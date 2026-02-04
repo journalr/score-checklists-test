@@ -151,8 +151,7 @@ class ProxyField final : public ProxyFieldBase
 
 template <typename FieldType>
 ProxyField<FieldType>::ProxyField(ProxyField&& other) noexcept
-    : ProxyFieldBase(std::move(static_cast<ProxyFieldBase&&>(other))),
-      proxy_event_dispatch_(std::move(other.proxy_event_dispatch_))
+    : ProxyFieldBase(std::move(other)), proxy_event_dispatch_(std::move(other.proxy_event_dispatch_))
 {
     // Since the address of this field has changed, we need update the address stored in the parent proxy.
     ProxyBaseView proxy_base_view{proxy_base_.get()};

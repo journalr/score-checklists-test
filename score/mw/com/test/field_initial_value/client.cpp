@@ -19,7 +19,6 @@
 
 #include <chrono>
 #include <cstddef>
-#include <future>
 #include <iostream>
 #include <thread>
 
@@ -43,22 +42,14 @@ int run_client(const std::size_t num_retries, const std::chrono::milliseconds re
     }
     auto instance_specifier = std::move(instance_specifier_result).value();
 
-    std::promise<std::vector<TestDataProxy::HandleType>> service_discovery_promise{};
-    auto service_discovery_future = service_discovery_promise.get_future();
-    auto lola_proxy_handles_result = TestDataProxy::StartFindService(
-        [moved_service_discovery_promise = std::move(service_discovery_promise)](auto handles, auto handle) mutable {
-            moved_service_discovery_promise.set_value(handles);
-            TestDataProxy::StopFindService(handle);
-        },
-        std::move(instance_specifier));
-
+    auto lola_proxy_handles_result = TestDataProxy::FindService(std::move(instance_specifier));
     if (!lola_proxy_handles_result.has_value())
     {
         std::cerr << "Unable to get handles, terminating\n";
         return -1;
     }
 
-    auto lola_proxy_handles = service_discovery_future.get();
+    auto lola_proxy_handles = lola_proxy_handles_result.value();
     if (lola_proxy_handles.empty())
     {
         std::cerr << "Unable to find lola service, terminating\n";
@@ -74,7 +65,7 @@ int run_client(const std::size_t num_retries, const std::chrono::milliseconds re
     auto& lola_proxy = lola_proxy_result.value();
     score::cpp::optional<std::int32_t> received_value;
 
-    std::ignore = lola_proxy.test_field.Subscribe(kMaxNumSamples);
+    lola_proxy.test_field.Subscribe(kMaxNumSamples);
     std::size_t retries = num_retries;
     while (lola_proxy.test_field.GetSubscriptionState() != score::mw::com::impl::SubscriptionState::kSubscribed)
     {
@@ -86,7 +77,7 @@ int run_client(const std::size_t num_retries, const std::chrono::milliseconds re
             return -4;
         }
     }
-    std::ignore = lola_proxy.test_field.GetNewSamples(
+    lola_proxy.test_field.GetNewSamples(
         [&received_value](const auto& sample_ptr) noexcept {
             received_value = *sample_ptr;
         },

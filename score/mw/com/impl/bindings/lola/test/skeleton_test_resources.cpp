@@ -331,12 +331,12 @@ ServiceDataControl SkeletonMockedMemoryFixture::CreateServiceDataControlWithEven
 {
     const auto created_resource = (quality_type == QualityType::kASIL_QM) ? control_qm_shared_memory_resource_mock_
                                                                           : control_asil_b_shared_memory_resource_mock_;
-    ServiceDataControl service_data_control{*created_resource};
+    ServiceDataControl service_data_control{created_resource->getMemoryResourceProxy()};
 
-    auto event_control =
-        service_data_control.event_controls_.emplace(std::piecewise_construct,
-                                                     std::forward_as_tuple(element_fq_id),
-                                                     std::forward_as_tuple(10U, 10U, true, *created_resource));
+    auto event_control = service_data_control.event_controls_.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(element_fq_id),
+        std::forward_as_tuple(10U, 10U, true, created_resource->getMemoryResourceProxy()));
     EXPECT_TRUE(event_control.second);
     return service_data_control;
 }

@@ -15,7 +15,6 @@
 
 #include "score/mw/com/impl/bindings/lola/element_fq_id.h"
 #include "score/mw/com/impl/bindings/lola/messaging/i_message_passing_service.h"
-#include "score/mw/com/impl/bindings/lola/methods/proxy_instance_identifier.h"
 #include "score/mw/com/impl/configuration/quality_type.h"
 
 #include <gmock/gmock.h>
@@ -48,31 +47,13 @@ class MessagePassingServiceMock : public IMessagePassingService
                 (QualityType, ElementFqId),
                 (noexcept, override));
 
-    MOCK_METHOD(Result<MethodSubscriptionRegistrationGuard>,
+    MOCK_METHOD(ResultBlank,
                 RegisterOnServiceMethodSubscribedHandler,
-                (QualityType, SkeletonInstanceIdentifier, ServiceMethodSubscribedHandler, AllowedConsumerUids),
+                (SkeletonInstanceIdentifier, ServiceMethodSubscribedHandler),
                 (override));
-    MOCK_METHOD(Result<MethodSubscriptionRegistrationGuard>,
-                RegisterMethodCallHandler,
-                (QualityType, ProxyMethodInstanceIdentifier, MethodCallHandler, uid_t),
-                (override));
-    MOCK_METHOD(ResultBlank,
-                SubscribeServiceMethod,
-                (QualityType, const SkeletonInstanceIdentifier&, const ProxyInstanceIdentifier&, pid_t),
-                (override));
-    MOCK_METHOD(ResultBlank,
-                CallMethod,
-                (QualityType, const ProxyMethodInstanceIdentifier&, std::size_t, pid_t),
-                (override));
-
-    MOCK_METHOD(void,
-                UnregisterOnServiceMethodSubscribedHandler,
-                (const QualityType asil_level, SkeletonInstanceIdentifier skeleton_instance_identifier),
-                (override));
-    MOCK_METHOD(void,
-                UnregisterMethodCallHandler,
-                (const QualityType asil_level, ProxyMethodInstanceIdentifier proxy_method_instance_identifier),
-                (override));
+    MOCK_METHOD(ResultBlank, RegisterMethodCallHandler, (ProxyInstanceIdentifier, MethodCallHandler), (override));
+    MOCK_METHOD(ResultBlank, SubscribeServiceMethod, (const SkeletonInstanceIdentifier&), (override));
+    MOCK_METHOD(ResultBlank, CallMethod, (const ProxyInstanceIdentifier&, std::size_t), (override));
 };
 
 }  // namespace score::mw::com::impl::lola

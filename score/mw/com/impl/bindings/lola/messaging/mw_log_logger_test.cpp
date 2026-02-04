@@ -76,9 +76,10 @@ TEST_F(MwLogLoggerFixture, ValidSeveritiesMapAsExpected)
         {{LogSeverity::kFatal, LogLevel::kFatal},
          {LogSeverity::kError, LogLevel::kError},
          {LogSeverity::kWarn, LogLevel::kWarn},
-         {LogSeverity::kInfo, LogLevel::kInfo},
-         {LogSeverity::kDebug, LogLevel::kDebug},
-         {LogSeverity::kVerbose, LogLevel::kVerbose}}};
+         // temporary replacement for Ticket-235378 debugging:
+         {LogSeverity::kInfo, LogLevel::kWarn},
+         {LogSeverity::kDebug, LogLevel::kWarn},
+         {LogSeverity::kVerbose, LogLevel::kWarn}}};
 
     // expect the recorder receives the expected log levels in sequence
     InSequence is;

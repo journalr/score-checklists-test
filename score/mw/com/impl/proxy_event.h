@@ -79,7 +79,7 @@ class ProxyEvent final : public ProxyEventBase
     ///
     /// \param proxy_binding The binding that shall be associated with this proxy.
     ProxyEvent(ProxyBase& base,
-               std::unique_ptr<ProxyEventBinding<SampleType>> proxy_event_binding,
+               std::unique_ptr<ProxyEventBinding<SampleType>> proxy_binding,
                const std::string_view event_name);
 
     /// \brief Constructor that allows to set the binding directly.
@@ -106,8 +106,6 @@ class ProxyEvent final : public ProxyEventBase
     /// \brief A ProxyEvent shall be movable
     ProxyEvent(ProxyEvent&& other) noexcept;
     ProxyEvent& operator=(ProxyEvent&& other) & noexcept;
-
-    ~ProxyEvent() override = default;
 
     /**
      * \api
@@ -188,8 +186,7 @@ ProxyEvent<SampleType>::ProxyEvent(ProxyBase& base,
 
 template <typename SampleType>
 ProxyEvent<SampleType>::ProxyEvent(ProxyEvent&& other) noexcept
-    : ProxyEventBase(std::move(static_cast<ProxyEventBase&&>(other))),
-      proxy_event_mock_{std::move(other.proxy_event_mock_)}
+    : ProxyEventBase(std::move(other)), proxy_event_mock_{std::move(other.proxy_event_mock_)}
 {
     // Since the address of this event has changed, we need update the address stored in the parent proxy.
     ProxyBaseView proxy_base_view{proxy_base_.get()};

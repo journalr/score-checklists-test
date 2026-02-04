@@ -268,7 +268,7 @@ TEST_F(SkeletonEventComponentTestFixture, CanAllocateAndSendEvent)
     // expect, that an event update notification is sent for QM and ASIL-B
     EXPECT_CALL(message_passing_service_mock_, NotifyEvent(QualityType::kASIL_QM, fake_element_fq_id_));
     EXPECT_CALL(message_passing_service_mock_, NotifyEvent(QualityType::kASIL_B, fake_element_fq_id_));
-    ASSERT_TRUE(skeleton_event_.Send(std::move(slot), {}));
+    skeleton_event_.Send(std::move(slot), {});
 
     // Then the send event in shared memory can be found by a proxy
     EXPECT_EQ(GetLastSendEvent(), 5);
@@ -291,7 +291,7 @@ TEST_F(SkeletonEventComponentTestFixture, CanSendByValue)
     auto free_slots_before = GetFreeSampleSlots();
 
     // When  sending by value
-    std::ignore = skeleton_event_.Send(5, {});
+    skeleton_event_.Send(5, {});
 
     // Then the send event in shared memory can be found by a proxy
     EXPECT_EQ(GetLastSendEvent(), 5);
@@ -366,7 +366,6 @@ TEST_F(SkeletonEventSingleSlotComponentTestFixture, SendByValueFreesSampleAlloca
         "Sends an event sample by Copy and verifies that the Sample Allocatee Ptr that gets allocated is destroyed.");
     RecordProperty("TestType", "Requirements-based test");
     RecordProperty("DerivationTechnique", "Analysis of requirements");
-    RecordProperty("Priority", "2");
 
     // When offering the event
     const auto prepare_offer_result = skeleton_event_.PrepareOffer();

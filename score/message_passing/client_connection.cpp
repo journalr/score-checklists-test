@@ -113,7 +113,7 @@ score::cpp::expected_blank<score::os::Error> ClientConnection::Send(score::cpp::
 {
     if (message.size() > max_send_size_)
     {
-        return score::cpp::make_unexpected(score::os::Error::createFromErrno(EMSGSIZE));
+        return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOMEM));
     }
     if (state_ != State::kReady)
     {
@@ -130,7 +130,7 @@ score::cpp::expected_blank<score::os::Error> ClientConnection::Send(score::cpp::
         {
             if (!TryQueueMessage(message, ReplyCallback{}))
             {
-                return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOBUFS));
+                return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOMEM));
             }
             ArmSendQueueUnderLock();
         }
@@ -143,7 +143,7 @@ score::cpp::expected_blank<score::os::Error> ClientConnection::Send(score::cpp::
     {
         if (!TryQueueMessage(message, ReplyCallback{}))
         {
-            return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOBUFS));
+            return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOMEM));
         }
     }
     return {};
@@ -159,7 +159,7 @@ score::cpp::expected<score::cpp::span<const std::uint8_t>, score::os::Error> Cli
     }
     if (message.size() > max_send_size_)
     {
-        return score::cpp::make_unexpected(score::os::Error::createFromErrno(EMSGSIZE));
+        return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOMEM));
     }
     if (state_ != State::kReady)
     {
@@ -178,7 +178,7 @@ score::cpp::expected<score::cpp::span<const std::uint8_t>, score::os::Error> Cli
         const auto reply_message = message_expected.value();
         if (reply_message.size() > reply.size())
         {
-            future.UpdateValueMarkReady(score::cpp::make_unexpected(score::os::Error::createFromErrno(EMSGSIZE)));
+            future.UpdateValueMarkReady(score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOMEM)));
             return;
         }
         // NOLINTBEGIN(bugprone-suspicious-stringview-data-usage) `reply`'s buffer size got checked above
@@ -201,7 +201,7 @@ score::cpp::expected<score::cpp::span<const std::uint8_t>, score::os::Error> Cli
         // coverity[autosar_cpp14_a5_1_4_violation]
         if (!TryQueueMessage(message, std::move(callback)))
         {
-            return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOBUFS));
+            return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOMEM));
         }
     }
     else
@@ -237,7 +237,7 @@ score::cpp::expected_blank<score::os::Error> ClientConnection::SendWithCallback(
 {
     if (message.size() > max_send_size_)
     {
-        return score::cpp::make_unexpected(score::os::Error::createFromErrno(EMSGSIZE));
+        return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOMEM));
     }
     if (state_ != State::kReady)
     {
@@ -248,7 +248,7 @@ score::cpp::expected_blank<score::os::Error> ClientConnection::SendWithCallback(
     {
         if (!TryQueueMessage(message, std::move(callback)))
         {
-            return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOBUFS));
+            return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOMEM));
         }
         return {};
     }
@@ -256,7 +256,7 @@ score::cpp::expected_blank<score::os::Error> ClientConnection::SendWithCallback(
     {
         if (!TryQueueMessage(message, std::move(callback)))
         {
-            return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOBUFS));
+            return score::cpp::make_unexpected(score::os::Error::createFromErrno(ENOMEM));
         }
         ArmSendQueueUnderLock();
     }
@@ -437,12 +437,6 @@ IClientConnection::StopReason ClientConnection::ProcessInputEvent() noexcept
     if (!message_expected.has_value())
     {
         auto os_code = message_expected.error().GetOsDependentErrorCode();
-        if (os_code == EAGAIN)
-        {
-            // cam happen due to notificaion intended to older connection, but shall be rare
-            LogWarn(engine_->GetLogger(), "ProcessInputEvent ", identifier_, " spurious wake-up");
-            return StopReason::kNone;
-        }
         return os_code == EPIPE ? StopReason::kClosedByPeer : StopReason::kIoError;
     }
     auto message = message_expected.value();

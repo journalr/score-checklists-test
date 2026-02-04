@@ -39,9 +39,9 @@ template <template <class> class AtomicIndirectorType>
 // coverity[autosar_cpp14_a15_5_3_violation]
 EventDataControlImpl<AtomicIndirectorType>::EventDataControlImpl(
     const SlotIndexType max_slots,
-    score::memory::shared::ManagedMemoryResource& resource,
+    const score::memory::shared::MemoryResourceProxy* const proxy,
     const LolaEventInstanceDeployment::SubscriberCountType max_number_combined_subscribers) noexcept
-    : state_slots_{max_slots, resource}, transaction_log_set_{max_number_combined_subscribers, max_slots, resource}
+    : state_slots_{max_slots, proxy}, transaction_log_set_{max_number_combined_subscribers, max_slots, proxy}
 {
 }
 

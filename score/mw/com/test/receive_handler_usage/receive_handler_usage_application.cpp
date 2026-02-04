@@ -22,10 +22,8 @@
 
 #include <score/jthread.hpp>
 #include <score/stop_token.hpp>
-
 #include <atomic>
 #include <chrono>
-#include <future>
 #include <iostream>
 
 namespace
@@ -60,7 +58,7 @@ score::Result<score::mw::com::test::BigDataSkeleton> CreateAndOfferSkeleton(
     {
         std::cerr << "Could not offer service for skeleton with instance specifier" << instance_specifier.ToString()
                   << std::endl;
-        return score::MakeUnexpected<score::mw::com::test::BigDataSkeleton>(
+        score::MakeUnexpected<score::mw::com::test::BigDataSkeleton>(
             score::mw::com::impl::MakeError(score::mw::com::impl::ComErrc::kServiceNotOffered));
     }
     return bigdata_result;
@@ -68,14 +66,7 @@ score::Result<score::mw::com::test::BigDataSkeleton> CreateAndOfferSkeleton(
 
 score::Result<score::mw::com::test::BigDataProxy> CreateProxy(const score::mw::com::InstanceSpecifier& instance_specifier)
 {
-    std::promise<std::vector<score::mw::com::test::BigDataProxy::HandleType>> service_discovery_promise{};
-    auto service_discovery_future = service_discovery_promise.get_future();
-    auto handles_result = score::mw::com::test::BigDataProxy::StartFindService(
-        [moved_service_discovery_promise = std::move(service_discovery_promise)](auto handles, auto handle) mutable {
-            moved_service_discovery_promise.set_value(handles);
-            score::mw::com::test::BigDataProxy::StopFindService(handle);
-        },
-        std::move(instance_specifier));
+    auto handles_result = score::mw::com::test::BigDataProxy::FindService(instance_specifier);
     if (!handles_result.has_value())
     {
         std::cerr << "Error finding service for instance specifier" << instance_specifier.ToString() << ": "
@@ -83,8 +74,7 @@ score::Result<score::mw::com::test::BigDataProxy> CreateProxy(const score::mw::c
         return score::MakeUnexpected<score::mw::com::test::BigDataProxy>(handles_result.error());
     }
 
-    const auto handles = service_discovery_future.get();
-    if (handles.empty())
+    if (handles_result.value().empty())
     {
         std::cerr << "NO instance found for instance specifier" << instance_specifier.ToString()
                   << " although service instance has been successfully offered! Terminating!" << std::endl;
@@ -92,7 +82,7 @@ score::Result<score::mw::com::test::BigDataProxy> CreateProxy(const score::mw::c
             score::mw::com::impl::MakeError(score::mw::com::impl::ComErrc::kServiceNotAvailable));
     }
 
-    return score::mw::com::test::BigDataProxy::Create(handles.front());
+    return score::mw::com::test::BigDataProxy::Create(handles_result.value().front());
 }
 
 bool ReceiveHandlerActions(score::mw::com::test::BigDataProxy& proxy)
@@ -235,19 +225,11 @@ int main(int argc, const char** argv)
     }
 
     ReceiveHandlerCtrl receive_handler_ctrl{};
-    const auto set_receive_handler_result =
-        proxy.map_api_lanes_stamped_.SetReceiveHandler([&proxy, &receive_handler_ctrl]() {
-            auto result = ReceiveHandlerActions(proxy);
-            receive_handler_ctrl.status =
-                result ? ReceiveHandlerStatus::FINISHED_OK : ReceiveHandlerStatus::FINISHED_ERROR;
-            receive_handler_ctrl.finished_notification.notify();
-        });
-    if (!set_receive_handler_result.has_value())
-    {
-        std::cerr << "Proxy error setting receive handler: " << set_receive_handler_result.error() << ", terminating."
-                  << std::endl;
-        return EXIT_FAILURE;
-    }
+    proxy.map_api_lanes_stamped_.SetReceiveHandler([&proxy, &receive_handler_ctrl]() {
+        auto result = ReceiveHandlerActions(proxy);
+        receive_handler_ctrl.status = result ? ReceiveHandlerStatus::FINISHED_OK : ReceiveHandlerStatus::FINISHED_ERROR;
+        receive_handler_ctrl.finished_notification.notify();
+    });
 
     // Sending an event update here triggers the event-receive-handler registered above
     // We do this in a separate thread as the Send() call might theoretically be calling the
@@ -257,7 +239,7 @@ int main(int argc, const char** argv)
     // decision might change, and we do not want to depend on it here.
     using namespace std::chrono_literals;
     score::cpp::jthread send_thread{[&skeleton]() noexcept {
-        std::ignore = skeleton.map_api_lanes_stamped_.Send(kEvent_sample);
+        skeleton.map_api_lanes_stamped_.Send(kEvent_sample);
     }};
 
     // Wait max 5 seconds for the EventReceiveHandler to finish

@@ -147,16 +147,17 @@ class SkeletonComponentTestFixture : public ::testing::Test
     void TearDown() override
     {
         score::memory::shared::MemoryResourceRegistry::getInstance().clear();
-        std::ignore =
-            score::filesystem::IStandardFilesystem::instance().Remove("/tmp/lola-data-0000000000000001-00016_lock");
-        std::ignore =
-            score::filesystem::IStandardFilesystem::instance().Remove("/tmp/lola-ctl-0000000000000001-00016_lock");
-        std::ignore =
-            score::filesystem::IStandardFilesystem::instance().Remove("/tmp/lola-ctl-0000000000000001-00016-b_lock");
+        score::filesystem::IStandardFilesystem::instance().Remove("/tmp/lola-data-0000000000000001-00016_lock");
+        score::filesystem::IStandardFilesystem::instance().Remove("/tmp/lola-ctl-0000000000000001-00016_lock");
+        score::filesystem::IStandardFilesystem::instance().Remove("/tmp/lola-ctl-0000000000000001-00016-b_lock");
 
-        std::ignore = score::filesystem::IStandardFilesystem::instance().Remove(data_shm);
-        std::ignore = score::filesystem::IStandardFilesystem::instance().Remove(control_shm);
-        std::ignore = score::filesystem::IStandardFilesystem::instance().Remove(asil_control_shm);
+        score::filesystem::IStandardFilesystem::instance().Remove(data_shm);
+        score::filesystem::IStandardFilesystem::instance().Remove(control_shm);
+        score::filesystem::IStandardFilesystem::instance().Remove(asil_control_shm);
+
+        EXPECT_FALSE(fileExists(data_shm));
+        EXPECT_FALSE(fileExists(control_shm));
+        EXPECT_FALSE(fileExists(asil_control_shm));
 
         score::memory::shared::MemoryResourceRegistry::getInstance().clear();
         impl::Runtime::InjectMock(nullptr);
@@ -267,7 +268,7 @@ TEST_F(SkeletonComponentTestFixture, ACLPermissionsSetCorrectly)
         .Times(3);
 
     // When preparing to offer a service
-    std::ignore = unit->PrepareOffer(kEmptyEvents, kEmptyFields, {});
+    unit->PrepareOffer(kEmptyEvents, kEmptyFields, {});
 }
 
 TEST_F(SkeletonComponentTestFixture, CannotCreateTheSameSkeletonTwice)
@@ -428,8 +429,8 @@ TEST_F(SkeletonComponentTestFixture, DataShmObjectSizeCalc_Simulation_QM)
 
     // When offering a service and all events
     const auto val = unit->PrepareOffer(events_, fields_, {});
-    std::ignore = mock_event_binding_.PrepareOffer();
-    std::ignore = mock_field_binding_.PrepareOffer();
+    mock_event_binding_.PrepareOffer();
+    mock_field_binding_.PrepareOffer();
 
     // then expect, that it has a value!
     EXPECT_TRUE(val.has_value());
@@ -488,8 +489,8 @@ TEST_F(SkeletonComponentTestFixture, DataShmObjectSizeCalc_Simulation_AsilB)
 
     // When offering a service and all events
     const auto val = unit->PrepareOffer(events_, fields_, {});
-    std::ignore = mock_event_binding_.PrepareOffer();
-    std::ignore = mock_field_binding_.PrepareOffer();
+    mock_event_binding_.PrepareOffer();
+    mock_field_binding_.PrepareOffer();
 
     // then expect, that it has a value!
     EXPECT_TRUE(val.has_value());
@@ -536,8 +537,8 @@ TEST_F(SkeletonComponentTestFixture,
 
     // When preparing to offer a service
     const auto prepare_offer_result = unit->PrepareOffer(events_, fields_, {});
-    std::ignore = mock_event_binding_.PrepareOffer();
-    std::ignore = mock_field_binding_.PrepareOffer();
+    mock_event_binding_.PrepareOffer();
+    mock_field_binding_.PrepareOffer();
 
     // then expect, that it has a value!
     EXPECT_TRUE(prepare_offer_result.has_value());
@@ -613,8 +614,8 @@ TEST_F(SkeletonComponentTestFixture,
 
     // When preparing to offer a service
     const auto prepare_offer_result = unit->PrepareOffer(events_, fields_, {});
-    std::ignore = mock_event_binding_.PrepareOffer();
-    std::ignore = mock_field_binding_.PrepareOffer();
+    mock_event_binding_.PrepareOffer();
+    mock_field_binding_.PrepareOffer();
 
     // then expect, that it has a value!
     EXPECT_TRUE(prepare_offer_result.has_value());
@@ -651,8 +652,8 @@ TEST_F(SkeletonComponentTestFixture,
 
     // When preparing to offer a service
     const auto prepare_offer_result = unit->PrepareOffer(events_, fields_, {});
-    std::ignore = mock_event_binding_.PrepareOffer();
-    std::ignore = mock_field_binding_.PrepareOffer();
+    mock_event_binding_.PrepareOffer();
+    mock_field_binding_.PrepareOffer();
 
     // then expect, that it has a value!
     EXPECT_TRUE(prepare_offer_result.has_value());
@@ -693,8 +694,8 @@ TEST_F(SkeletonComponentTestFixture,
 
     // When preparing to offer a service
     const auto prepare_offer_result = unit->PrepareOffer(events_, fields_, {});
-    std::ignore = mock_event_binding_.PrepareOffer();
-    std::ignore = mock_field_binding_.PrepareOffer();
+    mock_event_binding_.PrepareOffer();
+    mock_field_binding_.PrepareOffer();
 
     // then expect, that it has a value!
     EXPECT_TRUE(prepare_offer_result.has_value());

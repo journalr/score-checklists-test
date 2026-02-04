@@ -43,7 +43,8 @@ class TransactionLogSetFixture : public TransactionLogSetHelperFixture
   protected:
     TransactionLogSetFixture& WithATransactionLogSet(std::size_t number_of_logs)
     {
-        unit_ = std::make_unique<TransactionLogSet>(number_of_logs, kDummyNumberOfSlots, memory_resource_);
+        unit_ = std::make_unique<TransactionLogSet>(
+            number_of_logs, kDummyNumberOfSlots, memory_resource_.getMemoryResourceProxy());
         return *this;
     }
 

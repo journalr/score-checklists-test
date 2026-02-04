@@ -26,7 +26,6 @@
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
-#include <future>
 #include <iomanip>
 #include <iostream>
 #include <random>
@@ -186,7 +185,7 @@ int run_sender(SharedState& shared_state, const std::size_t turns, const std::si
     {
         for (std::size_t sample_in_batch = 0U; sample_in_batch < batch_size; ++sample_in_batch)
         {
-            std::ignore = sender.struct_event_.Send(data);
+            sender.struct_event_.Send(data);
             ++data;
         }
 
@@ -238,21 +237,14 @@ int run_receiver(SharedState& shared_state,
             return -4;
         }
 
-        std::promise<std::vector<DataProxy::HandleType>> service_discovery_promise{};
-        auto service_discovery_future = service_discovery_promise.get_future();
-        auto handles_result = DataProxy::StartFindService(
-            [moved_service_discovery_promise = std::move(service_discovery_promise)](auto found_handles,
-                                                                                     auto handle) mutable {
-                moved_service_discovery_promise.set_value(found_handles);
-                DataProxy::StopFindService(handle);
-            },
-            std::move(instance_specifier_result).value());
+        Result<ServiceHandleContainer<DataProxy::HandleType>> handles_result =
+            DataProxy::FindService(std::move(instance_specifier_result).value());
         if (!handles_result.has_value())
         {
             std::cerr << "FindService returned an error, terminating!\n";
             return -4;
         }
-        handles = service_discovery_future.get();
+        handles = std::move(handles_result.value());
         if (handles.empty())
         {
             // If we didn't find a service yet (because the sender is still busy spawning clients), we back off
@@ -279,7 +271,7 @@ int run_receiver(SharedState& shared_state,
         return -5;
     }
     auto& receiver = receiver_result.value();
-    std::ignore = receiver.struct_event_.Subscribe(num_slots);
+    receiver.struct_event_.Subscribe(num_slots);
     for (std::size_t retry = 0U; retry < 100U; ++retry)
     {
         if (receiver.struct_event_.GetSubscriptionState() != SubscriptionState::kSubscribed)

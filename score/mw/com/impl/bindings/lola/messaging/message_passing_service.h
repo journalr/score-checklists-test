@@ -13,7 +13,6 @@
 #ifndef SCORE_MW_COM_IMPL_BINDINGS_LOLA_MESSAGEPASSINGSERVICE_H
 #define SCORE_MW_COM_IMPL_BINDINGS_LOLA_MESSAGEPASSINGSERVICE_H
 
-#include "score/language/safecpp/scoped_function/scope.h"
 #include "score/mw/com/impl/bindings/lola/messaging/i_message_passing_service.h"
 
 #include "score/mw/com/impl/bindings/lola/messaging/i_message_passing_service_instance.h"
@@ -25,8 +24,13 @@
 
 #include "score/concurrency/thread_pool.h"
 
-#include "score/message_passing/client_factory.h"
-#include "score/message_passing/server_factory.h"
+#ifdef __QNX__
+#include "score/message_passing/qnx_dispatch/qnx_dispatch_client_factory.h"
+#include "score/message_passing/qnx_dispatch/qnx_dispatch_server_factory.h"
+#else
+#include "score/message_passing/unix_domain/unix_domain_client_factory.h"
+#include "score/message_passing/unix_domain/unix_domain_server_factory.h"
+#endif
 
 #include "score/concurrency/thread_pool.h"
 
@@ -102,19 +106,13 @@ class MessagePassingService final : public IMessagePassingService
     /// \brief Register a handler on Skeleton side which will be called when SubscribeServiceMethod is called by a
     /// Proxy.
     /// \details see IMessagePassingService::RegisterOnServiceMethodSubscribedHandler
-    Result<MethodSubscriptionRegistrationGuard> RegisterOnServiceMethodSubscribedHandler(
-        const QualityType asil_level,
-        SkeletonInstanceIdentifier skeleton_instance_identifier,
-        ServiceMethodSubscribedHandler subscribed_callback,
-        AllowedConsumerUids allowed_proxy_uids) override;
+    ResultBlank RegisterOnServiceMethodSubscribedHandler(SkeletonInstanceIdentifier skeleton_instance_identifier,
+                                                         ServiceMethodSubscribedHandler subscribed_callback) override;
 
     /// \brief Register a handler on Skeleton side which will be called when CallMethod is called by a Proxy.
     /// \details see IMessagePassingService::RegisterMethodCallHandler
-    Result<MethodSubscriptionRegistrationGuard> RegisterMethodCallHandler(
-        const QualityType asil_level,
-        ProxyMethodInstanceIdentifier proxy_method_instance_identifier,
-        MethodCallHandler method_call_callback,
-        uid_t allowed_proxy_uid) override;
+    ResultBlank RegisterMethodCallHandler(ProxyInstanceIdentifier proxy_instance_identifier,
+                                          MethodCallHandler method_call_callback) override;
 
     /// \brief Notifies target node about outdated_node_id being an old/outdated node id, not being used anymore.
     /// \details see IMessagePassingService::NotifyOutdatedNodeId
@@ -139,30 +137,30 @@ class MessagePassingService final : public IMessagePassingService
     /// method shared memory region and wants to subscribe. The callback registered with RegisterMethodCall will be
     /// called on the Skeleton side and a response will be returned.
     /// \details see IMessagePassingService::SubscribeServiceMethod
-    ResultBlank SubscribeServiceMethod(const QualityType asil_level,
-                                       const SkeletonInstanceIdentifier& skeleton_instance_identifier,
-                                       const ProxyInstanceIdentifier& proxy_instance_identifier,
-                                       const pid_t target_node_id) override;
+    ResultBlank SubscribeServiceMethod(const SkeletonInstanceIdentifier& skeleton_instance_identifier) override;
 
     /// \brief Blocking call which is called on Proxy side to trigger the Skeleton to process a method call. The
     /// callback registered with RegisterOnServiceMethodSubscribed will be called on the Skeleton side and a response
     /// will be returned.
     /// \details see IMessagePassingService::CallMethod
-    ResultBlank CallMethod(const QualityType asil_level,
-                           const ProxyMethodInstanceIdentifier& proxy_method_instance_identifier,
-                           std::size_t queue_position,
-                           const pid_t target_node_id) override;
+    ResultBlank CallMethod(const ProxyInstanceIdentifier& proxy_instance_identifier,
+                           std::size_t queue_position) override;
 
   private:
-    using Engine = score::message_passing::Engine;
-    using ClientFactory = score::message_passing::ClientFactory;
-    using ServerFactory = score::message_passing::ServerFactory;
-
-    void UnregisterOnServiceMethodSubscribedHandler(const QualityType asil_level,
-                                                    SkeletonInstanceIdentifier skeleton_instance_identifier) override;
-
-    void UnregisterMethodCallHandler(const QualityType asil_level,
-                                     ProxyMethodInstanceIdentifier proxy_method_instance_identifier) override;
+// Suppress "AUTOSAR C++14 A16-0-1" rule findings.
+// This is the standard way to determine if it runs on QNX or Unix
+// coverity[autosar_cpp14_a16_0_1_violation]
+#ifdef __QNX__
+    using Engine = score::message_passing::QnxDispatchEngine;
+    using ClientFactory = score::message_passing::QnxDispatchClientFactory;
+    using ServerFactory = score::message_passing::QnxDispatchServerFactory;
+    // coverity[autosar_cpp14_a16_0_1_violation]
+#else
+    using Engine = score::message_passing::UnixDomainEngine;
+    using ClientFactory = score::message_passing::UnixDomainClientFactory;
+    using ServerFactory = score::message_passing::UnixDomainServerFactory;
+    // coverity[autosar_cpp14_a16_0_1_violation]
+#endif
 
     ClientFactory client_factory_;
 
@@ -174,8 +172,6 @@ class MessagePassingService final : public IMessagePassingService
     std::unique_ptr<IMessagePassingServiceInstance> asil_b_;
 
     IMessagePassingServiceInstance& GetMessagePassingServiceInstance(const QualityType asil_level) const;
-
-    safecpp::Scope<> registration_guards_scope_{};
 };
 
 }  // namespace score::mw::com::impl::lola

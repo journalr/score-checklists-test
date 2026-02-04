@@ -95,7 +95,7 @@ class EventDataControlImpl final
     ///        owning this EventDataControl at any one time.
     EventDataControlImpl(
         const SlotIndexType max_slots,
-        score::memory::shared::ManagedMemoryResource& resource,
+        const score::memory::shared::MemoryResourceProxy* const proxy,
         const LolaEventInstanceDeployment::SubscriberCountType max_number_combined_subscribers) noexcept;
     ~EventDataControlImpl() noexcept = default;
 

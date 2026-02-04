@@ -11,7 +11,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@score_baselibs//score/language/safecpp:toolchain_features.bzl", "COMPILER_WARNING_FEATURES")
 
 cc_library(
@@ -275,9 +274,6 @@ cc_library(
     hdrs = ["timeout_supervisor.h"],
     features = COMPILER_WARNING_FEATURES,
     deps = [
-        "@score_baselibs//score/concurrency:thread_pool",
-        "@score_baselibs//score/concurrency/timed_executor:concurrent_timed_executor",
-        "@score_baselibs//score/concurrency/timed_executor:delayed_task",
         "@score_baselibs//score/language/futurecpp",
     ],
 )

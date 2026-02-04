@@ -59,11 +59,7 @@ class Service
     [[nodiscard]] ResultBlank OfferService(const std::int32_t test_value)
     {
         std::cout << "Start offering service, with value " << test_value << "\n";
-        const auto update_result = lola_service_.test_field.Update(test_value);
-        if (!update_result.has_value())
-        {
-            std::cerr << "Failed to update field: " << update_result.error().Message() << "\n";
-        }
+        lola_service_.test_field.Update(test_value);
         const auto result = lola_service_.OfferService();
         if (!result.has_value())
         {

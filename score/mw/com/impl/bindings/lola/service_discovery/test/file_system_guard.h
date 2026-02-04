@@ -29,7 +29,7 @@ class FileSystemGuard
     }
     ~FileSystemGuard() noexcept
     {
-        std::ignore = filesystem_.standard->RemoveAll(path_to_remove_);
+        filesystem_.standard->RemoveAll(path_to_remove_);
     }
 
     FileSystemGuard(const FileSystemGuard&) = delete;

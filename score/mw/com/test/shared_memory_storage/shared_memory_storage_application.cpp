@@ -277,7 +277,7 @@ int main(int argc, const char** argv)
             }
             proxy_creation_data.handle =
                 std::make_unique<score::mw::com::test::BigDataProxy::HandleType>(service_handle_container[0]);
-            std::ignore = score::mw::com::test::BigDataProxy::StopFindService(find_service_handle);
+            score::mw::com::test::BigDataProxy::StopFindService(find_service_handle);
             proxy_creation_data.condition_variable.notify_all();
         };
 
@@ -298,9 +298,9 @@ int main(int argc, const char** argv)
         });
 
         SCORE_LANGUAGE_FUTURECPP_ASSERT_MESSAGE(proxy_creation_data.handle != nullptr, "Service handle shouldn't be nullptr");
-        auto handle = *proxy_creation_data.handle;
+
+        auto proxy_result = score::mw::com::test::BigDataProxy::Create(*proxy_creation_data.handle);
         proxy_creation_lock.unlock();
-        auto proxy_result = score::mw::com::test::BigDataProxy::Create(handle);
         if (!proxy_result.has_value())
         {
             std::cerr << "Proxy: Unable to construct BigDataProxy: " << proxy_result.error() << ", bailing!\n";

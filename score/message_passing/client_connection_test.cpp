@@ -576,18 +576,6 @@ TEST_F(ClientConnectionTest, SuccessfullyConnectingAtFirstAttemptThenFirstReadDi
     EXPECT_EQ(connection.GetStopReason(), StopReason::kClosedByPeer);
 }
 
-TEST_F(ClientConnectionTest, SuccessfullyConnectingAtFirstAttemptThenSpuriousReadGetsIgnored)
-{
-    detail::ClientConnection connection(engine_, protocol_config_, client_config_);
-    MakeSuccessfulConnection(connection);
-
-    AtProtocolReceive_Return(0, score::cpp::make_unexpected(score::os::Error::createFromErrno(EAGAIN)));
-    InvokeEndpointInput();
-    EXPECT_EQ(connection.GetState(), State::kReady);
-
-    StopCurrentConnection(connection);
-}
-
 TEST_F(ClientConnectionTest, NotConnectedSendNotReady)
 {
     detail::ClientConnection connection(engine_, protocol_config_, client_config_);
@@ -629,15 +617,15 @@ TEST_F(ClientConnectionTest, SendTooLarge)
 
     auto send_result = connection.Send(send_buffer);
     EXPECT_FALSE(send_result);
-    EXPECT_EQ(send_result.error().GetOsDependentErrorCode(), EMSGSIZE);
+    EXPECT_EQ(send_result.error().GetOsDependentErrorCode(), ENOMEM);
 
     auto send_wait_reply_result = connection.SendWaitReply(send_buffer, reply_buffer);
     EXPECT_FALSE(send_wait_reply_result);
-    EXPECT_EQ(send_wait_reply_result.error().GetOsDependentErrorCode(), EMSGSIZE);
+    EXPECT_EQ(send_wait_reply_result.error().GetOsDependentErrorCode(), ENOMEM);
 
     auto send_with_callback_result = connection.SendWithCallback(send_buffer, IClientConnection::ReplyCallback{});
     EXPECT_FALSE(send_with_callback_result);
-    EXPECT_EQ(send_with_callback_result.error().GetOsDependentErrorCode(), EMSGSIZE);
+    EXPECT_EQ(send_with_callback_result.error().GetOsDependentErrorCode(), ENOMEM);
 
     StopCurrentConnection(connection);
 }
@@ -691,7 +679,7 @@ TEST_F(ClientConnectionTest, GivenTrulyAsyncWhenSendIsCalledItIsQueued)
     // third send shall fail as we only have two slots in the send queue
     send_result = connection.Send(send_buffer);
     EXPECT_FALSE(send_result);
-    EXPECT_EQ(send_result.error().GetOsDependentErrorCode(), ENOBUFS);
+    EXPECT_EQ(send_result.error().GetOsDependentErrorCode(), ENOMEM);
 
     // both queued messages shall be sent by the same command, as they have no receive callbacks
     EXPECT_CALL(*engine_, SendProtocolMessage).Times(2);
@@ -715,7 +703,7 @@ TEST_F(ClientConnectionTest, SendIsNotQueuedIfTrulyAsyncButNoSlots)
     std::array<std::uint8_t, kMaxSendSize> send_buffer;
     auto send_result = connection.Send(send_buffer);
     EXPECT_FALSE(send_result);
-    EXPECT_EQ(send_result.error().GetOsDependentErrorCode(), ENOBUFS);
+    EXPECT_EQ(send_result.error().GetOsDependentErrorCode(), ENOMEM);
 
     StopCurrentConnection(connection);
 }
@@ -803,7 +791,7 @@ TEST_F(ClientConnectionTest, SendWaitReplyFailsWhenCannotQueueMessage)
     // second send shall fail as we only have one slot in the send queue
     auto send_wait_reply_result = connection.SendWaitReply(send_buffer, reply_buffer);
     EXPECT_FALSE(send_wait_reply_result);
-    EXPECT_EQ(send_wait_reply_result.error().GetOsDependentErrorCode(), ENOBUFS);
+    EXPECT_EQ(send_wait_reply_result.error().GetOsDependentErrorCode(), ENOMEM);
 
     EXPECT_CALL(*engine_, SendProtocolMessage);
     InvokeSendQueueCommand();
@@ -864,7 +852,7 @@ TEST_F(ClientConnectionTest, SendWaitReplyFailsWhenReceiveTooLong)
 
     auto send_wait_reply_result = connection.SendWaitReply(send_buffer, reply_buffer);
     EXPECT_FALSE(send_wait_reply_result);
-    EXPECT_EQ(send_wait_reply_result.error().GetOsDependentErrorCode(), EMSGSIZE);
+    EXPECT_EQ(send_wait_reply_result.error().GetOsDependentErrorCode(), ENOMEM);
 
     StopCurrentConnection(connection);
 }
@@ -905,7 +893,7 @@ TEST_F(ClientConnectionTest, SendWithCallbackFailsWhenCannotQueueMessage)
     // second send shall fail as we only have one slot in the send queue
     send_with_callback_result = connection.SendWithCallback(send_buffer, [](auto&&) {});
     EXPECT_FALSE(send_with_callback_result);
-    EXPECT_EQ(send_with_callback_result.error().GetOsDependentErrorCode(), ENOBUFS);
+    EXPECT_EQ(send_with_callback_result.error().GetOsDependentErrorCode(), ENOMEM);
 
     StopCurrentConnection(connection);
 }
@@ -922,7 +910,7 @@ TEST_F(ClientConnectionTest, SendWithCallbackFailsWhenCannotQueueMessageTrulyAsy
 
     // first send shall fail
     auto send_with_callback_result = connection.SendWithCallback(send_buffer, [](auto&&) {});
-    EXPECT_EQ(send_with_callback_result.error().GetOsDependentErrorCode(), ENOBUFS);
+    EXPECT_EQ(send_with_callback_result.error().GetOsDependentErrorCode(), ENOMEM);
 
     StopCurrentConnection(connection);
 }

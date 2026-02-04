@@ -11,7 +11,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@score_baselibs//:bazel/unit_tests.bzl", "cc_gtest_unit_test", "cc_unit_test", "cc_unit_test_suites_for_host_and_qnx")
 load("//score/mw:common_features.bzl", "COMPILER_WARNING_FEATURES")
 
@@ -77,6 +76,7 @@ cc_library(
         "@score_baselibs//score/containers:dynamic_array",
         "@score_baselibs//score/language/futurecpp",
         "@score_baselibs//score/result",
+        "@score_logging//score/mw/log",
     ],
 )
 
@@ -212,5 +212,5 @@ cc_unit_test_suites_for_host_and_qnx(
         "skeleton_method_base_test",
         "skeleton_method_test",
     ],
-    visibility = ["//score/mw/com/impl:__pkg__"],
+    visibility = ["//score/mw/com:__subpackages__"],
 )

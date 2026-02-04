@@ -13,7 +13,6 @@
 #include "score/mw/com/impl/bindings/lola/proxy_method.h"
 
 #include "score/mw/com/impl/bindings/lola/element_fq_id.h"
-#include "score/mw/com/impl/bindings/lola/methods/skeleton_instance_identifier.h"
 #include "score/mw/com/impl/bindings/lola/test/proxy_event_test_resources.h"
 #include "score/mw/com/impl/com_error.h"
 #include "score/mw/com/impl/configuration/test/configuration_store.h"
@@ -57,13 +56,8 @@ const TypeErasedCallQueue::TypeErasedElementInfo kTypeErasedInfoWithReturnOnly{
     kValidReturnSizeInfo,
     10U};
 
-constexpr auto InArgsQueueStorageSize = kValidInArgSizeInfo.Size() * kDummyQueueSize;
-constexpr auto ReturnQueueStorageSize = kValidReturnSizeInfo.Size() * kDummyQueueSize;
-
-std::array<std::byte, InArgsQueueStorageSize> InArgsData{};
-std::array<std::byte, ReturnQueueStorageSize> ReturnData{};
-const std::optional<score::cpp::span<std::byte>> kValidInArgStorage{{InArgsData.data(), InArgsData.size()}};
-const std::optional<score::cpp::span<std::byte>> kValidReturnStorage{{ReturnData.data(), ReturnData.size()}};
+const std::optional<score::cpp::span<std::byte>> kValidInArgStorage{score::cpp::span<std::byte>{}};
+const std::optional<score::cpp::span<std::byte>> kValidReturnStorage{score::cpp::span<std::byte>{}};
 
 const std::optional<score::cpp::span<std::byte>> kEmptyInArgStorage{};
 const std::optional<score::cpp::span<std::byte>> kEmptyReturnStorage{};
@@ -91,13 +85,6 @@ class ProxyMethodFixture : public ProxyMockedMemoryFixture
     ProxyMethodFixture& GivenAProxyMethodWithoutReturnTypeErasedElementInfo()
     {
         unit_ = std::make_unique<ProxyMethod>(*proxy_, element_fq_id_, kTypeErasedInfoWithInArgsOnly);
-        return *this;
-    }
-
-    ProxyMethodFixture& WhichSuccessfullySubscribed()
-    {
-        SCORE_LANGUAGE_FUTURECPP_ASSERT_PRD(unit_ != nullptr);
-        unit_->MarkSubscribed();
         return *this;
     }
 
@@ -140,43 +127,9 @@ TEST_F(ProxyMethodFixture, FailingToGetBindingRuntimeTerminates)
 }
 
 using ProxyMethodAllocateInArgsFixture = ProxyMethodFixture;
-TEST_F(ProxyMethodAllocateInArgsFixture, CallingWithoutMarkingSubscribedReturnsError)
-{
-    GivenAProxyMethod();
-
-    // Given that SetInArgsAndReturnStorages was called with valid InArgs storage but the method was never marked as
-    // subscribed
-    unit_->SetInArgsAndReturnStorages(kValidInArgStorage, kEmptyReturnStorage);
-
-    // When calling AllocateInArgs
-    const auto result = unit_->AllocateInArgs(kDummyQueuePosition);
-
-    // Then an error is returned
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), ComErrc::kBindingFailure);
-}
-
-TEST_F(ProxyMethodAllocateInArgsFixture, CallingAfterMarkingSubscribedThenUnsubscribedReturnsError)
-{
-    GivenAProxyMethod();
-
-    // and given that the method was then marked as unsubscribed
-    unit_->MarkUnsubscribed();
-
-    // Given that SetInArgsAndReturnStorages was called with valid InArgs storage
-    unit_->SetInArgsAndReturnStorages(kValidInArgStorage, kEmptyReturnStorage);
-
-    // When calling AllocateInArgs
-    const auto result = unit_->AllocateInArgs(kDummyQueuePosition);
-
-    // Then an error is returned
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), ComErrc::kBindingFailure);
-}
-
 TEST_F(ProxyMethodAllocateInArgsFixture, CallingAfterSettingValidStoragesWithValidTypeInfosDispatchesToBinding)
 {
-    GivenAProxyMethod().WhichSuccessfullySubscribed();
+    GivenAProxyMethod();
 
     // Given that SetInArgsAndReturnStorages was called with valid InArgs storage
     unit_->SetInArgsAndReturnStorages(kValidInArgStorage, kEmptyReturnStorage);
@@ -190,7 +143,7 @@ TEST_F(ProxyMethodAllocateInArgsFixture, CallingAfterSettingValidStoragesWithVal
 
 TEST_F(ProxyMethodAllocateInArgsFixture, CallingAfterSettingValidInArgsStorageWithoutInArgsTypeInfoTerminates)
 {
-    GivenAProxyMethodWithoutInArgsTypeErasedElementInfo().WhichSuccessfullySubscribed();
+    GivenAProxyMethodWithoutInArgsTypeErasedElementInfo();
 
     // Given that SetInArgsAndReturnStorages was called with valid InArgs storage
     unit_->SetInArgsAndReturnStorages(kValidInArgStorage, kEmptyReturnStorage);
@@ -202,7 +155,7 @@ TEST_F(ProxyMethodAllocateInArgsFixture, CallingAfterSettingValidInArgsStorageWi
 
 TEST_F(ProxyMethodAllocateInArgsFixture, CallingAfterSettingEmptyInArgsStorageWithInArgsTypeInfoTerminates)
 {
-    GivenAProxyMethod().WhichSuccessfullySubscribed();
+    GivenAProxyMethod();
 
     // Given that SetInArgsAndReturnStorages was called with empty InArgs storage
     unit_->SetInArgsAndReturnStorages(kEmptyReturnStorage, kEmptyReturnStorage);
@@ -213,43 +166,9 @@ TEST_F(ProxyMethodAllocateInArgsFixture, CallingAfterSettingEmptyInArgsStorageWi
 }
 
 using ProxyMethodAllocateReturnTypeFixture = ProxyMethodFixture;
-TEST_F(ProxyMethodAllocateReturnTypeFixture, CallingWithoutMarkingSubscribedReturnsError)
-{
-    GivenAProxyMethod();
-
-    // Given that SetInArgsAndReturnStorages was called with valid Return storage but the method was never marked as
-    // subscribed
-    unit_->SetInArgsAndReturnStorages(kEmptyInArgStorage, kValidReturnStorage);
-
-    // When calling AllocateReturnType
-    const auto result = unit_->AllocateReturnType(kDummyQueuePosition);
-
-    // Then an error is returned
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), ComErrc::kBindingFailure);
-}
-
-TEST_F(ProxyMethodAllocateReturnTypeFixture, CallingAfterMarkingSubscribedThenUnsubscribedReturnsError)
-{
-    GivenAProxyMethod().WhichSuccessfullySubscribed();
-
-    // and given that the method was then marked as unsubscribed
-    unit_->MarkUnsubscribed();
-
-    // Given that SetInArgsAndReturnStorages was called with valid Return storage
-    unit_->SetInArgsAndReturnStorages(kEmptyInArgStorage, kValidReturnStorage);
-
-    // When calling AllocateReturnType
-    const auto result = unit_->AllocateReturnType(kDummyQueuePosition);
-
-    // Then an error is returned
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), ComErrc::kBindingFailure);
-}
-
 TEST_F(ProxyMethodAllocateReturnTypeFixture, CallingAfterSettingValidStoragesWithValidTypeInfosDispatchesToBinding)
 {
-    GivenAProxyMethod().WhichSuccessfullySubscribed();
+    GivenAProxyMethod();
 
     // Given that SetInArgsAndReturnStorages was called with valid Return storage
     unit_->SetInArgsAndReturnStorages(kEmptyInArgStorage, kValidReturnStorage);
@@ -263,7 +182,7 @@ TEST_F(ProxyMethodAllocateReturnTypeFixture, CallingAfterSettingValidStoragesWit
 
 TEST_F(ProxyMethodAllocateReturnTypeFixture, CallingAfterSettingValidReturnStorageWithoutReturnTypeInfoTerminates)
 {
-    GivenAProxyMethodWithoutReturnTypeErasedElementInfo().WhichSuccessfullySubscribed();
+    GivenAProxyMethodWithoutReturnTypeErasedElementInfo();
 
     // Given that SetInArgsAndReturnStorages was called with valid Return storage
     unit_->SetInArgsAndReturnStorages(kEmptyInArgStorage, kValidReturnStorage);
@@ -275,7 +194,7 @@ TEST_F(ProxyMethodAllocateReturnTypeFixture, CallingAfterSettingValidReturnStora
 
 TEST_F(ProxyMethodAllocateReturnTypeFixture, CallingAfterSettingEmptyReturnStorageWithReturnTypeInfoTerminates)
 {
-    GivenAProxyMethod().WhichSuccessfullySubscribed();
+    GivenAProxyMethod();
 
     // Given that SetInArgsAndReturnStorages was called with empty Return storage
     unit_->SetInArgsAndReturnStorages(kEmptyReturnStorage, kEmptyReturnStorage);
@@ -286,44 +205,16 @@ TEST_F(ProxyMethodAllocateReturnTypeFixture, CallingAfterSettingEmptyReturnStora
 }
 
 using ProxyMethodDoCallFixture = ProxyMethodFixture;
-TEST_F(ProxyMethodDoCallFixture, CallingWithoutMarkingSubscribedReturnsError)
+TEST_F(ProxyMethodDoCallFixture, DispatchesToMessagePassingBinding)
 {
     GivenAProxyMethod();
 
-    // When calling DoCall but the method was never marked as subscribed
-    const auto result = unit_->DoCall(kDummyQueuePosition);
-
-    // Then an error is returned
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), ComErrc::kBindingFailure);
-}
-
-TEST_F(ProxyMethodDoCallFixture, CallingAfterMarkingSubscribedThenUnsubscribedReturnsError)
-{
-    GivenAProxyMethod().WhichSuccessfullySubscribed();
-
-    // and given that the method was then marked as unsubscribed
-    unit_->MarkUnsubscribed();
-
-    // When calling DoCall
-    const auto result = unit_->DoCall(kDummyQueuePosition);
-
-    // Then an error is returned
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), ComErrc::kBindingFailure);
-}
-
-TEST_F(ProxyMethodDoCallFixture, DispatchesToMessagePassingBinding)
-{
-    GivenAProxyMethod().WhichSuccessfullySubscribed();
-
     // Expecting that CallMethod is called on the message passing binding which returns success
-    EXPECT_CALL(*mock_service_, CallMethod(_, _, kDummyQueuePosition, _))
-        .WillOnce(WithArg<1>(Invoke([](auto proxy_method_instance_identifier) -> ResultBlank {
-            // Then CallMethod is called with a ProxyMethodInstanceIdentifier containing the application id from the
+    EXPECT_CALL(*mock_service_, CallMethod(_, kDummyQueuePosition))
+        .WillOnce(WithArg<0>(Invoke([](auto proxy_instance_identifier) -> ResultBlank {
+            // Then CallMethod is called with a ProxyInstanceIdentifier containing the application id from the
             // configuration
-            EXPECT_EQ(proxy_method_instance_identifier.proxy_instance_identifier.process_identifier,
-                      kDummyApplicationId);
+            EXPECT_EQ(proxy_instance_identifier.process_identifier, kDummyApplicationId);
             return ResultBlank{};
         })));
 
@@ -336,11 +227,11 @@ TEST_F(ProxyMethodDoCallFixture, DispatchesToMessagePassingBinding)
 
 TEST_F(ProxyMethodDoCallFixture, PropagatesErrorFromMessagePassingBinding)
 {
-    GivenAProxyMethod().WhichSuccessfullySubscribed();
+    GivenAProxyMethod();
 
     // Expecting that CallMethod is called on the message passing binding which returns an erro
     const auto call_method_error_code = ComErrc::kBindingFailure;
-    EXPECT_CALL(*mock_service_, CallMethod(_, _, kDummyQueuePosition, _))
+    EXPECT_CALL(*mock_service_, CallMethod(_, kDummyQueuePosition))
         .WillOnce(Return(MakeUnexpected(call_method_error_code)));
 
     // When calling DoCall
@@ -349,41 +240,6 @@ TEST_F(ProxyMethodDoCallFixture, PropagatesErrorFromMessagePassingBinding)
     // Then the error from the call to CallMethod is returned
     ASSERT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), call_method_error_code);
-}
-
-using ProxyMethodSubscriptionFixture = ProxyMethodFixture;
-TEST_F(ProxyMethodSubscriptionFixture, ProxyMethodIsUnsubscribedByDefault)
-{
-    // When constructing a ProxyMethod
-    GivenAProxyMethod();
-
-    // Then it should be unsubscribed
-    EXPECT_FALSE(unit_->IsSubscribed());
-}
-
-TEST_F(ProxyMethodSubscriptionFixture, IsSubscribedReturnsTrueAfterMarkingSubscribed)
-{
-    GivenAProxyMethod();
-
-    // When marking the method as subscribed
-    unit_->MarkSubscribed();
-
-    // Then it should be subscribed
-    EXPECT_TRUE(unit_->IsSubscribed());
-}
-
-TEST_F(ProxyMethodSubscriptionFixture, IsSubscribedReturnsFalseAfterMarkingUnsubscribed)
-{
-    GivenAProxyMethod();
-
-    // and given that the method was previously marked as subscribed
-    unit_->MarkSubscribed();
-
-    // When marking the method as unsubscribed
-    unit_->MarkUnsubscribed();
-
-    // Then it should be unsubscribed
-    EXPECT_FALSE(unit_->IsSubscribed());
 }
 
 }  // namespace

@@ -22,10 +22,8 @@
 
 #include <score/jthread.hpp>
 #include <score/stop_token.hpp>
-
 #include <atomic>
 #include <chrono>
-#include <future>
 #include <iostream>
 #include <thread>
 
@@ -56,14 +54,7 @@ void CreateAndOfferSkeleton(const score::mw::com::InstanceSpecifier& instance_sp
 
 score::Result<score::mw::com::test::BigDataProxy> CreateProxy(const score::mw::com::InstanceSpecifier& instance_specifier)
 {
-    std::promise<std::vector<score::mw::com::test::BigDataProxy::HandleType>> service_discovery_promise{};
-    auto service_discovery_future = service_discovery_promise.get_future();
-    auto handles_result = score::mw::com::test::BigDataProxy::StartFindService(
-        [moved_service_discovery_promise = std::move(service_discovery_promise)](auto handles, auto handle) mutable {
-            moved_service_discovery_promise.set_value(handles);
-            score::mw::com::test::BigDataProxy::StopFindService(handle);
-        },
-        std::move(instance_specifier));
+    auto handles_result = score::mw::com::test::BigDataProxy::FindService(instance_specifier);
     if (!handles_result.has_value())
     {
         std::cerr << "Error finding service for instance specifier" << instance_specifier.ToString() << ": "
@@ -71,8 +62,7 @@ score::Result<score::mw::com::test::BigDataProxy> CreateProxy(const score::mw::c
         return score::MakeUnexpected<score::mw::com::test::BigDataProxy>(handles_result.error());
     }
 
-    const auto handles = service_discovery_future.get();
-    if (handles.empty())
+    if (handles_result.value().empty())
     {
         std::cerr << "NO instance found for instance specifier" << instance_specifier.ToString()
                   << " although service instance has been successfully offered! Terminating!" << std::endl;
@@ -80,7 +70,7 @@ score::Result<score::mw::com::test::BigDataProxy> CreateProxy(const score::mw::c
             score::mw::com::impl::MakeError(score::mw::com::impl::ComErrc::kServiceNotAvailable));
     }
 
-    return score::mw::com::test::BigDataProxy::Create(handles.front());
+    return score::mw::com::test::BigDataProxy::Create(handles_result.value().front());
 }
 
 /**
@@ -158,35 +148,25 @@ int main(int argc, const char** argv)
     }
 
     score::concurrency::Notification call_get_subscription_state_notification{};
-    const auto set_handler_result = proxy.map_api_lanes_stamped_.SetReceiveHandler(
-        [&proxy, &call_get_subscription_state_notification, &stop_source]() {
-            std::cout << "Proxy received event! Waiting for Notification to call GetSubscriptionState()" << std::endl;
-            const bool call_get_subscription_state =
-                call_get_subscription_state_notification.waitWithAbort(stop_source.get_token());
-            if (call_get_subscription_state)
-            {
-                std::cout << "Proxy calling GetSubscriptionState()" << std::endl;
-                proxy.map_api_lanes_stamped_.GetSubscriptionState();
-                std::cout << "Proxy GetSubscriptionState() returned" << std::endl;
-            }
-            else
-            {
-                std::cerr << "Waiting for Notification to call GetSubscriptionState() has been aborted!" << std::endl;
-            }
-        });
-    if (!set_handler_result.has_value())
-    {
-        std::cerr << "Could not set receive handler: " << set_handler_result.error() << ", terminating." << std::endl;
-        return EXIT_FAILURE;
-    }
+    proxy.map_api_lanes_stamped_.SetReceiveHandler([&proxy, &call_get_subscription_state_notification, &stop_source]() {
+        std::cout << "Proxy received event! Waiting for Notification to call GetSubscriptionState()" << std::endl;
+        const bool call_get_subscription_state =
+            call_get_subscription_state_notification.waitWithAbort(stop_source.get_token());
+        if (call_get_subscription_state)
+        {
+            std::cout << "Proxy calling GetSubscriptionState()" << std::endl;
+            proxy.map_api_lanes_stamped_.GetSubscriptionState();
+            std::cout << "Proxy GetSubscriptionState() returned" << std::endl;
+        }
+        else
+        {
+            std::cerr << "Waiting for Notification to call GetSubscriptionState() has been aborted!" << std::endl;
+        }
+    });
+
     // Sending an event update here triggers the event-receive-handler registered above, which will acquire the
     // read-lock on receive-handler map!
-    const auto send_result = skeleton.map_api_lanes_stamped_.Send(kEvent_sample);
-    if (!send_result.has_value())
-    {
-        std::cerr << "Could not send event sample: " << send_result.error() << ", terminating." << std::endl;
-        return EXIT_FAILURE;
-    }
+    skeleton.map_api_lanes_stamped_.Send(kEvent_sample);
 
     // Make a deferred notification to call_get_subscription_state_notification, where the registered
     // event-receive-handler waits for! It will get woken up by this notification and then call GetSubscriptionState(),

@@ -10,8 +10,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-
-load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_rust//rust:defs.bzl", "rust_library")
 load("@score_baselibs//score/language/safecpp:toolchain_features.bzl", "COMPILER_WARNING_FEATURES")
 
@@ -25,6 +23,7 @@ rust_library(
     ],
     deps = [
         ":vehicle_gen_cpp",
+        "//score/mw/com/impl/rust:generic_bridge_ffi_rs",
         "//score/mw/com/impl/rust/com-api/com-api",
     ],
 )
@@ -35,7 +34,7 @@ cc_library(
     hdrs = ["vehicle_gen.h"],
     features = COMPILER_WARNING_FEATURES,
     implementation_deps = [
-        "//score/mw/com/impl/rust/com-api/com-api-ffi-lola:registry_bridge_macro_cpp",
+        "//score/mw/com/impl/rust:registry_bridge_macro_cpp",
     ],
     alwayslink = True,
 )

@@ -73,7 +73,8 @@ FakeServiceData::FakeServiceData(const std::string& control_file_name,
         [this, initialise_skeleton_data](std::shared_ptr<ISharedMemoryResource> memory_resource) {
             if (initialise_skeleton_data)
             {
-                data_control = memory_resource->construct<ServiceDataControl>(*memory_resource);
+                data_control =
+                    memory_resource->construct<ServiceDataControl>(memory_resource->getMemoryResourceProxy());
             }
         },
         65535U);
@@ -84,7 +85,8 @@ FakeServiceData::FakeServiceData(const std::string& control_file_name,
             std::shared_ptr<ISharedMemoryResource> memory_resource) {
             if (initialise_skeleton_data)
             {
-                data_storage = memory_resource->construct<ServiceDataStorage>(*memory_resource);
+                data_storage =
+                    memory_resource->construct<ServiceDataStorage>(memory_resource->getMemoryResourceProxy());
                 data_storage->skeleton_pid_ = skeleton_process_pid_in;
                 data_storage->skeleton_uid_ = skeleton_uid_in;
             }

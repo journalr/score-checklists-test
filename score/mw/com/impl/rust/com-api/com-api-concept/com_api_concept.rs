@@ -196,9 +196,9 @@ where
 }
 
 /// Communication data type requirements trait.
-/// Requires the data type to be relocatable between address spaces and sendable across threads.
+/// Bounds the data type to be relocatable and sendable across threads.
 /// Also requires the data type to implement Debug for logging and debugging purposes.
-/// 'static' lifetime is required to ensure the data can live for the entire duration of the program.
+/// 'static' lifetime ensures the data type does not contain non-static references.
 pub trait CommData: Reloc + Send + Debug + 'static {
     const ID: &'static str;
 }
@@ -319,6 +319,16 @@ pub trait SampleMut<T>: DerefMut<Target = T> + Debug
 where
     T: CommData,
 {
+    /// Sample type for immutable access
+    type Sample: Sample<T>;
+
+    /// Consume the sample into an immutable sample.
+    ///
+    /// # Returns
+    ///
+    /// A `Sample` instance providing immutable access to the data.
+    fn into_sample(self) -> Self::Sample;
+
     /// Send the sample and consume it.
     ///
     /// # Returns

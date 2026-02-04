@@ -1,6 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2026 Contributors to the Eclipse Foundation
- *
+jk *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
  *
@@ -63,7 +62,7 @@ class ProxyMethodBindingFactoryImpl<ReturnType(ArgTypes...)> : public IProxyMeth
     /// \param method_name The binding unspecific name of the method inside the proxy denoted by handle.
     /// \return An instance of ProxyMethodBinding or nullptr in case of an error.
     std::unique_ptr<ProxyMethodBinding> Create(HandleType parent_handle,
-                                               ProxyBinding* parent_binding,
+                                               ProxyBinding* parent_bindign,
                                                const std::string_view method_name) noexcept override;
 };
 

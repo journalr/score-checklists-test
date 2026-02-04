@@ -12,16 +12,15 @@
  ********************************************************************************/
 
 /// \file registry_bridge_macro.cpp
-/// \brief C FFI wrapper implementations for COM-API that use registry-based type resolution
-/// \details This file provides extern "C" functions that implement the COM-API FFI using the registry-based approach
-/// defined in registry_bridge_macro.h. These functions are called by Rust code through FFI and provide safe,
-/// C-compatible interfaces to the C++ COM-API implementation.
-/// The actual logic of these functions relies on the type and interface registries to resolve the correct operations at
-/// runtime. The functions bridge between:
+/// \brief C FFI wrapper implementations for generic event bridge APIs
+/// \details This file provides extern "C" functions that wrap the C++ generic APIs.
+/// These functions are called by Rust code through FFI and provide safe,
+/// C-compatible interfaces to the C++ generic event system.
+/// The functions bridge between:
 /// - Rust side: String-based, safe wrapper APIs
 /// - C++ side: Template-based, type-erased implementation
 
-#include "score/mw/com/impl/rust/com-api/com-api-ffi-lola/registry_bridge_macro.h"
+#include "score/mw/com/impl/rust/registry_bridge_macro.h"
 #include "score/mw/com/impl/proxy_base.h"
 #include "score/mw/com/impl/proxy_event.h"
 #include "score/mw/com/impl/proxy_event_base.h"

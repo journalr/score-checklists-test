@@ -125,7 +125,7 @@ TEST_F(LolaGenericProxyEventDeathTest, OverflowWhenCalculatingRawEventsSlotsArra
 
     // and given a GenericProxyEvent which has subscribed
     WithAGenericProxyEvent(element_fq_id_, event_name_);
-    std::ignore = generic_proxy_event_->Subscribe(kMaxSampleCount);
+    generic_proxy_event_->Subscribe(kMaxSampleCount);
 
     // When calling GetNewSamples
     // Then the program terminates

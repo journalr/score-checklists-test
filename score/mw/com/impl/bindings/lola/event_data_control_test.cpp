@@ -98,7 +98,7 @@ class EventDataControlFixture : public ::testing::Test
 
         unit_mock_ =
             std::make_unique<detail_event_data_control::EventDataControlImpl<memory::shared::AtomicIndirectorMock>>(
-                kMaxSlots, memory_, kMaxSubscribers);
+                kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers);
 
         return *this;
     }
@@ -118,7 +118,7 @@ TEST_F(EventDataControlFixture, CanAllocateOneSlotWithoutContention)
     RecordProperty("DerivationTechnique", "Analysis of requirements");
 
     // Given an initialized EventDataControl structure
-    EventDataControl unit{kMaxSlots, memory_, kMaxSubscribers};
+    EventDataControl unit{kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
 
     // When allocating a slot
     auto slot = unit.AllocateNextSlot();
@@ -177,7 +177,7 @@ TEST_F(EventDataControlFixture, CanAllocateOneSlotWhenReferenceCountChanges)
 TEST_F(EventDataControlFixture, CanAllocateMultipleSlotWithoutContention)
 {
     // Given an initialized EventDataControl structure where already a slot is allocated
-    EventDataControl unit{kMaxSlots, memory_, kMaxSubscribers};
+    EventDataControl unit{kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     unit.AllocateNextSlot();
 
     // When allocating a slot
@@ -190,7 +190,7 @@ TEST_F(EventDataControlFixture, CanAllocateMultipleSlotWithoutContention)
 TEST_F(EventDataControlFixture, DiscardedElementOnWritingWillBeInvalid)
 {
     // Given an initialized EventDataControl structure where already a slot is allocated
-    EventDataControl unit{kMaxSlots, memory_, kMaxSubscribers};
+    EventDataControl unit{kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     auto slot = unit.AllocateNextSlot();
 
     // When discarding that slot
@@ -206,7 +206,7 @@ TEST_F(EventDataControlFixture, DiscardedElementOnWritingWillBeInvalid)
 TEST_F(EventDataControlFixture, DiscardedElementAfterWritingIsNotTouched)
 {
     // Given an initialized EventDataControl structure where already a slot is written
-    EventDataControl unit{kMaxSlots, memory_, kMaxSubscribers};
+    EventDataControl unit{kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     const auto slot = unit.AllocateNextSlot();
     unit.EventReady(slot, 0x42);
 
@@ -221,7 +221,7 @@ TEST_F(EventDataControlFixture, DiscardedElementAfterWritingIsNotTouched)
 TEST_F(EventDataControlFixture, CanNotAllocateSlotIfAllSlotsAllocated)
 {
     // Given an initialized EventDataControl structure where all slots are allocated
-    EventDataControl unit{kMaxSlots, memory_, kMaxSubscribers};
+    EventDataControl unit{kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     for (auto counter = 0; counter < 5; ++counter)
     {
         unit.AllocateNextSlot();
@@ -237,7 +237,7 @@ TEST_F(EventDataControlFixture, CanNotAllocateSlotIfAllSlotsAllocated)
 TEST_F(EventDataControlFixture, CanAllocateSlotAfterOneSlotReady)
 {
     // Given an initialized EventDataControl structure where all slots are allocated
-    EventDataControl unit{kMaxSlots, memory_, kMaxSubscribers};
+    EventDataControl unit{kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     std::array<ControlSlotIndicator, 5U> slot_indicators{};
     for (auto counter = 0U; counter < 5U; ++counter)
     {
@@ -255,7 +255,7 @@ TEST_F(EventDataControlFixture, CanAllocateSlotAfterOneSlotReady)
 TEST_F(EventDataControlFixture, CanAllocateOldestSlotAfterOneSlotReady)
 {
     // Given an initialized EventDataControl structure where all slots are allocated
-    EventDataControl unit{kMaxSlots, memory_, kMaxSubscribers};
+    EventDataControl unit{kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     std::array<ControlSlotIndicator, 5U> slot_indicators{};
     for (auto counter = 0U; counter < 5U; ++counter)
     {
@@ -278,7 +278,7 @@ TEST_F(EventDataControlFixture, CanAllocateOldestSlotAfterOneSlotReady)
 TEST_F(EventDataControlFixture, MultithreadedSlotAllocationDeallocation)
 {
     // Given an empty EventDataControl
-    EventDataControl unit{kMaxSlots, memory_, kMaxSubscribers};
+    EventDataControl unit{kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
 
     std::atomic<EventSlotStatus::EventTimeStamp> time_stamp{1};
     auto fuzzer = [&unit, &time_stamp]() {
@@ -324,7 +324,7 @@ TEST_F(EventDataControlFixture, MultithreadedSlotAllocationDeallocation)
 TEST_F(EventDataControlFixture, RegisterProxyElementReturnsValidTransactionLogIndex)
 {
     // Given a EventDataControlUnit
-    EventDataControl unit{1, memory_, kMaxSubscribers};
+    EventDataControl unit{1, memory_.getMemoryResourceProxy(), kMaxSubscribers};
 
     // When registering the proxy with the TransactionLogSet
     const auto transaction_log_index_result = unit.GetTransactionLogSet().RegisterProxyElement(kDummyTransactionLogId);
@@ -337,7 +337,7 @@ TEST_F(EventDataControlFixture, RegisterProxyElementReturnsValidTransactionLogIn
 TEST_F(EventDataControlFixture, FindNextSlotBlocksAllocation)
 {
     // Given a EventDataControlUnit with one ready slot
-    EventDataControl unit{1, memory_, kMaxSubscribers};
+    EventDataControl unit{1, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     auto slot = unit.AllocateNextSlot();
     unit.EventReady(slot, 1);
 
@@ -357,7 +357,7 @@ TEST_F(EventDataControlFixture, DISABLED_MultipleReceiverRefCountCheck)
     const std::size_t max_subscribers{10U};
 
     // Given an EventDataControl with one ready slot
-    EventDataControl unit{1, memory_, max_subscribers};
+    EventDataControl unit{1, memory_.getMemoryResourceProxy(), max_subscribers};
     auto slot = unit.AllocateNextSlot();
     unit.EventReady(slot, 1);
 
@@ -404,7 +404,8 @@ TEST_F(EventDataControlFixture, FailingToUpdateSlotValueCausesReferenceNextEvent
     EXPECT_CALL(atomic_mock, compare_exchange_weak(_, _, _)).Times(max_reference_retries).WillRepeatedly(Return(false));
 
     // and a EventDataControlUnit with one ready slot
-    detail_event_data_control::EventDataControlImpl<AtomicIndirectorMock> unit_mock{1, memory_, kMaxSubscribers};
+    detail_event_data_control::EventDataControlImpl<AtomicIndirectorMock> unit_mock{
+        1, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     auto slot = unit_mock.AllocateNextSlot();
     unit_mock.EventReady(slot, 1);
 
@@ -421,7 +422,7 @@ TEST_F(EventDataControlFixture, FailingToUpdateSlotValueCausesReferenceNextEvent
 TEST_F(EventDataControlFixture, GetNumNewEvents_Zero)
 {
     // Given an EventDataControl with one ready slot
-    EventDataControl unit{1, memory_, kMaxSubscribers};
+    EventDataControl unit{1, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     auto slot = unit.AllocateNextSlot();
     unit.EventReady(slot, 1);
 
@@ -432,7 +433,7 @@ TEST_F(EventDataControlFixture, GetNumNewEvents_Zero)
 TEST_F(EventDataControlFixture, GetNumNewEvents_One)
 {
     // Given an EventDataControl with one ready slot
-    EventDataControl unit{1, memory_, kMaxSubscribers};
+    EventDataControl unit{1, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     auto slot = unit.AllocateNextSlot();
     unit.EventReady(slot, 1);
 
@@ -443,7 +444,7 @@ TEST_F(EventDataControlFixture, GetNumNewEvents_One)
 TEST_F(EventDataControlFixture, GetNumNewEvents_Many)
 {
     // Given an EventDataControl with 6 ready slots
-    EventDataControl unit{6, memory_, kMaxSubscribers};
+    EventDataControl unit{6, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     for (unsigned int i = 1; i <= 6; i++)
     {
         auto slot = unit.AllocateNextSlot();
@@ -469,7 +470,7 @@ TEST_F(EventDataControlReferenceSpecificEventFixture, ReferenceSpecificEvents)
     const std::size_t subscription_slots{6U};
 
     // Given an EventDataControl with 6 ready slots
-    EventDataControl unit{max_number_slots, memory_, kMaxSubscribers};
+    EventDataControl unit{max_number_slots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     for (unsigned int i = 0; i < 6; i++)
     {
         auto slot = unit.AllocateNextSlot();
@@ -492,7 +493,7 @@ using EventDataControlReferenceSpecificEventDeathTest = EventDataControlReferenc
 TEST_F(EventDataControlReferenceSpecificEventDeathTest, ReferenceSpecificEvent_StatusInvalidTerminates)
 {
     // Given an EventDataControl with one (initially invalid) slot
-    EventDataControl unit{1, memory_, kMaxSubscribers};
+    EventDataControl unit{1, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     EXPECT_TRUE(unit[0].IsInvalid());
 
     const auto transaction_log_index = unit.GetTransactionLogSet().RegisterProxyElement(kDummyTransactionLogId).value();
@@ -505,7 +506,7 @@ TEST_F(EventDataControlReferenceSpecificEventDeathTest, ReferenceSpecificEvent_S
 TEST_F(EventDataControlReferenceSpecificEventDeathTest, ReferenceSpecificEvent_StatusInWritingTerminates)
 {
     // Given an EventDataControl with one in_writing slot
-    EventDataControl unit{1, memory_, kMaxSubscribers};
+    EventDataControl unit{1, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     auto slot = unit.AllocateNextSlot();
     ASSERT_TRUE(slot.IsValid());
     EXPECT_TRUE(unit[slot.GetIndex()].IsInWriting());
@@ -531,7 +532,7 @@ TEST_F(EventDataControlReferenceSpecificEventDeathTest, ReferenceSpecificEvent_R
 
     // Given an EventDataControl with one slot
     detail_event_data_control::EventDataControlImpl<memory::shared::AtomicIndirectorMock> unit{
-        1, memory_, kMaxSubscribers};
+        1, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     auto slot = unit.AllocateNextSlot();
     ASSERT_TRUE(slot.IsValid());
 
@@ -547,7 +548,7 @@ TEST_F(EventDataControlFixture, AllocatedSlotsCanBeCleanedUp)
     RecordProperty("Description", "Tests that all allocated slots can be cleaned up at once.");
 
     // Given an initialized EventDataControl structure, with allocated slots
-    EventDataControl unit{kMaxSlots, memory_, kMaxSubscribers};
+    EventDataControl unit{kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     const auto first_slot = unit.AllocateNextSlot();
     const auto second_slot = unit.AllocateNextSlot();
 
@@ -576,7 +577,7 @@ TEST_F(EventDataControlDeathTest, FailingToCleanUpSlotDueToOtherThreadModifyingA
 
     // and given an initialized EventDataControl structure, with a single allocated slot
     detail_event_data_control::EventDataControlImpl<memory::shared::AtomicIndirectorMock> unit{
-        kMaxSlots, memory_, kMaxSubscribers};
+        kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
 
     // When cleaning up allocations
     // Then the program terminates
@@ -612,7 +613,7 @@ class MultiSenderMultiReceiverTest : public ::testing::TestWithParam<MultiSender
 
     // Unprotected
     FakeMemoryResource memory_{};
-    EventDataControl unit_{GetParam().num_slots, memory_, GetParam().num_receiver_threads};
+    EventDataControl unit_{GetParam().num_slots, memory_.getMemoryResourceProxy(), GetParam().num_receiver_threads};
 };
 
 TEST_P(MultiSenderMultiReceiverTest, MultiSenderMultiReceiver)

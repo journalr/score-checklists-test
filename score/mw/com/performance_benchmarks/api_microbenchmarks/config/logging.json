@@ -1,8 +1,0 @@
-{
-    "appId": "BNCH",
-    "appDesc": "benchmark",
-    "logLevel": "kOff",
-    "logLevelThresholdConsole": "kOff",
-    "logMode": "kRemote|kConsole",
-    "dynamicDatarouterIdentifiers": true
-}

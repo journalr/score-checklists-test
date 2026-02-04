@@ -38,7 +38,7 @@ class SampleAllocateePtrFixture : public ::testing::Test
 {
   public:
     FakeMemoryResource memory_{};
-    EventDataControl control_block_{kMaxSlots, memory_, kMaxSubscribers};
+    EventDataControl control_block_{kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers};
     EventDataControlComposite control_composite_{&control_block_};
 };
 

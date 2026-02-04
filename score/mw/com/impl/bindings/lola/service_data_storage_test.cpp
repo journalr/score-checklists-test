@@ -20,7 +20,6 @@
 #include "score/mw/com/impl/test/runtime_mock_guard.h"
 
 #include "score/memory/shared/map.h"
-#include "score/memory/shared/new_delete_delegate_resource.h"
 #include "score/os/ObjectSeam.h"
 #include "score/os/mocklib/unistdmock.h"
 
@@ -35,8 +34,6 @@ namespace score::mw::com::impl::lola
 {
 namespace
 {
-
-const std::uint64_t kMemoryResourceId{10U};
 
 using namespace ::testing;
 
@@ -83,8 +80,7 @@ TEST_F(ServiceDataStorageFixture, ServiceElementsAreIndexedUsingElementFqId)
     RecordProperty("TestType", "Requirements-based test");
     RecordProperty("DerivationTechnique", "Analysis of requirements");
 
-    memory::shared::NewDeleteDelegateMemoryResource memory{kMemoryResourceId};
-    const ServiceDataStorage unit{memory};
+    const ServiceDataStorage unit{nullptr};
     using ActualEventMapType = decltype(unit.events_);
 
     using ExpectedKeyType = ElementFqId;
@@ -105,9 +101,8 @@ TEST_F(ServiceDataStorageFixture, GetsPidFromUnistdAndStoresItOnConstruction)
     const pid_t pid{123};
     EXPECT_CALL(lola_runtime_mock_, GetPid()).WillOnce(Return(pid));
 
-    memory::shared::NewDeleteDelegateMemoryResource memory{kMemoryResourceId};
     // When creating a ServiceDataStorage
-    const ServiceDataStorage unit{memory};
+    const ServiceDataStorage unit{nullptr};
 
     // Then the ServiceDataStorage will contain the returned PID
     EXPECT_EQ(unit.skeleton_pid_, pid);
@@ -121,9 +116,8 @@ TEST_F(ServiceDataStorageFixture, GetsUidFromRuntimAndStoresItOnConstruction)
     const uid_t uid{456};
     EXPECT_CALL(*unistd_mock, getuid()).WillOnce(Return(uid));
 
-    memory::shared::NewDeleteDelegateMemoryResource memory{kMemoryResourceId};
     // When creating a ServiceDataStorage
-    const ServiceDataStorage unit{memory};
+    const ServiceDataStorage unit{nullptr};
 
     // Then the ServiceDataStorage will contain the returned UID
     EXPECT_EQ(unit.skeleton_uid_, uid);

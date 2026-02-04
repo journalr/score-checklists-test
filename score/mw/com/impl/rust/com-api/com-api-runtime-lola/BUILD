@@ -10,26 +10,20 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-
 load("@rules_rust//rust:defs.bzl", "rust_library")
 
 rust_library(
     name = "com-api-runtime-lola",
-    srcs = [
-        "consumer.rs",
-        "lib.rs",
-        "producer.rs",
-        "runtime.rs",
-    ],
+    srcs = ["runtime.rs"],
     visibility = [
         "//visibility:public",  # platform_only
     ],
     deps = [
         "//score/mw/com/impl/plumbing/rust:sample_allocatee_ptr_rs",
         "//score/mw/com/impl/plumbing/rust:sample_ptr_rs",
-        "//score/mw/com/impl/rust:mw_com",
+        "//score/mw/com/impl/rust:generic_bridge_ffi_rs",
+        "//score/mw/com/impl/rust:proxy_bridge_rs",
         "//score/mw/com/impl/rust/com-api/com-api-concept",
-        "//score/mw/com/impl/rust/com-api/com-api-ffi-lola:bridge_ffi_rs",
         "@score_communication_crate_index//:futures",
     ],
 )

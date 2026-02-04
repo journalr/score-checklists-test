@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2026 Contributors to the Eclipse Foundation
+# Copyright (c) 2025 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -11,7 +11,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@score_baselibs//score/language/safecpp:toolchain_features.bzl", "COMPILER_WARNING_FEATURES")
 
 cc_library(
@@ -33,7 +32,7 @@ cc_binary(
         "lola_public_api_benchmarks.cpp",
     ],
     data = [
-        "//score/mw/com/performance_benchmarks/api_microbenchmarks/config:basic_config",
+        "//score/mw/com/performance_benchmarks/api_microbenchmarks/config",
     ],
     features = COMPILER_WARNING_FEATURES,
     tags = ["benchmark"],
@@ -51,29 +50,8 @@ cc_binary(
         "lola_get_num_new_samples_benchmarks.cpp",
     ],
     data = [
-        "//score/mw/com/performance_benchmarks/api_microbenchmarks/config:basic_config",
+        "//score/mw/com/performance_benchmarks/api_microbenchmarks/config",
     ],
-    features = COMPILER_WARNING_FEATURES,
-    tags = ["benchmark"],
-    deps = [
-        ":lola_interface",
-        "//score/mw/com",
-        "@google_benchmark//:benchmark_main",
-        "@score_baselibs//score/language/futurecpp",
-        "@score_logging//score/mw/log",
-    ],
-)
-
-cc_binary(
-    name = "lola_get_new_samples_benchmark",
-    srcs = [
-        "lola_get_new_samples_benchmarks.cpp",
-    ],
-    data = [
-        "//score/mw/com/performance_benchmarks/api_microbenchmarks/config:config_qm_high_frequency_send_large_data",
-        "//score/mw/com/performance_benchmarks/api_microbenchmarks/config:logging_json",
-    ],
-    env = {"MW_LOG_CONFIG_FILE": "$(location //score/mw/com/performance_benchmarks/api_microbenchmarks/config:logging_json)"},
     features = COMPILER_WARNING_FEATURES,
     tags = ["benchmark"],
     deps = [

@@ -94,6 +94,33 @@ SkeletonBase::SkeletonBase(std::unique_ptr<SkeletonBinding> skeleton_binding, In
 {
 }
 
+SkeletonBase::~SkeletonBase()
+{
+    Cleanup();
+}
+
+void SkeletonBase::Cleanup()
+{
+    // If the skeleton is mocked, then we shouldn't perform any actual cleanup.
+    if (skeleton_mock_ != nullptr)
+    {
+        return;
+    }
+
+    // The SkeletonBase is responsible for calling PrepareStopOffer on the skeleton binding when the SkeletonBase is
+    // destroyed. The SkeletonEventBase is responsible for calling PrepareStopOffer on the SkeletonEvent binding as the
+    // SkeletonEventBases are owned by the child class of SkeletonBase and will therefore be fully destroyed before
+    // ~SkeletonBase() is called.
+    if (service_offered_flag_.IsSet())
+    {
+        StopOfferServiceInServiceDiscovery(instance_id_);
+        auto tracing_handler = tracing::CreateUnregisterShmObjectCallback(instance_id_, events_, fields_, *binding_);
+
+        binding_->PrepareStopOffer(std::move(tracing_handler));
+        service_offered_flag_.Clear();
+    }
+}
+
 SkeletonBase::SkeletonBase(SkeletonBase&& other) noexcept
     : binding_{std::move(other.binding_)},
       events_{std::move(other.events_)},
@@ -128,33 +155,32 @@ SkeletonBase::SkeletonBase(SkeletonBase&& other) noexcept
 // coverity[autosar_cpp14_a6_2_1_violation]
 SkeletonBase& SkeletonBase::operator=(SkeletonBase&& other) noexcept
 {
-    if (this == &other)
+    if (this != &other)
     {
-        return *this;
-    }
+        Cleanup();
+        binding_ = std::move(other.binding_);
+        events_ = std::move(other.events_);
+        fields_ = std::move(other.fields_);
+        methods_ = std::move(other.methods_);
+        instance_id_ = std::move(other.instance_id_);
+        skeleton_mock_ = std::move(other.skeleton_mock_);
+        service_offered_flag_ = std::move(other.service_offered_flag_);
 
-    binding_ = std::move(other.binding_);
-    events_ = std::move(other.events_);
-    fields_ = std::move(other.fields_);
-    methods_ = std::move(other.methods_);
-    instance_id_ = std::move(other.instance_id_);
-    skeleton_mock_ = std::move(other.skeleton_mock_);
-    service_offered_flag_ = std::move(other.service_offered_flag_);
+        // Since the address of this skeleton has changed, we need update the address stored in each of the events and
+        // fields belonging to the skeleton.
+        for (auto& event : events_)
+        {
+            event.second.get().UpdateSkeletonReference(*this);
+        }
 
-    // Since the address of this skeleton has changed, we need update the address stored in each of the events and
-    // fields belonging to the skeleton.
-    for (auto& event : events_)
-    {
-        event.second.get().UpdateSkeletonReference(*this);
-    }
-
-    for (auto& field : fields_)
-    {
-        field.second.get().UpdateSkeletonReference(*this);
-    }
-    for (auto& method : methods_)
-    {
-        method.second.get().UpdateSkeletonReference(*this);
+        for (auto& field : fields_)
+        {
+            field.second.get().UpdateSkeletonReference(*this);
+        }
+        for (auto& method : methods_)
+        {
+            method.second.get().UpdateSkeletonReference(*this);
+        }
     }
     return *this;
 }

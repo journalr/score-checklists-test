@@ -114,8 +114,8 @@ TEST_F(SkeletonTestMockedSharedMemoryFixture, VerifyAllMethodsRegisteredSucceeds
         std::cout << "bla\n";
     };
 
-    std::ignore = fooo_method_->RegisterHandler(fooo_callback);
-    std::ignore = dumb_method_->RegisterHandler(dumb_callback);
+    fooo_method_->RegisterHandler(fooo_callback);
+    dumb_method_->RegisterHandler(dumb_callback);
 
     // Then VerifyAllMethodsRegistered succeeds
     EXPECT_EQ(skeleton_->VerifyAllMethodsRegistered(), true);
@@ -128,7 +128,7 @@ TEST_F(SkeletonTestMockedSharedMemoryFixture, VerifyAllMethodsRegisteredFailsWhe
     // When one of the methods does not have a callback registered
     auto fooo_callback = [](std::optional<score::cpp::span<std::byte>>, std::optional<score::cpp::span<std::byte>>) {};
 
-    std::ignore = fooo_method_->RegisterHandler(fooo_callback);
+    fooo_method_->RegisterHandler(fooo_callback);
 
     // Then VerifyAllMethodsRegistered fails with kBindingFailure
     EXPECT_EQ(skeleton_->VerifyAllMethodsRegistered(), false);
@@ -929,7 +929,7 @@ TEST_P(SkeletonRegisterParamaterisedFixture, TracingWillBeDisabledAndTransaction
     EXPECT_CALL(tracing_runtime_mock, DisableTracing());
 
     // when calling PrepareOffer ... expect, that it succeeds
-    std::ignore = skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
+    skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
 
     // when the event is registered with the skeleton
     score::cpp::ignore = skeleton_->Register<test::TestSampleType>(test::kDummyElementFqId, test::kDefaultEventProperties);
@@ -963,7 +963,7 @@ TEST_P(SkeletonRegisterParamaterisedFixture, ValidEventDataSlotsExistAfterEventI
     InitialiseSkeleton(instance_identifier);
 
     // when PrepareOffer the service
-    std::ignore = skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
+    skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
 
     // when the event is registered with the skeleton
     const auto* const lola_service_type_deployment = GetLolaServiceTypeDeployment(test::kValidMinimalTypeDeployment);
@@ -1003,7 +1003,7 @@ TEST_P(SkeletonRegisterParamaterisedFixture, CanAllocateSlotAfterEventIsRegister
     InitialiseSkeleton(instance_identifier);
 
     // when PrepareOffer the service
-    std::ignore = skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
+    skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
 
     // when the event is registered with the skeleton
     const auto* const lola_service_type_deployment = GetLolaServiceTypeDeployment(test::kValidMinimalTypeDeployment);
@@ -1040,7 +1040,7 @@ TEST_P(SkeletonRegisterParamaterisedFixture, AllocateAfterCleanUp)
     // Given a skeleton with one event "fooEvent" registered
     InitialiseSkeleton(instance_identifier);
 
-    std::ignore = skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
+    skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
 
     const auto* const lola_service_type_deployment = GetLolaServiceTypeDeployment(test::kValidMinimalTypeDeployment);
     ElementFqId event_fqn{
@@ -1066,7 +1066,6 @@ TEST_P(SkeletonRegisterParamaterisedFixture, ValidEventMetaInfoExistAfterEventIs
     RecordProperty("Description", "Checks that the event meta info for an event is published by the Skeleton.");
     RecordProperty("TestingTechnique", "Requirements-based test");
     RecordProperty("DerivationTechnique", "Analysis of requirements");
-    RecordProperty("Priority", "2");
 
     /// \brief only locally used complex SampleType/event-data-type
     struct VeryComplexType
@@ -1128,7 +1127,7 @@ TEST_P(SkeletonRegisterParamaterisedFixture, ValidEventMetaInfoExistAfterEventIs
     InitialiseSkeleton(instance_identifier);
 
     // when the service offering is prepared
-    std::ignore = skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
+    skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
 
     // and foo_event is registered with the skeleton with 5 slots
     const auto* const lola_service_type_deployment = GetLolaServiceTypeDeployment(test::kValidMinimalTypeDeployment);
@@ -1200,7 +1199,7 @@ TEST_P(SkeletonRegisterParamaterisedFixture, NoMetaInfoExistsForInvalidElementId
     InitialiseSkeleton(instance_identifier);
 
     // when PrepareOffer the service
-    std::ignore = skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
+    skeleton_->PrepareOffer(events_, fields_, std::move(kEmptyRegisterShmObjectTraceCallback));
 
     // and the event is registered with the skeleton
     const auto* const lola_service_type_deployment = GetLolaServiceTypeDeployment(test::kValidMinimalTypeDeployment);
@@ -1289,8 +1288,7 @@ class SkeletonCreateFixture : public Test
 
     void TearDown() override
     {
-        std::ignore =
-            filesystem::FilesystemFactory{}.CreateInstance().standard->RemoveAll(partial_restart_directory_path_);
+        filesystem::FilesystemFactory{}.CreateInstance().standard->RemoveAll(partial_restart_directory_path_);
     }
 
 #if defined(__QNXNTO__)

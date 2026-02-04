@@ -11,11 +11,18 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-test_suite(
-    name = "component_tests",
-    tests = [
-        "//score/mw/com/test/methods/basic_acceptance_test:component_tests",
-        "//score/mw/com/test/methods/signature_variations:component_tests",
+filegroup(
+    name = "bigdata-secpol",
+    srcs = select({
+        "//bazel/platforms/settings:arm64-qnx-virtual": ["bigdata-virtual.secpol"],
+        "//conditions:default": [
+            "bigdata.secpol",
+        ],
+    }),
+    visibility = [
+        "//pqr/abc/abc-lmn/config/common/os/bsw/qnx-secpol:__pkg__",
+        "//pqr/abc/abc-lmn/config/project/cpu/os:__subpackages__",
+        # "@xyz//pqr/abc/abc-lmn/config/common/os/bsw/qnx-secpol:__pkg__",
+        # "@xyz//pqr/abc/abc-lmn/config/project/cpu/os:__subpackages__",
     ],
-    visibility = ["//score/mw/com/test:__pkg__"],
 )

@@ -1,0 +1,36 @@
+type lib_mw_com_lola_t, restricted_a;
+
+allow lib_mw_com_lola_t self:ability {
+    nonroot # Option to indicate that this set of abilities is selected when running as nonroot
+    map_fixed # Vector ara::com
+    pathspace # Vector ara::com
+    prot_exec # Vector ara::com
+    public_channel # Vector ara::com
+    xthread_threadctl:11 # Vector ara::com
+};
+
+# The abilities in this blocked are not required for LoLa users, they are only required in this example application
+# because it is deployed on the fly and not part of the pdx
+allow lib_mw_com_lola_t self:ability {
+    nonroot # Option to indicate that this set of abilities is selected when running as nonroot
+    untrusted_exec # Required to execute code located in a writable partition
+};
+
+allow lib_mw_com_lola_t {
+    datarouter_t # Handles routing of data
+    devb_loopback_t # loopback device drivers
+    devb_ufs_qualcomm_t # UFS device driver
+    devb_virtio_t # that's needed on QQVP only
+    fsevmgr_t # For managing file system events
+    pipe_t # Communication through named pipes
+    qtsafefsd_t # Reading of configuration files
+}:channel connect;
+
+allow {
+    datarouter_t
+} lib_mw_com_lola_t:channel connect;
+
+allow_attach lib_mw_com_lola_t {
+    /mw_com/message_passing/LoLa* # Logging infrastructure
+    /mw_com/message_passing/logging-*
+};

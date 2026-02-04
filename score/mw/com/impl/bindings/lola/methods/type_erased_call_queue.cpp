@@ -36,13 +36,7 @@ score::cpp::span<std::byte> GetElement(const std::size_t position,
 {
     SCORE_LANGUAGE_FUTURECPP_PRECONDITION_PRD(position < queue_size);
 
-    SCORE_LANGUAGE_FUTURECPP_PRECONDITION_PRD(queue_storage.size() == type_info.Size() * queue_size);
     const auto element_offset = type_info.Size() * position;
-
-    // In our architecture we have a one-to-one mapping between pointers and integral values.
-    // The preconditions above guarantee that element_address will always point inside queue_storage.
-    // Therefore, casting between integers and pointers is well-defined in this case.
-    // NOLINTNEXTLINE(score-banned-function) see above
     auto* const element_address = memory::shared::AddOffsetToPointer(queue_storage.data(), element_offset);
 
     return score::cpp::span{element_address, type_info.Size()};
@@ -74,12 +68,12 @@ score::cpp::span<std::byte> GetReturnValueElementStorage(
                       return_type_erased_info.queue_size);
 }
 
-TypeErasedCallQueue::TypeErasedCallQueue(memory::shared::ManagedMemoryResource& memory_resource,
+TypeErasedCallQueue::TypeErasedCallQueue(const memory::shared::MemoryResourceProxy& resource_proxy,
                                          const TypeErasedElementInfo& type_erased_element_info)
-    : memory_resource_{memory_resource},
+    : resource_proxy_{resource_proxy},
       type_erased_element_info_{type_erased_element_info},
-      in_args_queue_start_address_{nullptr, 0U},
-      return_queue_start_address_{nullptr, 0U}
+      in_args_queue_start_address_{nullptr},
+      return_queue_start_address_{nullptr}
 {
     // If we have neither InArgs nor a Return value, then we don't need to allocate any memory at all.
     if (!(type_erased_element_info_.in_arg_type_info.has_value() ||
@@ -92,13 +86,17 @@ TypeErasedCallQueue::TypeErasedCallQueue(memory::shared::ManagedMemoryResource& 
 
 TypeErasedCallQueue::~TypeErasedCallQueue()
 {
-    if (in_args_queue_start_address_.data != nullptr)
+    if (in_args_queue_start_address_ != nullptr)
     {
-        memory_resource_.deallocate(in_args_queue_start_address_.data.get(), in_args_queue_start_address_.size);
+        const auto& in_arg_type_info = type_erased_element_info_.in_arg_type_info.value();
+        const auto allocated_size = in_arg_type_info.Size() * type_erased_element_info_.queue_size;
+        resource_proxy_.deallocate(in_args_queue_start_address_.get(), allocated_size);
     }
-    if (return_queue_start_address_.data != nullptr)
+    if (return_queue_start_address_ != nullptr)
     {
-        memory_resource_.deallocate(return_queue_start_address_.data.get(), return_queue_start_address_.size);
+        const auto& return_type_info = type_erased_element_info_.return_type_info.value();
+        const auto allocated_size = return_type_info.Size() * type_erased_element_info_.queue_size;
+        resource_proxy_.deallocate(return_queue_start_address_.get(), allocated_size);
     }
 }
 
@@ -108,7 +106,7 @@ std::optional<score::cpp::span<std::byte>> TypeErasedCallQueue::GetInArgValuesQu
     {
         return {};
     }
-    return {{in_args_queue_start_address_.data.get(), in_args_queue_start_address_.size}};
+    return {{in_args_queue_start_address_.get(), type_erased_element_info_.in_arg_type_info->Size()}};
 }
 
 std::optional<score::cpp::span<std::byte>> TypeErasedCallQueue::GetReturnValueQueueStorage() const
@@ -117,7 +115,7 @@ std::optional<score::cpp::span<std::byte>> TypeErasedCallQueue::GetReturnValueQu
     {
         return {};
     }
-    return {{return_queue_start_address_.data.get(), return_queue_start_address_.size}};
+    return {{return_queue_start_address_.get(), type_erased_element_info_.return_type_info->Size()}};
 }
 
 auto TypeErasedCallQueue::GetTypeErasedElementInfo() const -> const TypeErasedElementInfo&
@@ -125,34 +123,28 @@ auto TypeErasedCallQueue::GetTypeErasedElementInfo() const -> const TypeErasedEl
     return type_erased_element_info_;
 }
 
-std::pair<TypeErasedCallQueue::OffsetPtrSpan, TypeErasedCallQueue::OffsetPtrSpan> TypeErasedCallQueue::AllocateQueue()
-    const
+std::pair<memory::shared::OffsetPtr<std::byte>, memory::shared::OffsetPtr<std::byte>>
+TypeErasedCallQueue::AllocateQueue() const
 {
     std::byte* in_args_queue_start_address_bytes{nullptr};
-    std::size_t in_args_queue_size{0U};
     if (type_erased_element_info_.in_arg_type_info.has_value())
     {
         const auto& in_arg_type_info = type_erased_element_info_.in_arg_type_info.value();
         const auto required_size = in_arg_type_info.Size() * type_erased_element_info_.queue_size;
-        void* const in_args_queue_start_address =
-            memory_resource_.allocate(required_size, in_arg_type_info.Alignment());
+        void* const in_args_queue_start_address = resource_proxy_.allocate(required_size, in_arg_type_info.Alignment());
         in_args_queue_start_address_bytes = static_cast<std::byte*>(in_args_queue_start_address);
-        in_args_queue_size = in_arg_type_info.Size() * type_erased_element_info_.queue_size;
     }
 
     std::byte* return_queue_start_address_bytes{nullptr};
-    std::size_t return_queue_size{0U};
     if (type_erased_element_info_.return_type_info.has_value())
     {
         const auto& return_type_info = type_erased_element_info_.return_type_info.value();
         const auto required_size = return_type_info.Size() * type_erased_element_info_.queue_size;
-        void* const return_queue_start_address = memory_resource_.allocate(required_size, return_type_info.Alignment());
+        void* const return_queue_start_address = resource_proxy_.allocate(required_size, return_type_info.Alignment());
         return_queue_start_address_bytes = static_cast<std::byte*>(return_queue_start_address);
-        return_queue_size = return_type_info.Size() * type_erased_element_info_.queue_size;
     }
 
-    return {{in_args_queue_start_address_bytes, in_args_queue_size},
-            {return_queue_start_address_bytes, return_queue_size}};
+    return {in_args_queue_start_address_bytes, return_queue_start_address_bytes};
 }
 
 }  // namespace score::mw::com::impl::lola

@@ -11,7 +11,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library")
 load("@score_baselibs//score/language/safecpp:toolchain_features.bzl", "COMPILER_WARNING_FEATURES")
 load("//score/mw/com/test:pkg_application.bzl", "pkg_application")
@@ -87,7 +86,6 @@ pkg_application(
     ],
     visibility = [
         "//platform/aas/test/mw/com:__pkg__",
-        "//pqr/abc/abc-lmn/config/project/cpu/os/hardware/hypervisor:__subpackages__",
         "//score/mw/com/test/bigdata:__subpackages__",
     ],
 )

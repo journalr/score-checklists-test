@@ -10,7 +10,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-
 load("@rules_rust//rust:defs.bzl", "rust_library")
 
 # Default target with lola runtime
