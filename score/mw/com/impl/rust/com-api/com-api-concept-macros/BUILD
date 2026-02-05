@@ -10,8 +10,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-
-load("@rules_rust//rust:defs.bzl", "rust_doc_test", "rust_proc_macro")
+load("@rules_rust//rust:defs.bzl", "rust_doc_test", "rust_library", "rust_proc_macro")
 
 rust_proc_macro(
     name = "com-api-concept-macros",
@@ -23,6 +22,18 @@ rust_proc_macro(
     deps = [
         "@score_communication_crate_index//:quote",
         "@score_communication_crate_index//:syn",
+    ],
+)
+
+rust_library(
+    name = "com-api-interface-macros",
+    srcs = ["interface_macros.rs"],
+    crate_name = "com_api_concept_interface_macros",
+    visibility = [
+        "//visibility:public",  # platform_only
+    ],
+    deps = [
+        "//score/mw/com/impl/rust/com-api/com-api",
     ],
 )
 

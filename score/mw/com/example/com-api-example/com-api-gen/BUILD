@@ -26,6 +26,7 @@ rust_library(
     deps = [
         ":vehicle_gen_cpp",
         "//score/mw/com/impl/rust/com-api/com-api",
+        "//score/mw/com/impl/rust/com-api/com-api-concept-macros:com-api-interface-macros",
     ],
 )
 
