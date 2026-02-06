@@ -29,11 +29,11 @@ rust_library(
     name = "com-api-interface-macros",
     srcs = ["interface_macros.rs"],
     crate_name = "com_api_concept_interface_macros",
+    proc_macro_deps = [
+        "@score_communication_crate_index//:paste",
+    ],
     visibility = [
         "//visibility:public",  # platform_only
-    ],
-    deps = [
-        "//score/mw/com/impl/rust/com-api/com-api",
     ],
 )
 

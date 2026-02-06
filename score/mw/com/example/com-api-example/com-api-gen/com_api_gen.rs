@@ -11,7 +11,7 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-use com_api::{CommData, ProviderInfo, Publisher, Reloc, Subscriber};
+use com_api::{interface, CommData, ProviderInfo, Publisher, Reloc, Subscriber};
 
 #[derive(Debug, Reloc)]
 #[repr(C)]
@@ -31,14 +31,23 @@ impl CommData for Exhaust {
     const ID: &'static str = "Exhaust";
 }
 
-pub struct VehicleInterface {}
-
-com_api_concept_interface_macros::interface!(
-    VehicleInterface,
-    crate::VehicleInterface,
-    VehicleConsumer,
-    VehicleProducer,
-    VehicleOfferedProducer,
-    left_tire : Event<crate::Tire>,
-    exhaust : Event<crate::Exhaust>
+// Example interface definition using the interface macro
+// This will generate the following types and trait implementations:
+// - VehicleInterface struct with INTERFACE_ID = "Vehicle"
+// - VehicleConsumer<R>, VehicleProducer<R>, VehicleOfferedProducer<R> with appropriate trait
+//   implementations for the Vehicle interface.
+// The macro invocation defines an interface named "Vehicle" with two events: "left_tire" and "exhaust".
+// The generated code will include:
+// - VehicleInterface struct with INTERFACE_ID = "Vehicle"
+// - VehicleConsumer<R> struct that implements Consumer trait for subscribing to "left_tire"
+//   and "exhaust" events.
+// - VehicleProducer<R> struct that implements Producer trait for producing "left_tire" and
+//   "exhaust" events.
+// - VehicleOfferedProducer<R> struct that implements OfferedProducer trait for offering
+//   "left_tire" and "exhaust" events.
+interface!(
+    interface Vehicle {
+        left_tire: Event<Tire>,
+        exhaust: Event<Exhaust>,
+     }
 );
