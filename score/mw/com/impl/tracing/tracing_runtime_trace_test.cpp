@@ -916,7 +916,7 @@ TEST_P(TracingRuntimeTraceLocalParamaterisedFixture, TraceLocalData_NonRecoverab
     EXPECT_CALL(binding_tracing_runtime_mock_, GetTraceClientId()).WillOnce(Return(trace_client_id_));
     // and then expect, that UuT calls the GenericTraceAPI::Trace() call with local chunk list
     EXPECT_CALL(*generic_trace_api_mock_.get(), Trace(trace_client_id_, _, Eq(ByRef(expected_chunk_list))))
-        .WillOnce(Return(MakeUnexpected(analysis::tracing::ErrorCode::kChannelCreationFailedFatal)));
+        .WillOnce(Return(MakeUnexpected(analysis::tracing::ErrorCode::kDaemonConnectionFailedFatal)));
     // and expect, that it calls binding specific tracing runtime SetDataLoss(true) after a failed call to
     // GenericTraceAPI::Trace()
     EXPECT_CALL(binding_tracing_runtime_mock_, SetDataLossFlag(true)).Times(1);
