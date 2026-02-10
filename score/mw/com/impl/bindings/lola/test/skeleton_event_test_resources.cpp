@@ -37,7 +37,11 @@ SkeletonEventFixture::SkeletonEventFixture() : SkeletonMockedMemoryFixture{}
     SkeletonBinding::SkeletonEventBindings events{};
     SkeletonBinding::SkeletonFieldBindings fields{};
     std::optional<SkeletonBinding::RegisterShmObjectTraceCallback> register_shm_object_trace_callback{};
-    skeleton_->PrepareOffer(events, fields, std::move(register_shm_object_trace_callback));
+    const auto result = skeleton_->PrepareOffer(events, fields, std::move(register_shm_object_trace_callback));
+    if (!result)
+    {
+        std::terminate();
+    }
 }
 
 void SkeletonEventFixture::InitialiseSkeletonEvent(const ElementFqId element_fq_id,

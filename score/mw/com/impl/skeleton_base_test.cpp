@@ -208,7 +208,7 @@ TEST_F(SkeletonBaseOfferFixture, OfferService)
     EXPECT_CALL(*field_binding_mock_, Send(kInitialFieldValue, _));
 
     // and the initial field value is set
-    skeleton_->dummy_field.Update(kInitialFieldValue);
+    ASSERT_TRUE(skeleton_->dummy_field.Update(kInitialFieldValue));
 
     // When offering a Service
     const auto offer_result = skeleton_->OfferService();
@@ -330,7 +330,7 @@ TEST_F(SkeletonBaseOfferFixture, CallingPrepareOfferWhenFieldBindingFailsReturns
         .WillOnce(Return(MakeUnexpected(ComErrc::kInvalidBindingInformation)));
 
     // and the initial field value is set
-    skeleton_->dummy_field.Update(kInitialFieldValue);
+    ASSERT_TRUE(skeleton_->dummy_field.Update(kInitialFieldValue));
 
     // and when offering a Service
     const auto offer_result = skeleton_->OfferService();
@@ -396,7 +396,7 @@ TEST_F(SkeletonBaseStopOfferFixture, PrepareStopOffer)
     EXPECT_CALL(*field_binding_mock_, Send(kInitialFieldValue, _));
 
     // and the initial field value is set
-    skeleton_->dummy_field.Update(kInitialFieldValue);
+    ASSERT_TRUE(skeleton_->dummy_field.Update(kInitialFieldValue));
 
     // When offering a Service
     const auto offer_result = skeleton_->OfferService();
@@ -437,7 +437,7 @@ TEST_F(SkeletonBaseOfferFixture, OfferServiceReturnsErrorWhenServiceDiscoveryOff
     EXPECT_CALL(service_discovery_mock_, OfferService(_)).WillOnce(Return(MakeUnexpected(ComErrc::kBindingFailure)));
 
     // and the initial field value is set
-    skeleton_->dummy_field.Update(kInitialFieldValue);
+    ASSERT_TRUE(skeleton_->dummy_field.Update(kInitialFieldValue));
 
     // When offering a Service
     const auto offer_result = skeleton_->OfferService();
@@ -456,7 +456,7 @@ TEST_F(SkeletonBaseMoveFixture, SelfMovingAssignmentDoesNotCauseIssues)
     ExpectOfferService();
 
     // and the initial field value is set
-    skeleton_->dummy_field.Update(kInitialFieldValue);
+    ASSERT_TRUE(skeleton_->dummy_field.Update(kInitialFieldValue));
 
     // and given that the service was offered
     score::cpp::ignore = skeleton_->OfferService();
@@ -505,7 +505,7 @@ TEST_F(SkeletonBaseOfferFixture, ServiceCanBeReOfferedAfterMoveConstructingServi
     EXPECT_CALL(*field_binding_mock_, Send(kInitialFieldValue, _));
 
     // and the initial field value is set
-    skeleton.dummy_field.Update(kInitialFieldValue);
+    ASSERT_TRUE(skeleton.dummy_field.Update(kInitialFieldValue));
 
     // When offering the Service
     const auto offer_result = skeleton.OfferService();
@@ -580,7 +580,7 @@ TEST_F(SkeletonBaseOfferFixture, ServiceCanBeReOfferedAfterCallingStopOfferServi
         EXPECT_CALL(*field_binding_mock_, Send(kInitialFieldValue, _));
 
         // and the initial field value is set
-        skeleton.dummy_field.Update(kInitialFieldValue);
+        ASSERT_TRUE(skeleton.dummy_field.Update(kInitialFieldValue));
 
         // When offering the Service
         const auto offer_result = skeleton.OfferService();

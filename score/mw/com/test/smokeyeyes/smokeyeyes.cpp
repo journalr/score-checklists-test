@@ -186,7 +186,7 @@ int run_sender(SharedState& shared_state, const std::size_t turns, const std::si
     {
         for (std::size_t sample_in_batch = 0U; sample_in_batch < batch_size; ++sample_in_batch)
         {
-            sender.struct_event_.Send(data);
+            std::ignore = sender.struct_event_.Send(data);
             ++data;
         }
 
@@ -279,7 +279,7 @@ int run_receiver(SharedState& shared_state,
         return -5;
     }
     auto& receiver = receiver_result.value();
-    receiver.struct_event_.Subscribe(num_slots);
+    std::ignore = receiver.struct_event_.Subscribe(num_slots);
     for (std::size_t retry = 0U; retry < 100U; ++retry)
     {
         if (receiver.struct_event_.GetSubscriptionState() != SubscriptionState::kSubscribed)

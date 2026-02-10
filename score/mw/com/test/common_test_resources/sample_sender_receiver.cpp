@@ -459,14 +459,25 @@ int EventSenderReceiver::RunAsProxy(const score::mw::com::InstanceSpecifier& ins
     concurrency::Notification event_received;
     if (!cycle_time.has_value())
     {
-        map_api_lanes_stamped_event.SetReceiveHandler([&event_received, &instance_specifier]() {
-            std::cout << ToString(instance_specifier, ": Callback called\n");
-            event_received.notify();
-        });
+        const auto set_receive_handler_result =
+            map_api_lanes_stamped_event.SetReceiveHandler([&event_received, &instance_specifier]() {
+                std::cout << ToString(instance_specifier, ": Callback called\n");
+                event_received.notify();
+            });
+        if (!set_receive_handler_result.has_value())
+        {
+            std::cerr << "Unable to set receive handler: " << set_receive_handler_result.error() << ", bailing!\n";
+            return EXIT_FAILURE;
+        }
     }
 
     std::cout << ToString(instance_specifier, ": Subscribing to service\n");
-    map_api_lanes_stamped_event.Subscribe(SAMPLES_PER_CYCLE);
+    const auto subscribe_result = map_api_lanes_stamped_event.Subscribe(SAMPLES_PER_CYCLE);
+    if (!subscribe_result.has_value())
+    {
+        std::cerr << "Unable to subscribe to event: " << subscribe_result.error() << ", bailing!\n";
+        return EXIT_FAILURE;
+    }
 
     SampleReceiver receiver{instance_specifier};
     for (std::size_t cycle = 0U; (cycle < num_cycles) && !stop_token.stop_requested();)
@@ -591,7 +602,12 @@ int EventSenderReceiver::RunAsSkeleton(const score::mw::com::InstanceSpecifier& 
 
         {
             std::lock_guard<std::mutex> lock{event_sending_mutex_};
-            bigdata.map_api_lanes_stamped_.Send(std::move(sample));
+            const auto send_result = bigdata.map_api_lanes_stamped_.Send(std::move(sample));
+            if (!send_result.has_value())
+            {
+                std::cerr << "Unable to send data. Exiting.\n";
+                return EXIT_FAILURE;
+            }
             event_published_ = true;
         }
         std::this_thread::sleep_for(cycle_time);
@@ -694,7 +710,12 @@ int EventSenderReceiver::RunAsSkeletonCheckEventSlots(const score::mw::com::Inst
             }
             else
             {
-                bigdata.map_api_lanes_stamped_.Send(std::move(sample_result).value());
+                const auto send_result = bigdata.map_api_lanes_stamped_.Send(std::move(sample_result).value());
+                if (!send_result.has_value())
+                {
+                    std::cerr << "Unable to send data. Exiting.\n";
+                    break;
+                }
             }
         }
         else  // All event slots have already been allocated
@@ -836,7 +857,12 @@ int EventSenderReceiver::RunAsProxyCheckValuesCreatedFromConfig(
         return EXIT_FAILURE;
     }
 
-    bigdata.map_api_lanes_stamped_.Subscribe(2);
+    const auto subscribe_result = bigdata.map_api_lanes_stamped_.Subscribe(2);
+    if (!subscribe_result.has_value())
+    {
+        std::cerr << "Unable to subscribe: " << subscribe_result.error() << ", bailing!\n";
+        return EXIT_FAILURE;
+    }
 
     // Check that the ElementFqId used for the events match the values manually generated from the configuration.
     if (!ElementFqIdMatchesConfigurationValue(bigdata.map_api_lanes_stamped_, map_api_lanes_element_fq_id_from_config))
@@ -891,13 +917,23 @@ int EventSenderReceiver::RunAsProxyReceiveHandlerOnly(const score::mw::com::Inst
     auto& bigdata = proxy_result.value();
 
     std::atomic<bool> callback_called{false};
-    bigdata.map_api_lanes_stamped_.SetReceiveHandler([&callback_called]() {
+    const auto set_receive_handler_result = bigdata.map_api_lanes_stamped_.SetReceiveHandler([&callback_called]() {
         callback_called = true;
         std::cout << "Callback called\n";
     });
+    if (!set_receive_handler_result.has_value())
+    {
+        std::cerr << "Unable to set receive handler: " << set_receive_handler_result.error() << ", bailing!\n";
+        return EXIT_FAILURE;
+    }
 
     std::cout << "Subscribing to service\n";
-    bigdata.map_api_lanes_stamped_.Subscribe(SAMPLES_PER_CYCLE);
+    const auto subscribe_result = bigdata.map_api_lanes_stamped_.Subscribe(SAMPLES_PER_CYCLE);
+    if (!subscribe_result.has_value())
+    {
+        std::cerr << "Unable to subscribe: " << subscribe_result.error() << ", bailing!\n";
+        return EXIT_FAILURE;
+    }
 
     // Make sure that callback is called at least once. If stop is called via the stop_token or the skeleton notifies
     // that it's finished publishing, exit with a failure code.
@@ -961,13 +997,23 @@ int EventSenderReceiver::RunAsProxyCheckEventSlots(const score::mw::com::Instanc
     auto& bigdata = proxy_result.value();
 
     concurrency::Notification event_received;
-    bigdata.map_api_lanes_stamped_.SetReceiveHandler([&event_received]() {
+    const auto set_receive_handler_result = bigdata.map_api_lanes_stamped_.SetReceiveHandler([&event_received]() {
         std::cout << "Callback called\n";
         event_received.notify();
     });
+    if (!set_receive_handler_result.has_value())
+    {
+        std::cerr << "Unable to set receive handler: " << set_receive_handler_result.error() << ", bailing!\n";
+        return EXIT_FAILURE;
+    }
 
     std::cout << "Subscribing to service\n";
-    bigdata.map_api_lanes_stamped_.Subscribe(num_proxy_slots);
+    const auto subscribe_result = bigdata.map_api_lanes_stamped_.Subscribe(num_proxy_slots);
+    if (!subscribe_result.has_value())
+    {
+        std::cerr << "Unable to subscribe: " << subscribe_result.error() << ", bailing!\n";
+        return EXIT_FAILURE;
+    }
 
     // Ensure that receive handler is set before the skeleton begins publishing events.
     proxy_ready_to_receive_.notify();
@@ -1033,7 +1079,12 @@ int EventSenderReceiver::RunAsProxyCheckSubscribeHandler(const score::mw::com::I
     }
     auto& bigdata = proxy_result.value();
 
-    bigdata.map_api_lanes_stamped_.Subscribe(SAMPLES_PER_CYCLE);
+    const auto subscribe_result = bigdata.map_api_lanes_stamped_.Subscribe(SAMPLES_PER_CYCLE);
+    if (!subscribe_result.has_value())
+    {
+        std::cerr << "Unable to subscribe: " << subscribe_result.error() << ", bailing!\n";
+        return EXIT_FAILURE;
+    }
     bigdata.map_api_lanes_stamped_.Unsubscribe();
 
     interprocess_notification.notify();

@@ -544,14 +544,14 @@ TEST_P(TracingRuntimeTraceShmParamaterisedDeathTest, TraceShmDataNOK_GetShmRegio
                     GetShmRegionStartAddress(dummy_service_element_instance_identifier_view_))
             .WillOnce(Return(score::cpp::optional<void*>{}));
         // when we call Trace on the UuT
-        unit_under_test_->Trace(BindingType::kLoLa,
-                                service_element_tracing_data_,
-                                dummy_service_element_instance_identifier_view_,
-                                trace_point_type_,
-                                dummy_data_id_,
-                                CreateDummySamplePtr(),
-                                dummy_shm_data_ptr_,
-                                dummy_shm_data_size_);
+        std::ignore = unit_under_test_->Trace(BindingType::kLoLa,
+                                              service_element_tracing_data_,
+                                              dummy_service_element_instance_identifier_view_,
+                                              trace_point_type_,
+                                              dummy_data_id_,
+                                              CreateDummySamplePtr(),
+                                              dummy_shm_data_ptr_,
+                                              dummy_shm_data_size_);
     };
 
     // we expect to die!

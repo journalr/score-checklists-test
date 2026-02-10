@@ -277,7 +277,7 @@ int main(int argc, const char** argv)
             }
             proxy_creation_data.handle =
                 std::make_unique<score::mw::com::test::BigDataProxy::HandleType>(service_handle_container[0]);
-            score::mw::com::test::BigDataProxy::StopFindService(find_service_handle);
+            std::ignore = score::mw::com::test::BigDataProxy::StopFindService(find_service_handle);
             proxy_creation_data.condition_variable.notify_all();
         };
 

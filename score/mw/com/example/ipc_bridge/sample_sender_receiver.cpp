@@ -310,14 +310,14 @@ int EventSenderReceiver::RunAsProxy(const score::mw::com::InstanceSpecifier& ins
     concurrency::Notification event_received;
     if (!cycle_time.has_value())
     {
-        map_api_lanes_stamped_event.SetReceiveHandler([&event_received, &instance_specifier]() {
+        std::ignore = map_api_lanes_stamped_event.SetReceiveHandler([&event_received, &instance_specifier]() {
             std::cout << ToString(instance_specifier, ": Callback called\n");
             event_received.notify();
         });
     }
 
     std::cout << ToString(instance_specifier, ": Subscribing to service\n");
-    map_api_lanes_stamped_event.Subscribe(SAMPLES_PER_CYCLE);
+    std::ignore = map_api_lanes_stamped_event.Subscribe(SAMPLES_PER_CYCLE);
 
     score::cpp::optional<char> last_received{};
     SampleReceiver receiver{instance_specifier, check_sample_hash};
@@ -434,7 +434,7 @@ int EventSenderReceiver::RunAsSkeleton(const score::mw::com::InstanceSpecifier& 
 
         {
             std::lock_guard lock{event_sending_mutex_};
-            skeleton.map_api_lanes_stamped_.Send(std::move(sample));
+            std::ignore = skeleton.map_api_lanes_stamped_.Send(std::move(sample));
             event_published_ = true;
         }
         std::this_thread::sleep_for(cycle_time);

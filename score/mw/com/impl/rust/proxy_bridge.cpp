@@ -133,12 +133,12 @@ void mw_com_impl_proxy_event_set_receive_handler(::score::mw::com::impl::ProxyEv
 {
     SCORE_LANGUAGE_FUTURECPP_ASSERT_PRD_MESSAGE(boxed_handler != nullptr,
                            "Call to mw_com_impl_proxy_event_set_receive_handler with a nullptr for the handler");
-    proxy_event->SetReceiveHandler(RustFnMutCallable<RustBoxedCallable>{*boxed_handler});
+    std::ignore = proxy_event->SetReceiveHandler(RustFnMutCallable<RustBoxedCallable>{*boxed_handler});
 }
 
 void mw_com_impl_proxy_event_unset_receive_handler(::score::mw::com::impl::ProxyEventBase* proxy_event)
 {
-    proxy_event->UnsetReceiveHandler();
+    std::ignore = proxy_event->UnsetReceiveHandler();
 }
 }
 }  // namespace score::mw::com::impl::rust

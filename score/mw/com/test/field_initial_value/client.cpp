@@ -74,7 +74,7 @@ int run_client(const std::size_t num_retries, const std::chrono::milliseconds re
     auto& lola_proxy = lola_proxy_result.value();
     score::cpp::optional<std::int32_t> received_value;
 
-    lola_proxy.test_field.Subscribe(kMaxNumSamples);
+    std::ignore = lola_proxy.test_field.Subscribe(kMaxNumSamples);
     std::size_t retries = num_retries;
     while (lola_proxy.test_field.GetSubscriptionState() != score::mw::com::impl::SubscriptionState::kSubscribed)
     {
@@ -86,7 +86,7 @@ int run_client(const std::size_t num_retries, const std::chrono::milliseconds re
             return -4;
         }
     }
-    lola_proxy.test_field.GetNewSamples(
+    std::ignore = lola_proxy.test_field.GetNewSamples(
         [&received_value](const auto& sample_ptr) noexcept {
             received_value = *sample_ptr;
         },

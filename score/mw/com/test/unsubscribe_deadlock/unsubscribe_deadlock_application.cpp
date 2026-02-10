@@ -158,25 +158,35 @@ int main(int argc, const char** argv)
     }
 
     score::concurrency::Notification call_get_subscription_state_notification{};
-    proxy.map_api_lanes_stamped_.SetReceiveHandler([&proxy, &call_get_subscription_state_notification, &stop_source]() {
-        std::cout << "Proxy received event! Waiting for Notification to call GetSubscriptionState()" << std::endl;
-        const bool call_get_subscription_state =
-            call_get_subscription_state_notification.waitWithAbort(stop_source.get_token());
-        if (call_get_subscription_state)
-        {
-            std::cout << "Proxy calling GetSubscriptionState()" << std::endl;
-            proxy.map_api_lanes_stamped_.GetSubscriptionState();
-            std::cout << "Proxy GetSubscriptionState() returned" << std::endl;
-        }
-        else
-        {
-            std::cerr << "Waiting for Notification to call GetSubscriptionState() has been aborted!" << std::endl;
-        }
-    });
-
+    const auto set_handler_result = proxy.map_api_lanes_stamped_.SetReceiveHandler(
+        [&proxy, &call_get_subscription_state_notification, &stop_source]() {
+            std::cout << "Proxy received event! Waiting for Notification to call GetSubscriptionState()" << std::endl;
+            const bool call_get_subscription_state =
+                call_get_subscription_state_notification.waitWithAbort(stop_source.get_token());
+            if (call_get_subscription_state)
+            {
+                std::cout << "Proxy calling GetSubscriptionState()" << std::endl;
+                proxy.map_api_lanes_stamped_.GetSubscriptionState();
+                std::cout << "Proxy GetSubscriptionState() returned" << std::endl;
+            }
+            else
+            {
+                std::cerr << "Waiting for Notification to call GetSubscriptionState() has been aborted!" << std::endl;
+            }
+        });
+    if (!set_handler_result.has_value())
+    {
+        std::cerr << "Could not set receive handler: " << set_handler_result.error() << ", terminating." << std::endl;
+        return EXIT_FAILURE;
+    }
     // Sending an event update here triggers the event-receive-handler registered above, which will acquire the
     // read-lock on receive-handler map!
-    skeleton.map_api_lanes_stamped_.Send(kEvent_sample);
+    const auto send_result = skeleton.map_api_lanes_stamped_.Send(kEvent_sample);
+    if (!send_result.has_value())
+    {
+        std::cerr << "Could not send event sample: " << send_result.error() << ", terminating." << std::endl;
+        return EXIT_FAILURE;
+    }
 
     // Make a deferred notification to call_get_subscription_state_notification, where the registered
     // event-receive-handler waits for! It will get woken up by this notification and then call GetSubscriptionState(),

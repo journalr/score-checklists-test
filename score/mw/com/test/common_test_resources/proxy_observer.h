@@ -46,7 +46,7 @@ class ProxyObserver
     {
         if (handle_.has_value())
         {
-            Proxy::StopFindService(handle_.value());
+            std::ignore = Proxy::StopFindService(handle_.value());
         }
     }
 
