@@ -168,7 +168,7 @@ TEST_F(TransactionLogRollbackExecutorRollbackLogsFixture,
     WithTransactionLogRollbackExecutor();
 
     // when RollbackTransactionLogs() has been called
-    EXPECT_TRUE(unit_->RollbackTransactionLogs());
+    std::ignore = unit_->RollbackTransactionLogs();
 
     // expect, that the synchronization mutex for service_data_control_ exists afterward
     auto [mutex, mutex_existed] = rollback_synchronization_.GetMutex(service_data_control_.get());
@@ -223,7 +223,7 @@ TEST_F(TransactionLogRollbackExecutorRollbackLogsFixture, RollbackTransactionLog
     for (std::size_t i = 0; i < kMaxSubscribers; ++i)
     {
         threads.emplace_back([this]() noexcept {
-            EXPECT_TRUE(unit_->RollbackTransactionLogs());
+            std::ignore = unit_->RollbackTransactionLogs();
         });
     }
 

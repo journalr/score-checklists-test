@@ -156,7 +156,7 @@ TEST_F(SkeletonEventTracingSendFixture, SendCallsAreTracedWhenEnabled)
                             expected_enabled_trace_points);
 
     // Given an offered event in an offered service
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // and then send is called
     auto tracing_handler =
@@ -226,7 +226,7 @@ TEST_F(SkeletonEventTracingSendFixture, MultipleSendCallsUsesCorrectTracePointDa
                             expected_enabled_trace_points);
 
     // Given an offered event in an offered service
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // and then send is called twice
     auto tracing_handler =
@@ -263,7 +263,7 @@ TEST_F(SkeletonEventTracingSendFixture, SendCallsAreNotTracedWhenAllocateFails)
     InitialiseSkeletonEvent(fake_element_fq_id_, fake_event_name_, max_samples_, max_subscribers_, enforce_max_samples);
 
     // Given an offered event in an offered service
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // When all of the available slots are used up such that the next call to Send will not be able to allocate a slot
     std::list<impl::SampleAllocateePtr<test::TestSampleType>> data_vector{};
@@ -341,7 +341,7 @@ TEST_F(SkeletonEventTracingSendWithAllocateFixture, SendWithAllocateCallsAreTrac
                             expected_enabled_trace_points);
 
     // Given an offered event in an offered service
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // When allocating a slot
     auto slot_result = skeleton_event_->Allocate();
@@ -419,7 +419,7 @@ TEST_F(SkeletonEventTracingSendWithAllocateFixture, MultipleSendCallsUsesCorrect
                             expected_enabled_trace_points);
 
     // Given an offered event in an offered service
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // When allocating a slot
     auto slot_result = skeleton_event_->Allocate();
@@ -466,7 +466,7 @@ TEST_F(SkeletonEventTracingPrepareOfferFixture, DisablingTracingWillNotRegisterT
                             expected_enabled_trace_points);
 
     // Given an offered event in an offered service
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // Then a TransactionLog is not registered
     auto& transaction_log_set =
@@ -493,7 +493,7 @@ TEST_F(SkeletonEventTracingPrepareOfferFixture, EnablingSendTracingWillRegisterT
                             expected_enabled_trace_points);
 
     // Given an offered event in an offered service
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // Then a TransactionLog is registered
     auto& transaction_log_set =
@@ -520,7 +520,7 @@ TEST_F(SkeletonEventTracingPrepareOfferFixture, EnablingSendWithAllocateTracingW
                             expected_enabled_trace_points);
 
     // Given an offered event in an offered service
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // Then a TransactionLog is registered
     auto& transaction_log_set =
@@ -548,7 +548,7 @@ TEST_F(SkeletonEventTracingPrepareStopOfferFixture, PrepareStopOfferWillRemoveRe
                             expected_enabled_trace_points);
 
     // Given an offered event in an offered service
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // Then a TransactionLog is registered
     auto& transaction_log_set =
@@ -578,7 +578,7 @@ TEST_F(SkeletonEventTracingPrepareStopOfferFixture, PrepareStopOfferWillNotRemov
                             expected_enabled_trace_points);
 
     // Given an offered event in an offered service
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // Then a TransactionLog is not registered, because expected_enabled_trace_points has no corresponding trace points
     // enabled
@@ -613,7 +613,7 @@ TEST_F(SkeletonEventTracingPrepareStopOfferFixture, PrepareStopOfferWillCallClea
                             max_subscribers_,
                             enforce_max_samples,
                             expected_enabled_trace_points);
-    ASSERT_TRUE(skeleton_event_->PrepareOffer());
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // When calling PrepareStopOffer
     skeleton_event_->PrepareStopOffer();

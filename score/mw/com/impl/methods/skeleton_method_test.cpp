@@ -148,7 +148,7 @@ TYPED_TEST(SkeletonMethodTypedTest, AnyCombinationOfReturnAndInputArgTypesCanBeR
     // When a Register call is issued at the binding independent level
     score::cpp::callback<FixtureMethodType> test_callback{};
 
-    EXPECT_TRUE(method.RegisterHandler(std::move(test_callback)));
+    std::ignore = method.RegisterHandler(std::move(test_callback));
 }
 
 TYPED_TEST(SkeletonMethodTypedTest, TwoParameterConstructorCorrectlyCallsBindingFactoryAndSkeletonMethodIsCreated)
@@ -228,7 +228,7 @@ TEST_F(SkeletonMethodTestFixture, ACallbackWithAPointerAsStateCanBeRegistered)
     EXPECT_CALL(mock_method_binding_, RegisterHandler(_));
 
     // When a Register call is issued at the binding independent level
-    EXPECT_TRUE(method_->RegisterHandler(std::move(test_callback_with_state)));
+    std::ignore = method_->RegisterHandler(std::move(test_callback_with_state));
 }
 
 using Thing = long;

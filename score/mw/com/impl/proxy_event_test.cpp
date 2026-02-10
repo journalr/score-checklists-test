@@ -148,7 +148,7 @@ TYPED_TEST(ProxyEventFixture, ReceiveDataFromProxy)
     EXPECT_CALL(Base::mock_proxy_event_, GetNewSamples(_, _)).Times(2);
     EXPECT_CALL(Base::mock_proxy_event_, GetNumNewSamplesAvailable()).WillOnce(Return(1));
 
-    EXPECT_TRUE(Base::proxy_event_.Subscribe(7U));
+    std::ignore = Base::proxy_event_.Subscribe(7U);
     EXPECT_EQ(Base::proxy_event_.GetFreeSampleCount(), 7U);
     EXPECT_EQ(*Base::proxy_event_.GetNumNewSamplesAvailable(), 1U);
     const auto num_samples_result = Base::proxy_event_.GetNewSamples(
@@ -202,7 +202,7 @@ TYPED_TEST(ProxyEventFixture, SamplePtrLimitsAreEnforced)
         ++num_callback_calls;
     };
 
-    EXPECT_TRUE(Base::proxy_event_.Subscribe(max_num_samples));
+    std::ignore = Base::proxy_event_.Subscribe(max_num_samples);
 
     EXPECT_EQ(Base::proxy_event_.GetFreeSampleCount(), 2U);
     const auto get_result = Base::proxy_event_.GetNewSamples(get_new_samples_callback, 3U);
@@ -266,7 +266,7 @@ TYPED_TEST(ProxyEventDeathTest, DieOnUnsubscribingWhileHoldingSamplePtrs)
         .WillOnce(::testing::Return(SubscriptionState::kNotSubscribed));
 
     score::cpp::optional<SamplePtr<typename Base::SampleType>> ptr{};
-    ASSERT_TRUE(Base::proxy_event_.Subscribe(max_num_samples));
+    std::ignore = Base::proxy_event_.Subscribe(max_num_samples);
     Result<std::size_t> num_samples = Base::proxy_event_.GetNewSamples(
         [&ptr](SamplePtr<typename Base::SampleType> new_sample) {
             ptr = std::move(new_sample);

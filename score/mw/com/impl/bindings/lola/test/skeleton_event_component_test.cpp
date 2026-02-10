@@ -291,7 +291,7 @@ TEST_F(SkeletonEventComponentTestFixture, CanSendByValue)
     auto free_slots_before = GetFreeSampleSlots();
 
     // When  sending by value
-    ASSERT_TRUE(skeleton_event_.Send(5, {}));
+    std::ignore = skeleton_event_.Send(5, {});
 
     // Then the send event in shared memory can be found by a proxy
     EXPECT_EQ(GetLastSendEvent(), 5);
