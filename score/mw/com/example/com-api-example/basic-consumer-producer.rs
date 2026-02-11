@@ -193,23 +193,25 @@ mod test {
     async fn async_data_processor_fn<R: Runtime>(subscribed: impl Subscription<Tire, R>) {
         let mut buffer = SampleContainer::new(5);
         for _ in 0..10 {
-            //try_receive need to please with async receive call
-            match subscribed.try_receive(&mut buffer, 3) {
-                Ok(0) => eprintln!("No data received"),
-                Ok(num_samples) => {
-                    println!("Processing received samples...{}", num_samples);
-                    loop {
-                        if buffer.sample_count() == 0 {
-                            break;
+            let result_buffer = (&subscribed).receive(buffer, 1, 3).await;
+            match result_buffer {
+                Ok(mut buf) => {
+                    let mut received_count = buf.sample_count();
+                    println!("Received {} new samples", received_count);
+                    if received_count > 0 {
+                        loop {
+                            let sample = buf.pop_front().unwrap();
+                            println!("Received sample with pressure: {}", sample.pressure);
+                            received_count -= 1;
+                            if received_count == 0 {
+                                break;
+                            }
                         }
-                        let sample = buffer.pop_front().unwrap();
-                        println!("Processing sample: {:?}", *sample);
                     }
+                    buffer = buf;
                 }
-                Err(e) => panic!("{:?}", e),
+                Err(e) => panic!(" Error Received: {:?}", e),
             }
-            //when async receive is available, sleep can be removed
-            tokio::time::sleep(tokio::time::Duration::from_millis(2)).await;
         }
     }
 

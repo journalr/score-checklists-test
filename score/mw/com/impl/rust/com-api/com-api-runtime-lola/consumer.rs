@@ -33,7 +33,9 @@ use core::future::Future;
 use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::ops::Deref;
-use std::collections::VecDeque;
+use futures::task::{AtomicWaker, Context, Poll};
+use futures::{Stream, StreamExt};
+use std::pin::Pin;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
@@ -229,8 +231,9 @@ impl NativeProxyBase {
 /// Drop is not required as the proxy event lifetime is managed by proxy instance
 /// It does not provide any mutable access to the underlying proxy event pointer
 /// And the proxy event lifetime is managed safely through Drop of the parent proxy instance
+/// user can get the raw pointer using 'get_proxy_event_ptr' method
 pub struct NativeProxyEventBase {
-    pub proxy_event_ptr: *mut ProxyEventBase,
+    proxy_event_ptr: *mut ProxyEventBase,
 }
 
 //SAFETY: NativeProxyEventBase is to send between threads because:
@@ -240,6 +243,15 @@ pub struct NativeProxyEventBase {
 // which ensures the proxy handle remains valid as long as events are in use
 unsafe impl Send for NativeProxyEventBase {}
 
+//SAFETY: NativeProxyEventBase is safe to sync between threads because:
+// It does not provide any mutable access to the underlying proxy event pointer
+// Pointer is created during consumer creation and it is valid as long as the parent proxy instance is valid
+// The proxy event lifetime is managed safely through Drop of the parent proxy instance
+// which ensures the proxy handle remains valid as long as events are in use
+// Also there is no internal mutability in this struct which ensures pointer won't be mutated from multiple threads
+// using get_proxy_event_ptr method user can get the raw pointer but it won't mutate the underlying pointer
+unsafe impl Sync for NativeProxyEventBase {}
+
 impl NativeProxyEventBase {
     pub fn new(proxy: *mut ProxyBase, interface_id: &str, identifier: &str) -> Self {
         //SAFETY: It is safe as we are passing valid proxy pointer and interface id to get event
@@ -247,6 +259,11 @@ impl NativeProxyEventBase {
         let proxy_event_ptr =
             unsafe { bridge_ffi_rs::get_event_from_proxy(proxy, interface_id, identifier) };
         Self { proxy_event_ptr }
+    }
+
+    /// user can get the raw pointer using this method
+    pub fn get_proxy_event_ptr(&self) -> *mut ProxyEventBase {
+        self.proxy_event_ptr
     }
 }
 
@@ -289,7 +306,7 @@ impl<T: CommData> Subscriber<T, LolaRuntimeImpl> for SubscribableImpl<T> {
         // which was obtained from valid proxy instance
         let status = unsafe {
             bridge_ffi_rs::subscribe_to_event(
-                event_instance.proxy_event_ptr,
+                event_instance.get_proxy_event_ptr(),
                 max_num_samples.try_into().unwrap(),
             )
         };
@@ -301,9 +318,9 @@ impl<T: CommData> Subscriber<T, LolaRuntimeImpl> for SubscribableImpl<T> {
             event: Some(event_instance),
             event_id: self.identifier,
             max_num_samples,
-            data: VecDeque::new(),
             instance_info,
             _proxy: self.proxy_instance.clone(),
+            _phantom: PhantomData,
         })
     }
 }
@@ -317,19 +334,16 @@ where
     pub event: Option<NativeProxyEventBase>,
     pub event_id: &'static str,
     pub max_num_samples: usize,
-    pub data: VecDeque<T>,
     pub instance_info: LolaConsumerInfo,
     pub _proxy: ProxyInstanceManager,
+    _phantom: PhantomData<T>,
 }
 
-impl<T> SubscriberImpl<T>
-where
-    T: CommData,
-{
-    pub fn add_data(&mut self, data: T) {
-        self.data.push_front(data);
-    }
-}
+//SAFETY: SubscriberImpl can be sent and shared between threads because:
+// It does not provide any mutable access to the underlying event or proxy instance
+// The event and proxy instance lifetimes are managed safely through Drop of the parent proxy instance
+// and proxy instance is shared through Arc  which ensures the proxy handle remains valid as long as events are in use
+unsafe impl<T> Send for SubscriberImpl<T> where T: CommData {}
 
 impl<T> Subscription<T, LolaRuntimeImpl> for SubscriberImpl<T>
 where
@@ -356,30 +370,8 @@ where
             return Err(Error::Fail);
         }
         if let Some(event) = &self.event {
-            let mut callback = |raw_sample: *mut sample_ptr_rs::SamplePtr<T>| {
-                if !raw_sample.is_null() {
-                    //SAFETY: It is safe to read the sample pointer because
-                    // raw_sample is valid pointer passed from FFI callback
-                    // and raw_pointer is moved from FFI to Rust ownership here
-                    let sample_ptr = unsafe { std::ptr::read(raw_sample) };
-
-                    let wrapped_sample = Sample {
-                        //Relaxed ordering is sufficient here as we just need a unique id for each sample
-                        id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-                        inner: LolaBinding {
-                            data: ManuallyDrop::new(sample_ptr),
-                        },
-                    };
-                    while scratch.sample_count() >= max_samples {
-                        scratch.pop_front();
-                    }
-                    // After pop from SampleContainer to make room, push should always succeed, otherwise we lose the data
-                    assert!(
-                        scratch.push_back(wrapped_sample).is_ok(),
-                        "Failed to push sample after making room in buffer"
-                    );
-                }
-            };
+            // Create a callback that will be called by the C++ side for each new sample arrival
+            let mut callback = create_sample_callback(scratch, max_samples);
 
             // Convert closure to FatPtr for C++ callback
             let dyn_callback: &mut dyn FnMut(*mut sample_ptr_rs::SamplePtr<T>) = &mut callback;
@@ -412,11 +404,157 @@ where
     #[allow(clippy::manual_async_fn)]
     fn receive<'a>(
         &'a self,
-        _scratch: &'_ mut SampleContainer<Self::Sample<'a>>,
-        _new_samples: usize,
-        _max_samples: usize,
-    ) -> impl Future<Output = Result<usize>> + Send {
-        async { todo!() }
+        scratch: SampleContainer<Self::Sample<'a>>,
+        new_samples: usize,
+        max_samples: usize,
+    ) -> impl Future<Output = Result<SampleContainer<Self::Sample<'a>>>> + 'a {
+        async move {
+            let mut scratch = scratch;
+
+            if max_samples > self.max_num_samples && new_samples > self.max_num_samples {
+                return Err(Error::Fail);
+            }
+            if let Some(event) = &self.event {
+                // max_samples is the maximum number of samples can be received from the communication buffer and transferred to the container
+                // new_samples is the minimum number of new samples required before resolving the future
+                // max_num_samples is the total number samples subscribed for the event.
+                let event_stream = ProxyEventStream::new(
+                    event,
+                    self.max_num_samples,
+                    max_samples,
+                    self._proxy.clone(),
+                );
+
+                let mut event_stream = Box::pin(event_stream);
+                let mut total_received = 0;
+
+                // We need to receive at least new_samples number of samples before resolving the future
+                while total_received < new_samples {
+                    match event_stream.next().await {
+                        Some(sample) => {
+                            scratch.push_back(sample).ok();
+                            total_received += 1;
+                        }
+                        None => break, // Stream ended, no more samples
+                    }
+                }
+                Ok(scratch)
+            } else {
+                return Err(Error::Fail);
+            }
+        }
+    }
+}
+
+/// A stream that wraps the FFI event callback mechanism to provide an asynchronous stream of samples.
+/// It maintains an internal buffer of samples received from the FFI callback and uses an AtomicWaker to wake the stream when new samples arrive.
+/// The stream polls the FFI event for new samples when woken, and yields samples from the internal buffer until it is empty, at which point it waits to be woken again.
+/// The stream is tied to the lifetime of the proxy event and the proxy instance, ensuring that it does not outlive the resources it depends on.
+struct ProxyEventStream<'a, T: CommData> {
+    event_ptr: &'a NativeProxyEventBase,
+    max_num_samples: usize,
+    max_samples: usize,
+    internal_buffer: SampleContainer<Sample<T>>,
+    waker_storage: Arc<AtomicWaker>,
+    _proxy: ProxyInstanceManager,
+}
+
+//SAFETY: ProxyEventStream can be sent between threads because:
+// It does not provide any mutable access to the underlying event or proxy instance
+// Also it does not have public method to access the underlying event or proxy instance directly
+// This stream is designed to be used within the context of the subscription and is tied to the lifetime of the proxy event and proxy instance,
+// which are managed safely through Arc and Drop
+unsafe impl<T> Send for ProxyEventStream<'_, T> where T: CommData {}
+
+impl<'a, T: CommData> ProxyEventStream<'a, T> {
+    fn new(
+        event_ptr: &'a NativeProxyEventBase,
+        max_num_samples: usize,
+        max_samples: usize,
+        proxy: ProxyInstanceManager,
+    ) -> Self {
+        let waker_storage: Arc<AtomicWaker> = Arc::default();
+
+        let callback_waker = Arc::clone(&waker_storage);
+        let waker_callback = move || callback_waker.wake();
+        let boxed_handler = Box::new(waker_callback) as Box<dyn FnMut() + Send + 'static>;
+        let ptr = Box::into_raw(boxed_handler);
+        let fat_ptr: FatPtr = unsafe { std::mem::transmute(ptr) };
+
+        // SAFETY: it is safe to set the event receive handler because event ptr is a valid ProxyEventBase pointer
+        // The callback is a simple waker that wakes the stream when new samples arrive,
+        // and the lifetime of the callback is managed by Rust, it will not outlive the scope of this function call.
+        unsafe {
+            generic_bridge_ffi_rs::set_event_receive_handler(
+                event_ptr.get_proxy_event_ptr(),
+                &fat_ptr,
+                T::ID,
+            );
+        }
+
+        Self {
+            event_ptr,
+            max_num_samples,
+            max_samples,
+            internal_buffer: SampleContainer::new(max_samples),
+            waker_storage,
+            _proxy: proxy,
+        }
+    }
+
+    /// Poll the FFI event to fetch available samples into internal buffer
+    fn poll_event_for_samples(&mut self) -> com_api_concept::Result<usize> {
+        // Create a temporary scratch container for the callback to populate
+
+        let count = {
+            let mut callback = create_sample_callback(&mut self.internal_buffer, self.max_samples);
+
+            // Convert closure to FatPtr for C++ callback
+            let dyn_callback: &mut dyn FnMut(*mut sample_ptr_rs::SamplePtr<T>) = &mut callback;
+
+            // SAFETY: it is safe to transmute the closure reference to a FatPtr because
+            // it has the same representation in memory like FnMut pointer
+            let fat_ptr: FatPtr = unsafe { std::mem::transmute(dyn_callback) };
+
+            // SAFETY: this call is safe because event ptr is a valid ProxyEventBase pointer
+            let count = unsafe {
+                generic_bridge_ffi_rs::get_samples_from_event(
+                    self.event_ptr.get_proxy_event_ptr(),
+                    T::ID,
+                    &fat_ptr,
+                    self.max_num_samples as u32,
+                )
+            };
+            count
+        }; // callback is dropped here, releasing the borrow on internal_buffer
+
+        if count > self.max_num_samples as u32 {
+            return Err(Error::Fail);
+        }
+        Ok(count as usize)
+    }
+}
+
+impl<'a, T: CommData + Send> Stream for ProxyEventStream<'a, T> {
+    type Item = Sample<T>;
+
+    fn poll_next(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // No samples in internal buffer, register waker for future notifications
+        self.waker_storage.register(ctx.waker());
+
+        // Poll the FFI event to fetch more samples
+        match self.poll_event_for_samples() {
+            Ok(_count) => {
+                // Try again to get a sample from internal buffer (callback populated it)
+                if let Some(sample) = self.internal_buffer.pop_front() {
+                    Poll::Ready(Some(sample))
+                } else {
+                    // No samples available, wait for waker
+                    Poll::Pending
+                }
+            }
+            Err(_) => Poll::Ready(None), // Error terminates the stream
+        }
     }
 }
 
@@ -494,6 +632,49 @@ impl<I: Interface> ConsumerDescriptor<LolaRuntimeImpl> for SampleConsumerBuilder
         //if InstanceSpecifier::ANY support enable by lola
         //then this API should get InstanceSpecifier from FFI Call
         todo!()
+    }
+}
+
+/// Creates a callback function for processing FFI samples into the sample container.
+///
+/// This callback is invoked by the C++ side for each new sample arrival.
+/// It wraps raw sample pointers into Rust-managed Sample<T> objects and stores them
+/// in the provided scratch buffer, maintaining the max_samples limit.
+///
+/// # Safety
+/// The returned closure must not outlive the scope where `scratch` is valid.
+/// The closure captures a mutable reference to `scratch`.
+///
+/// # Parameters
+/// * `scratch` - Mutable reference to the sample container
+/// * `max_samples` - Maximum number of samples to maintain in the container
+pub fn create_sample_callback<'a, T: CommData>(
+    scratch: &'a mut SampleContainer<Sample<T>>,
+    max_samples: usize,
+) -> impl FnMut(*mut sample_ptr_rs::SamplePtr<T>) + 'a {
+    move |raw_sample: *mut sample_ptr_rs::SamplePtr<T>| {
+        if !raw_sample.is_null() {
+            //SAFETY: It is safe to read the sample pointer because
+            // raw_sample is valid pointer passed from FFI callback
+            // and raw_pointer is moved from FFI to Rust ownership here
+            let sample_ptr = unsafe { std::ptr::read(raw_sample) };
+
+            let wrapped_sample = Sample {
+                //Relaxed ordering is sufficient here as we just need a unique id for each sample
+                id: ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                inner: LolaBinding {
+                    data: ManuallyDrop::new(sample_ptr),
+                },
+            };
+            while scratch.sample_count() >= max_samples {
+                scratch.pop_front();
+            }
+            // After pop from SampleContainer to make room, push should always succeed, otherwise we lose the data
+            assert!(
+                scratch.push_back(wrapped_sample).is_ok(),
+                "Failed to push sample after making room in buffer"
+            );
+        }
     }
 }
 

@@ -798,17 +798,16 @@ pub trait Subscription<T: CommData, R: Runtime + ?Sized> {
     /// # Parameters
     /// * `scratch` - Container for events from this subscription
     /// * `new_samples` - Minimum number of new events before resolution
-    /// * `max_samples` - Maximum total capacity of the container
+    /// * `max_samples` - Maximum number of events can be received from the communication buffer and transferred to the container
     ///
     /// # Returns
-    ///
-    /// Number of newly added events to the container
+    /// Future that resolves to the number of newly added events to the container with at least `new_samples` number of new events.
     fn receive<'a>(
         &'a self,
-        scratch: &'_ mut SampleContainer<Self::Sample<'a>>,
+        scratch: SampleContainer<Self::Sample<'a>>,
         new_samples: usize,
         max_samples: usize,
-    ) -> impl Future<Output = Result<usize>> + Send;
+    ) -> impl Future<Output = Result<SampleContainer<Self::Sample<'a>>>> + 'a;
 }
 
 /// A trait for types that can be default-constructed in place, skipping intermediate moves.

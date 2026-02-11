@@ -329,10 +329,10 @@ where
     #[allow(clippy::manual_async_fn)]
     fn receive<'a>(
         &'a self,
-        _scratch: &'_ mut SampleContainer<Self::Sample<'a>>,
+        _scratch: SampleContainer<Self::Sample<'a>>,
         _new_samples: usize,
         _max_samples: usize,
-    ) -> impl Future<Output = com_api_concept::Result<usize>> + Send {
+    ) -> impl Future<Output = Result<SampleContainer<Self::Sample<'a>>>> + 'a {
         async { todo!() }
     }
 }
