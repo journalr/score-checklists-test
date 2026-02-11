@@ -403,48 +403,32 @@ bool mw_com_skeleton_send_event_allocatee(SkeletonEventBase* event_ptr, StringVi
 /// \details Registers a Rust FnMut handler for a proxy event. The handler will be called when new samples are received.
 /// \param event_ptr Opaque proxy event pointer (ProxyEventBase*)
 /// \param boxed_handler Pointer to FatPtr containing the Rust FnMut handler
-/// \param event_type Type name string
 /// @return True if handler was set successfully, false otherwise
-bool mw_com_proxy_set_event_receive_handler(ProxyEventBase* event_ptr,
-                                            const FatPtr* boxed_handler,
-                                            StringView event_type)
+bool mw_com_proxy_set_event_receive_handler(ProxyEventBase* event_ptr, const FatPtr* boxed_handler)
 {
-    if (event_ptr == nullptr || boxed_handler == nullptr || event_type.data == nullptr)
+    if (event_ptr == nullptr || boxed_handler == nullptr)
     {
         return false;
     }
 
-    auto name = static_cast<std::string_view>(event_type);
-
-    auto registry = GlobalRegistryMapping::FindTypeInformation(name);
-
-    if (registry == nullptr)
+    auto result = event_ptr->SetReceiveHandler(RustFnMutCallable<RustBoxedCallable>{*boxed_handler});
+    if (result.has_value() == false)
     {
         return false;
     }
-    return registry->SetEventReceiveHandler(event_ptr, boxed_handler);
+    return true;
 }
 
 /// \brief Clear event receive handler for proxy event
 /// \details Unregisters the event receive handler for a proxy event, if any.
 /// \param event_ptr Opaque proxy event pointer (ProxyEventBase*)
-/// \param event_type Type name string
-void mw_com_proxy_clear_event_receive_handler(ProxyEventBase* event_ptr, StringView event_type)
+void mw_com_proxy_clear_event_receive_handler(ProxyEventBase* event_ptr)
 {
-    if (event_ptr == nullptr || event_type.data == nullptr)
+    if (event_ptr == nullptr)
     {
         return;
     }
-
-    auto name = static_cast<std::string_view>(event_type);
-
-    auto registry = GlobalRegistryMapping::FindTypeInformation(name);
-
-    if (registry == nullptr)
-    {
-        return;
-    }
-    registry->ClearEventReceiveHandler(event_ptr);
+    event_ptr->UnsetReceiveHandler();
 }
 
 }  // extern "C"

@@ -325,6 +325,15 @@ impl<T: CommData> Subscriber<T, LolaRuntimeImpl> for SubscribableImpl<T> {
     }
 }
 
+/// `SubscriberImpl<T>` represents an active subscription to a specific event, encapsulating the native proxy event and subscription details.
+///
+/// The `receive()` method returns a Future bound by lifetime `'a` but NOT by `+ Send`.
+/// This enforces single-threaded sequential access to the subscriber:
+/// - The Future captures `&'a self` and cannot be moved across threads
+/// - Users cannot spawn the Future on multi-threaded runtimes without wrapping `SubscriberImpl` in `Arc<Mutex<_>>`
+/// - This prevents accidental concurrent receivers accessing the same subscriber instance
+/// Adding `+ Send` to the Future would require `unsafe impl Sync for SubscriberImpl<T>`,
+/// which may create potential risk for receiving data concurrently on the same subscriber instance without proper synchronization.
 #[derive(Debug)]
 pub struct SubscriberImpl<T>
 where
@@ -338,12 +347,6 @@ where
     pub _proxy: ProxyInstanceManager,
     _phantom: PhantomData<T>,
 }
-
-//SAFETY: SubscriberImpl can be sent and shared between threads because:
-// It does not provide any mutable access to the underlying event or proxy instance
-// The event and proxy instance lifetimes are managed safely through Drop of the parent proxy instance
-// and proxy instance is shared through Arc  which ensures the proxy handle remains valid as long as events are in use
-unsafe impl<T> Send for SubscriberImpl<T> where T: CommData {}
 
 impl<T> Subscription<T, LolaRuntimeImpl> for SubscriberImpl<T>
 where
@@ -372,14 +375,11 @@ where
         if let Some(event) = &self.event {
             // Create a callback that will be called by the C++ side for each new sample arrival
             let mut callback = create_sample_callback(scratch, max_samples);
-
             // Convert closure to FatPtr for C++ callback
             let dyn_callback: &mut dyn FnMut(*mut sample_ptr_rs::SamplePtr<T>) = &mut callback;
-
             // SAFETY: it is safe to transmute the closure reference to a FatPtr because
             // it has the same representation in memory like FnMut pointer
             let fat_ptr: FatPtr = unsafe { std::mem::transmute(dyn_callback) };
-
             // SAFETY: this call is safe because event ptr is a valid ProxyEventBase pointer
             // obtained during subscription
             // The lifetime of the callback is managed by Rust, and it will not outlive
@@ -401,6 +401,12 @@ where
         }
     }
 
+    /// Asynchronously receives samples from the subscribed event.
+    ///
+    /// The returned Future is bounded by the lifetime of `self` (`'a`) and is NOT `Send`.
+    /// This ensures the Future cannot outlive the subscriber and enforces single-threaded usage.
+    /// Users may call this method sequentially but cannot clone or share the subscriber
+    /// across thread boundaries without explicit synchronization (e.g., `Arc<Mutex<_>>`).
     #[allow(clippy::manual_async_fn)]
     fn receive<'a>(
         &'a self,
@@ -410,29 +416,25 @@ where
     ) -> impl Future<Output = Result<SampleContainer<Self::Sample<'a>>>> + 'a {
         async move {
             let mut scratch = scratch;
-
-            if max_samples > self.max_num_samples && new_samples > self.max_num_samples {
+            if max_samples > self.max_num_samples || new_samples > self.max_num_samples {
                 return Err(Error::Fail);
             }
             if let Some(event) = &self.event {
                 // max_samples is the maximum number of samples can be received from the communication buffer and transferred to the container
                 // new_samples is the minimum number of new samples required before resolving the future
                 // max_num_samples is the total number samples subscribed for the event.
-                let event_stream = ProxyEventStream::new(
+                let mut event_stream = ProxyEventStream::new(
                     event,
                     self.max_num_samples,
                     max_samples,
                     self._proxy.clone(),
                 );
-
-                let mut event_stream = Box::pin(event_stream);
                 let mut total_received = 0;
-
                 // We need to receive at least new_samples number of samples before resolving the future
                 while total_received < new_samples {
                     match event_stream.next().await {
                         Some(sample) => {
-                            scratch.push_back(sample).ok();
+                            scratch.push_back(sample).map_err(|_| Error::Fail)?; // If push_back fails, return an error
                             total_received += 1;
                         }
                         None => break, // Stream ended, no more samples
@@ -459,12 +461,23 @@ struct ProxyEventStream<'a, T: CommData> {
     _proxy: ProxyInstanceManager,
 }
 
+impl<'a, T: CommData> Drop for ProxyEventStream<'a, T> {
+    fn drop(&mut self) {
+        //SAFETY: it is safe to clear the event receive handler because event ptr is valid
+        // which was obtained from valid proxy instance and the callback set for this event stream will be dropped after this,
+        // so it won't be called after the handler is cleared
+        unsafe {
+            bridge_ffi_rs::clear_event_receive_handler(self.event_ptr.get_proxy_event_ptr(), T::ID);
+        }
+    }
+}
+
 //SAFETY: ProxyEventStream can be sent between threads because:
 // It does not provide any mutable access to the underlying event or proxy instance
 // Also it does not have public method to access the underlying event or proxy instance directly
 // This stream is designed to be used within the context of the subscription and is tied to the lifetime of the proxy event and proxy instance,
 // which are managed safely through Arc and Drop
-unsafe impl<T> Send for ProxyEventStream<'_, T> where T: CommData {}
+unsafe impl<T: CommData> Send for ProxyEventStream<'_, T> {}
 
 impl<'a, T: CommData> ProxyEventStream<'a, T> {
     fn new(
@@ -474,7 +487,6 @@ impl<'a, T: CommData> ProxyEventStream<'a, T> {
         proxy: ProxyInstanceManager,
     ) -> Self {
         let waker_storage: Arc<AtomicWaker> = Arc::default();
-
         let callback_waker = Arc::clone(&waker_storage);
         let waker_callback = move || callback_waker.wake();
         let boxed_handler = Box::new(waker_callback) as Box<dyn FnMut() + Send + 'static>;
@@ -485,7 +497,7 @@ impl<'a, T: CommData> ProxyEventStream<'a, T> {
         // The callback is a simple waker that wakes the stream when new samples arrive,
         // and the lifetime of the callback is managed by Rust, it will not outlive the scope of this function call.
         unsafe {
-            generic_bridge_ffi_rs::set_event_receive_handler(
+            bridge_ffi_rs::set_event_receive_handler(
                 event_ptr.get_proxy_event_ptr(),
                 &fat_ptr,
                 T::ID,
@@ -504,21 +516,16 @@ impl<'a, T: CommData> ProxyEventStream<'a, T> {
 
     /// Poll the FFI event to fetch available samples into internal buffer
     fn poll_event_for_samples(&mut self) -> com_api_concept::Result<usize> {
-        // Create a temporary scratch container for the callback to populate
-
         let count = {
             let mut callback = create_sample_callback(&mut self.internal_buffer, self.max_samples);
-
             // Convert closure to FatPtr for C++ callback
             let dyn_callback: &mut dyn FnMut(*mut sample_ptr_rs::SamplePtr<T>) = &mut callback;
-
             // SAFETY: it is safe to transmute the closure reference to a FatPtr because
             // it has the same representation in memory like FnMut pointer
             let fat_ptr: FatPtr = unsafe { std::mem::transmute(dyn_callback) };
-
             // SAFETY: this call is safe because event ptr is a valid ProxyEventBase pointer
             let count = unsafe {
-                generic_bridge_ffi_rs::get_samples_from_event(
+                bridge_ffi_rs::get_samples_from_event(
                     self.event_ptr.get_proxy_event_ptr(),
                     T::ID,
                     &fat_ptr,
@@ -539,19 +546,19 @@ impl<'a, T: CommData + Send> Stream for ProxyEventStream<'a, T> {
     type Item = Sample<T>;
 
     fn poll_next(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // No samples in internal buffer, register waker for future notifications
-        self.waker_storage.register(ctx.waker());
-
+        if self.internal_buffer.sample_count() == 0 {
+            self.waker_storage.register(ctx.waker());
+        }
         // Poll the FFI event to fetch more samples
         match self.poll_event_for_samples() {
-            Ok(_count) => {
-                // Try again to get a sample from internal buffer (callback populated it)
-                if let Some(sample) = self.internal_buffer.pop_front() {
-                    Poll::Ready(Some(sample))
-                } else {
-                    // No samples available, wait for waker
-                    Poll::Pending
+            Ok(count) => {
+                for _ in 0..count {
+                    if let Some(sample) = self.internal_buffer.pop_front() {
+                        return Poll::Ready(Some(sample));
+                    }
                 }
+                // No samples available, wait for waker
+                return Poll::Pending;
             }
             Err(_) => Poll::Ready(None), // Error terminates the stream
         }

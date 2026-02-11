@@ -798,7 +798,7 @@ pub trait Subscription<T: CommData, R: Runtime + ?Sized> {
     /// # Parameters
     /// * `scratch` - Container for events from this subscription
     /// * `new_samples` - Minimum number of new events before resolution
-    /// * `max_samples` - Maximum number of events can be received from the communication buffer and transferred to the container
+    /// * `max_samples` - Maximum number of events that shall be received from the communication buffer and transferred to the container
     ///
     /// # Returns
     /// Future that resolves to the number of newly added events to the container with at least `new_samples` number of new events.

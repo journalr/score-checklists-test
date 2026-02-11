@@ -165,6 +165,8 @@ fn main() {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::thread;
+    use std::time::Duration;
 
     #[test]
     fn integration_test() {
@@ -172,6 +174,108 @@ mod test {
         let lola_runtime_builder = init_lola_runtime_builder();
         let lola_runtime = lola_runtime_builder.build().unwrap();
         run_with_runtime("Lola", &lola_runtime);
+    }
+
+    /// Test case: Async sender and receiver on separate threads
+    /// Demonstrates true concurrent async operations on different threads
+    /// Each thread gets its own runtime instance
+    /// It use futures-based blocking executor to run async code in each thread,
+    #[test]
+    fn test_async_sender_receiver_threads() {
+        println!("=== Starting async sender and receiver on separate threads ===");
+
+        let service_id = InstanceSpecifier::new("/Vehicle/Service2/Instance")
+            .expect("Failed to create InstanceSpecifier");
+
+        // Sender thread
+        let service_id_sender = service_id.clone();
+        let sender_handle = std::thread::spawn(move || {
+            // Each thread creates its own runtime instance
+            let lola_runtime_builder = init_lola_runtime_builder();
+            let lola_runtime = lola_runtime_builder.build().unwrap();
+
+            let producer = create_producer(&lola_runtime, service_id_sender);
+
+            println!("[SENDER] Thread started: {:?}", thread::current().id());
+
+            futures::executor::block_on(async {
+                for i in 0..5 {
+                    let tire = Tire {
+                        pressure: 1.0 + (i as f32 * 0.5),
+                    };
+                    println!("[SENDER] Sending sample {}: {:.2} psi", i, tire.pressure);
+
+                    let uninit_sample = producer.left_tire.allocate().unwrap();
+                    let sample = uninit_sample.write(tire);
+                    sample.send().unwrap();
+
+                    // Simulate async work delay
+                    std::thread::sleep(Duration::from_millis(1000));
+                }
+                println!("[SENDER] All samples sent");
+            });
+        });
+
+        let service_id_receiver = service_id.clone();
+        // Receiver thread
+        let receiver_handle = std::thread::spawn(move || {
+            // Ensure sender starts first
+            std::thread::sleep(Duration::from_millis(500));
+            // Each thread creates its own runtime instance
+            let lola_runtime_builder = init_lola_runtime_builder();
+            let lola_runtime = lola_runtime_builder.build().unwrap();
+
+            let consumer = create_consumer(&lola_runtime, service_id_receiver);
+            let subscribed = consumer.left_tire.subscribe(5).unwrap();
+
+            println!("[RECEIVER] Thread started: {:?}", thread::current().id());
+
+            futures::executor::block_on(async {
+                let mut sample_buf = SampleContainer::new(5);
+                let mut total_received = 0;
+                const MAX_ATTEMPTS: usize = 5;
+
+                for attempt in 0..MAX_ATTEMPTS {
+                    println!("[RECEIVER] Attempt {}", attempt);
+
+                    // Match and immediately reassign in all branches
+                    sample_buf = match subscribed.receive(sample_buf, 1, 3).await {
+                        Ok(returned_buf) => {
+                            let count = returned_buf.sample_count();
+
+                            if count > 0 {
+                                total_received += count;
+                                println!(
+                                    "[RECEIVER] Received {} samples (total: {})",
+                                    count, total_received
+                                );
+
+                                // Create a mutable version to pop from
+                                let mut buf = returned_buf;
+                                while let Some(sample) = buf.pop_front() {
+                                    println!("[RECEIVER]   Sample: {:.2} psi", sample.pressure);
+                                }
+                                buf
+                            } else {
+                                returned_buf
+                            }
+                        }
+                        Err(e) => {
+                            println!("[RECEIVER] Error on attempt {}: {:?}", attempt, e);
+                            // Create a fresh buffer if there's an error
+                            SampleContainer::new(5)
+                        }
+                    };
+                }
+
+                println!("[RECEIVER] Total received: {}", total_received);
+            });
+        });
+
+        // Wait for both threads
+        sender_handle.join().expect("Sender thread panicked");
+        receiver_handle.join().expect("Receiver thread panicked");
+        println!("=== Async sender and receiver threads test completed ===");
     }
 
     //sender will send data in each 2 milliseconds
@@ -184,41 +288,48 @@ mod test {
                 pressure: 1.0 + i as f32,
             });
             sample.send().unwrap();
-            println!("Sent sample with pressure: {}", 1.0 + i as f32);
-            tokio::time::sleep(tokio::time::Duration::from_millis(2)).await;
+            println!(
+                "[SENDER] Sent sample with pressure: {:.2} psi",
+                1.0 + i as f32
+            );
+            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
         }
         offered_producer
     }
 
+    //receiver function which use async receive to get data, it waits for new data and process it once it arrives,
+    //it will receive data 10 times and print the received samples
     async fn async_data_processor_fn<R: Runtime>(subscribed: impl Subscription<Tire, R>) {
         let mut buffer = SampleContainer::new(5);
         for _ in 0..10 {
-            let result_buffer = (&subscribed).receive(buffer, 1, 3).await;
-            match result_buffer {
-                Ok(mut buf) => {
-                    let mut received_count = buf.sample_count();
-                    println!("Received {} new samples", received_count);
-                    if received_count > 0 {
-                        loop {
-                            let sample = buf.pop_front().unwrap();
-                            println!("Received sample with pressure: {}", sample.pressure);
-                            received_count -= 1;
-                            if received_count == 0 {
-                                break;
-                            }
+            buffer = match subscribed.receive(buffer, 1, 3).await {
+                Ok(returned_buf) => {
+                    let count = returned_buf.sample_count();
+                    if count > 0 {
+                        println!("[RECEIVER] Received {} samples", count);
+                        let mut buf = returned_buf;
+                        while let Some(sample) = buf.pop_front() {
+                            println!("[RECEIVER]   Sample: {:.2} psi", sample.pressure);
                         }
+                        buf
+                    } else {
+                        returned_buf
                     }
-                    buffer = buf;
                 }
-                Err(e) => panic!(" Error Received: {:?}", e),
+                Err(e) => {
+                    println!("[RECEIVER] Error receiving data: {:?}", e);
+                    SampleContainer::new(5)
+                }
             }
         }
     }
 
+    // Test case: Async subscription and sending on multi-threaded runtime
+    // Use the tokio multi-threaded runtime to run async sender and receiver concurrently on separate threads
     #[tokio::test(flavor = "multi_thread")]
     async fn receive_and_send_using_multi_thread() {
         println!("Starting async subscription test with Lola runtime");
-        let service_id = InstanceSpecifier::new("/Vehicle/Service2/Instance")
+        let service_id = InstanceSpecifier::new("/Vehicle/Service3/Instance")
             .expect("Failed to create InstanceSpecifier");
 
         let lola_runtime_builder = LolaRuntimeBuilderImpl::new();

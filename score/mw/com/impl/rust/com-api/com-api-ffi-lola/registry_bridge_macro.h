@@ -187,19 +187,6 @@ class TypeOperations
     /// \param allocatee_ptr Pointer SampleAllocateePtr (of type T)
     /// \return true if send successful, false otherwise
     virtual bool SkeletonSendEventAllocatee(SkeletonEventBase* event_ptr, void* allocatee_ptr) = 0;
-
-    /// \brief Set event receive handler for ProxyEvent of specific type
-    /// \details Associates a Rust event receive notification handler (callback) with a ProxyEvent.
-    /// The handler will be called whenever the new event data is received.
-    /// \param event_ptr Pointer to ProxyEventBase instance
-    /// \param handler FatPtr to the Rust event receive handler
-    /// \return true if handler set successfully, false otherwise
-    virtual bool SetEventReceiveHandler(ProxyEventBase* event_ptr, const FatPtr* handler) = 0;
-
-    /// \brief Clear event receive handler for ProxyEvent of specific type
-    /// \details Removes the previously set Rust event receive handler from the ProxyEvent.
-    /// \param event_ptr Pointer to ProxyEventBase instance
-    virtual void ClearEventReceiveHandler(ProxyEventBase* event_ptr) = 0;
 };
 
 /// \brief Template implementation of TypeOperations for a specific type T
@@ -312,27 +299,6 @@ class TypeOperationImpl : public TypeOperations
             return false;
         }
         return skeleton_event->Send(std::move(*typed_ptr)).has_value();
-    }
-
-    bool SetEventReceiveHandler(ProxyEventBase* event_ptr, const FatPtr* handler) override
-    {
-        auto proxy_event = dynamic_cast<ProxyEvent<T>*>(event_ptr);
-        if (proxy_event == nullptr)
-        {
-            return false;
-        }
-        proxy_event->SetReceiveHandler(RustFnMutCallable<RustBoxedCallable>{*handler});
-        return true;
-    }
-
-    void ClearEventReceiveHandler(ProxyEventBase* event_ptr) override
-    {
-        auto proxy_event = dynamic_cast<ProxyEvent<T>*>(event_ptr);
-        if (proxy_event == nullptr)
-        {
-            return;
-        }
-        proxy_event->UnsetReceiveHandler();
     }
 };
 
