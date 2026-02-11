@@ -347,6 +347,29 @@ extern "C" {
         event_type: StringView,
         allocatee_ptr: *const std::ffi::c_void,
     ) -> bool;
+
+    /// Set event receive handler for proxy event
+    ///
+    /// # Arguments
+    /// * `proxy_event_ptr` - Opaque proxy event pointer
+    /// * `handler` - FatPtr to event receive handler function
+    ///
+    /// # Returns
+    /// True if handler was set successfully, false otherwise
+    fn mw_com_proxy_set_event_receive_handler(
+        proxy_event_ptr: *mut ProxyEventBase,
+        handler: *const FatPtr,
+        event_type: StringView,
+    ) -> bool;
+
+    /// Clear event receive handler for proxy event
+    ///
+    /// # Arguments
+    /// * `proxy_event_ptr` - Opaque proxy event pointer
+    fn mw_com_proxy_clear_event_receive_handler(
+        proxy_event_ptr: *mut ProxyEventBase,
+        event_type: StringView,
+    );
 }
 
 /// Get allocatee pointer from skeleton event of specific type
@@ -679,4 +702,42 @@ pub unsafe fn subscribe_to_event(event_ptr: *mut ProxyEventBase, max_sample_coun
     // SAFETY: event_ptr is guaranteed to be valid per the caller's contract.
     // The C++ implementation handles subscription and buffer allocation safely.
     mw_com_proxy_event_subscribe(event_ptr, max_sample_count)
+}
+
+/// Unsafe wrapper around mw_com_proxy_set_event_receive_handler
+///
+/// # Arguments
+/// * `proxy_event_ptr` - Opaque proxy event pointer
+/// * `handler` - FatPtr to event receive handler function
+///
+/// # Returns
+/// true if handler was set successfully, false otherwise
+///
+/// # Safety
+/// proxy_event_ptr must be a valid pointer to a ProxyEventBase previously obtained from get_event_from_proxy().
+/// handler must be a valid FatPtr which is used for notifying the proxy of incoming events.
+pub unsafe fn set_event_receive_handler(
+    proxy_event_ptr: *mut ProxyEventBase,
+    handler: &FatPtr,
+    event_type: &str,
+) -> bool {
+    // SAFETY: proxy_event_ptr must be valid per the caller's contract,
+    //and handler must be a valid FatPtr referencing a callable compatible with the callback signature expected by the C++ implementation.
+    let c_name = StringView::from(event_type);
+    mw_com_proxy_set_event_receive_handler(proxy_event_ptr, handler, c_name)
+}
+
+/// Unsafe wrapper around mw_com_proxy_clear_event_receive_handler
+///
+/// # Arguments
+/// * `proxy_event_ptr` - Opaque proxy event pointer
+/// * `event_type` - Event type name string
+///
+/// # Safety
+/// proxy_event_ptr must be a valid pointer to a ProxyEventBase previously obtained from get_event_from_proxy().
+/// event_type must be a valid string corresponding to the event type.
+pub unsafe fn clear_event_receive_handler(proxy_event_ptr: *mut ProxyEventBase, event_type: &str) {
+    // SAFETY: proxy_event_ptr must be valid per the caller's contract.
+    let c_name = StringView::from(event_type);
+    mw_com_proxy_clear_event_receive_handler(proxy_event_ptr, c_name);
 }

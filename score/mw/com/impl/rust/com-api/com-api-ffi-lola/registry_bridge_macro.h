@@ -188,7 +188,18 @@ class TypeOperations
     /// \return true if send successful, false otherwise
     virtual bool SkeletonSendEventAllocatee(SkeletonEventBase* event_ptr, void* allocatee_ptr) = 0;
 
-    // TODO: Allocate API need to add - Ticket-234824
+    /// \brief Set event receive handler for ProxyEvent of specific type
+    /// \details Associates a Rust event receive notification handler (callback) with a ProxyEvent.
+    /// The handler will be called whenever the new event data is received.
+    /// \param event_ptr Pointer to ProxyEventBase instance
+    /// \param handler FatPtr to the Rust event receive handler
+    /// \return true if handler set successfully, false otherwise
+    virtual bool SetEventReceiveHandler(ProxyEventBase* event_ptr, const FatPtr* handler) = 0;
+
+    /// \brief Clear event receive handler for ProxyEvent of specific type
+    /// \details Removes the previously set Rust event receive handler from the ProxyEvent.
+    /// \param event_ptr Pointer to ProxyEventBase instance
+    virtual void ClearEventReceiveHandler(ProxyEventBase* event_ptr) = 0;
 };
 
 /// \brief Template implementation of TypeOperations for a specific type T
@@ -301,6 +312,27 @@ class TypeOperationImpl : public TypeOperations
             return false;
         }
         return skeleton_event->Send(std::move(*typed_ptr)).has_value();
+    }
+
+    bool SetEventReceiveHandler(ProxyEventBase* event_ptr, const FatPtr* handler) override
+    {
+        auto proxy_event = dynamic_cast<ProxyEvent<T>*>(event_ptr);
+        if (proxy_event == nullptr)
+        {
+            return false;
+        }
+        proxy_event->SetReceiveHandler(RustFnMutCallable<RustBoxedCallable>{*handler});
+        return true;
+    }
+
+    void ClearEventReceiveHandler(ProxyEventBase* event_ptr) override
+    {
+        auto proxy_event = dynamic_cast<ProxyEvent<T>*>(event_ptr);
+        if (proxy_event == nullptr)
+        {
+            return;
+        }
+        proxy_event->UnsetReceiveHandler();
     }
 };
 
@@ -565,7 +597,40 @@ extern "C" {
 /// \param boxed_fnmut Pointer to FatPtr representing the Rust FnMut closure
 /// \param sample_ptr Pointer to SamplePtr<T> representing the sample data
 void mw_com_impl_call_dyn_ref_fnmut_sample(const ::score::mw::com::impl::rust::FatPtr* boxed_fnmut, void* sample_ptr);
+
+/// \brief Rust closure invocation for events without sample data
+/// \details This function is called by C++ to invoke a Rust closure for events that do not have sample data (e.g.
+/// simple notifications).
+/// \param boxed_fnmut Pointer to FatPtr representing the Rust FnMut closure
+void mw_com_impl_call_dyn_fnmut(const FatPtr* boxed_fnmut) noexcept;
+
+/// \brief Rust closure deletion for all types
+/// \details This function is called by C++ to properly delete a Rust FnMut closure represented as a FatPtr.
+//  This is necessary to ensure that any resources owned by the closure are released correctly when the event receive
+//  handler is cleared or when the proxy is destroyed.
+/// \param boxed_fnmut Pointer to FatPtr representing the Rust FnMut closure to be deleted
+void mw_com_impl_delete_boxed_fnmut(const FatPtr* boxed_fnmut) noexcept;
 }
+
+/// \brief Template specialization of RustBoxedCallable for void return type
+/// \details This specialization is used for events that do not have sample data and therefore do not need to pass a
+/// SamplePtr to the Rust closure.
+// It simply calls the Rust FFI function for FnMut without sample data.
+// The dispose function calls the Rust FFI function to delete the
+template <>
+class RustBoxedCallable<void>
+{
+  public:
+    static void invoke(FatPtr ptr_) noexcept
+    {
+        mw_com_impl_call_dyn_fnmut(&ptr_);
+    }
+
+    static void dispose(FatPtr ptr_) noexcept
+    {
+        mw_com_impl_delete_boxed_fnmut(&ptr_);
+    }
+};
 
 /// \brief Macro to begin registration of interface operations
 /// \details Creates registry and type aliases for a specific interface. Uses a static struct to register
