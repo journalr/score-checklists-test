@@ -176,10 +176,10 @@ mod test {
         run_with_runtime("Lola", &lola_runtime);
     }
 
-    /// Test case: Async sender and receiver on separate threads
-    /// Demonstrates true concurrent async operations on different threads
-    /// Each thread gets its own runtime instance
-    /// It use futures-based blocking executor to run async code in each thread,
+    // Test case: Async sender and receiver on separate threads
+    // Demonstrates true concurrent async operations on different threads
+    // Each thread gets its own runtime instance
+    // It use futures-based blocking executor to run async code in each thread,
     #[test]
     fn test_async_sender_receiver_threads() {
         println!("=== Starting async sender and receiver on separate threads ===");
@@ -292,7 +292,7 @@ mod test {
                 "[SENDER] Sent sample with pressure: {:.2} psi",
                 1.0 + i as f32
             );
-            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
         }
         offered_producer
     }
@@ -300,9 +300,10 @@ mod test {
     //receiver function which use async receive to get data, it waits for new data and process it once it arrives,
     //it will receive data 10 times and print the received samples
     async fn async_data_processor_fn<R: Runtime>(subscribed: impl Subscription<Tire, R>) {
+        println!("[RECEIVER] Async data processor started");
         let mut buffer = SampleContainer::new(5);
-        for _ in 0..10 {
-            buffer = match subscribed.receive(buffer, 1, 3).await {
+        for _ in 0..5 {
+            buffer = match subscribed.receive(buffer, 2, 3).await {
                 Ok(returned_buf) => {
                     let count = returned_buf.sample_count();
                     if count > 0 {

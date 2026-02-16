@@ -802,6 +802,17 @@ pub trait Subscription<T: CommData, R: Runtime + ?Sized> {
     ///
     /// # Returns
     /// Future that resolves to the number of newly added events to the container with at least `new_samples` number of new events.
+    ///
+    /// # Notes
+    ///
+    /// The `Future` cannot have a `'static` lifetime. If we enforced `'static`, then `self` would
+    /// also need to be `'static`, which is not semantically correct for this use case.
+    ///
+    /// Multiple threads cannot concurrently read the same event from a single subscription.
+    /// Therefore, `self` must be borrowed mutably rather than immutably.
+    ///
+    ///  TODO design considerations:
+    /// - Consider introducing separate lifetimes for `SampleContainer` and the returned `Future`
     fn receive<'a>(
         &'a self,
         scratch: SampleContainer<Self::Sample<'a>>,
