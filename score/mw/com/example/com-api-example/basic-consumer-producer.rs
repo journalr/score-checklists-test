@@ -111,6 +111,27 @@ fn create_consumer<R: Runtime>(runtime: &R, service_id: InstanceSpecifier) -> Ve
     consumer_builder.build().unwrap()
 }
 
+async fn create_consumer_async<R: Runtime>(
+    runtime: &R,
+    service_id: InstanceSpecifier,
+) -> VehicleConsumer<R> {
+    let consumer_discovery =
+        runtime.find_service::<VehicleInterface>(FindServiceSpecifier::Specific(service_id));
+    let available_service_instances = consumer_discovery
+        .get_available_instances_async()
+        .await
+        .unwrap();
+
+    // Select service instance at specific handle_index
+    let handle_index = 0; // or any index you need from vector of instances
+    let consumer_builder = available_service_instances
+        .into_iter()
+        .nth(handle_index)
+        .unwrap();
+
+    consumer_builder.build().unwrap()
+}
+
 // Create a producer for the specified service identifier
 fn create_producer<R: Runtime>(
     runtime: &R,
@@ -338,8 +359,8 @@ mod test {
         let lola_runtime_builder = LolaRuntimeBuilderImpl::new();
         let lola_runtime = lola_runtime_builder.build().unwrap();
         let producer = create_producer(&lola_runtime, service_id.clone());
-        let consumer = create_consumer(&lola_runtime, service_id);
 
+        let consumer = create_consumer_async(&lola_runtime, service_id).await;
         // Spawn async data sender
         let sender_join_handle = tokio::spawn(async_data_sender_fn(producer));
 

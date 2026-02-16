@@ -576,6 +576,16 @@ void mw_com_impl_call_dyn_fnmut(const FatPtr* boxed_fnmut) noexcept;
 //  handler is cleared or when the proxy is destroyed.
 /// \param boxed_fnmut Pointer to FatPtr representing the Rust FnMut closure to be deleted
 void mw_com_impl_delete_boxed_fnmut(const FatPtr* boxed_fnmut) noexcept;
+
+/// \brief Rust closure invocation for FindServiceHandle with type erasure
+/// \details This function is called by C++ to invoke a Rust closure for finding services, passing a vector of service
+/// handles.
+/// \param boxed_fnmut Pointer to FatPtr representing the Rust FnMut closure
+/// \param service_handles Pointer to a vector of service handles (type-erased as void*)
+/// \param find_service_handle Opaque handle for the find service operation
+void mw_com_impl_call_dyn_ref_fnmut_find_service(const ::score::mw::com::impl::rust::FatPtr* boxed_fnmut,
+                                                 void* service_handles,
+                                                 ::score::mw::com::impl::FindServiceHandle find_service_handle) noexcept;
 }
 
 /// \brief Template specialization of RustBoxedCallable for void return type
@@ -596,6 +606,24 @@ class RustBoxedCallable<void>
     {
         mw_com_impl_delete_boxed_fnmut(&ptr_);
     }
+};
+
+/// Specialization of RustBoxedCallable for FindServiceHandle with type-erased service handles vector
+template <>
+class RustBoxedCallable<void, std::vector<::score::mw::com::impl::HandleType>, ::score::mw::com::impl::FindServiceHandle>
+{
+  public:
+    static void invoke(FatPtr ptr_,
+                       std::vector<::score::mw::com::impl::HandleType> service_handles,
+                       ::score::mw::com::impl::FindServiceHandle find_service_handle) noexcept
+    {
+        auto* placement_handles =
+            new ::score::mw::com::ServiceHandleContainer<::score::mw::com::impl::HandleType>{std::move(service_handles)};
+        // Call the Rust FFI function
+        mw_com_impl_call_dyn_ref_fnmut_find_service(&ptr_, static_cast<void*>(placement_handles), find_service_handle);
+    }
+
+    static void dispose(FatPtr) noexcept {}
 };
 
 /// \brief Macro to begin registration of interface operations

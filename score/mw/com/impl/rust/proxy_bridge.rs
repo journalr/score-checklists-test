@@ -54,7 +54,7 @@ mod ffi {
     /// `::score::mw::com::ServiceHandleContainer`<`::score::mw::com::impl::HandleType`> as an opaque
     /// struct. Note that this struct is empty as we only use references to it on Rust side.
     #[repr(C)]
-    pub(super) struct NativeHandleContainer {
+    pub struct NativeHandleContainer {
         _dummy: [u8; 0],
     }
 
@@ -193,6 +193,7 @@ pub use ffi::NativeInstanceSpecifier;
 
 pub use ffi::FatPtr;
 pub use ffi::HandleType;
+pub use ffi::NativeHandleContainer;
 pub use ffi::ProxyEvent as NativeProxyEvent;
 pub use ffi::ProxyEventBase;
 pub use ffi::ProxyWrapperClass;
@@ -644,7 +645,7 @@ impl<T: EventOps, P> Drop for ProxyEventStream<'_, T, P> {
 ///
 /// The main way to create this is by converting from a `str`.
 pub struct InstanceSpecifier {
-    inner: *mut ffi::NativeInstanceSpecifier,
+    pub inner: *mut ffi::NativeInstanceSpecifier,
 }
 
 impl InstanceSpecifier {
@@ -699,7 +700,7 @@ impl Drop for InstanceSpecifier {
 /// If needed, this struct could implement `Iterator`. However, since we only use the first handle
 /// in the current sample code, we do not need that yet.
 pub struct HandleContainer {
-    inner: *mut ffi::NativeHandleContainer,
+    pub inner: *mut ffi::NativeHandleContainer,
 }
 
 //Safety: Here data owned by type so it is safe to send and share between threads.

@@ -407,7 +407,7 @@ where
     #[allow(clippy::manual_async_fn)]
     fn get_available_instances_async(
         &self,
-    ) -> impl Future<Output = com_api_concept::Result<Self::ServiceEnumerator>> + Send {
+    ) -> impl Future<Output = com_api_concept::Result<Self::ServiceEnumerator>> {
         async { Ok(Vec::new()) }
     }
 }

@@ -634,12 +634,133 @@ where
             .collect();
         Ok(available_instances)
     }
-
-    #[allow(clippy::manual_async_fn)]
+    /// This function initiates an asynchronous service discovery process and returns a future that resolves to the available service instances.
+    /// It uses FFI to call the underlying C++ service discovery mechanism and sets up a callback to receive the discovery results.
+    /// The future will poll for discovery results and return them once available, while also ensuring stop find service is called when the future is dropped to clean up resources.
+    /// The implementation uses an AtomicWaker to wake up the future when discovery results are received from the C++ callback, and it manages the shared state of discovery results using a Mutex.
+    /// User can not spwan this future as discovery should be initiated by runtime, and runtime will await on this future to get the discovery result and then create consumer instance using the result
+    /// So not allowing user to spawn on this future to avoid multiple discovery process for same service instance and
+    /// also until service is not discovered we should not allow user to create consumer instance or any other consumer related operation, as it may cause undefined behavior
     fn get_available_instances_async(
         &self,
-    ) -> impl Future<Output = Result<Self::ServiceEnumerator>> + Send {
-        async { Ok(Vec::new()) }
+    ) -> impl Future<Output = Result<Self::ServiceEnumerator>> {
+        let instance_specifier = self.instance_specifier.clone();
+
+        async move {
+            let instance_specifier_lola =
+                mw_com::InstanceSpecifier::try_from(instance_specifier.as_ref())
+                    .map_err(|_| Error::Fail)?;
+
+            let waker_storage = Arc::new(futures::task::AtomicWaker::new());
+
+            // Combined state: (find_handle, discovery_result)
+            let discovery_state = Arc::new(std::sync::Mutex::new((
+                None::<bridge_ffi_rs::FindServiceHandle>,
+                None::<Arc<mw_com::proxy::HandleContainer>>,
+            )));
+
+            let state_ref = Arc::clone(&discovery_state);
+            let waker_ref = Arc::clone(&waker_storage);
+
+            let discovery_callback = Box::new(
+                move |handles: mw_com::proxy::HandleContainer,
+                      find_handle: bridge_ffi_rs::FindServiceHandle| {
+                    if let Ok(mut state) = state_ref.lock() {
+                        state.0 = Some(find_handle);
+                        state.1 = Some(Arc::new(handles));
+                    }
+                    waker_ref.wake();
+                },
+            );
+
+            let dyn_callback: Box<
+                dyn FnMut(mw_com::proxy::HandleContainer, bridge_ffi_rs::FindServiceHandle)
+                    + Send
+                    + 'static,
+            > = discovery_callback;
+
+            let fat_ptr: FatPtr = unsafe { std::mem::transmute(dyn_callback) };
+            let find_handle = unsafe {
+                let ptr = bridge_ffi_rs::start_find_service(&fat_ptr, instance_specifier_lola);
+                if ptr.is_null() {
+                    return Err(Error::Fail);
+                }
+                ptr.read()
+            };
+
+            // Create and await the future
+            ServiceDiscoveryFuture {
+                discovery_state: discovery_state.clone(),
+                waker_storage,
+                instance_specifier: instance_specifier.clone(),
+                _interface: PhantomData,
+            }
+            .await
+        }
+    }
+}
+
+/// Future that waits for service discovery to complete and then returns the available instances
+/// It polls the shared state for discovery results and uses an AtomicWaker to wake up when results are available
+/// It also ensures that the find service is stopped when the future is dropped to clean up resources
+/// Stop find service in Drop implementation to ensure that we clean up the find service if the future is dropped before completion
+struct ServiceDiscoveryFuture<I: Interface> {
+    discovery_state: Arc<
+        std::sync::Mutex<(
+            Option<bridge_ffi_rs::FindServiceHandle>,
+            Option<Arc<mw_com::proxy::HandleContainer>>,
+        )>,
+    >,
+    waker_storage: Arc<futures::task::AtomicWaker>,
+    instance_specifier: InstanceSpecifier,
+    _interface: PhantomData<I>,
+}
+
+impl<I: Interface> Drop for ServiceDiscoveryFuture<I> {
+    fn drop(&mut self) {
+        // Ensure we stop the find service when the future is dropped
+        unsafe {
+            bridge_ffi_rs::stop_find_service(
+                &mut self.discovery_state.lock().unwrap().0.take().unwrap(),
+            );
+        }
+    }
+}
+
+impl<I: Interface> Future for ServiceDiscoveryFuture<I> {
+    type Output = Result<Vec<SampleConsumerBuilder<I>>>;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        ctx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        // Register the waker so C++ callback can wake us up
+        self.waker_storage.register(ctx.waker());
+
+        // Check if discovery has completed
+        if let Ok(state_guard) = self.discovery_state.lock() {
+            if let Some(service_handle_arc) = state_guard.1.as_ref() {
+                // Build the response from discovered handles
+                let available_instances = (0..service_handle_arc.len())
+                    .map(|handle_index| {
+                        let instance_info = LolaConsumerInfo {
+                            instance_specifier: self.instance_specifier.clone(),
+                            handle_container: Arc::clone(&service_handle_arc),
+                            handle_index,
+                            interface_id: I::INTERFACE_ID,
+                        };
+                        SampleConsumerBuilder {
+                            instance_info,
+                            _interface: PhantomData,
+                        }
+                    })
+                    .collect();
+                return std::task::Poll::Ready(Ok(available_instances));
+            }
+        }
+
+        // Wait for discovery to complete - C++ callback will wake us
+        std::task::Poll::Pending
     }
 }
 

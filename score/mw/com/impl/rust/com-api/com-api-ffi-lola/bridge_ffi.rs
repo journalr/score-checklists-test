@@ -63,10 +63,13 @@ pub type CVoidPtr = *const std::ffi::c_void;
 pub type CMutVoidPtr = *mut std::ffi::c_void;
 
 pub use mw_com::proxy::FatPtr;
+pub use mw_com::proxy::HandleContainer;
 pub use mw_com::proxy::HandleType;
+pub use mw_com::proxy::NativeHandleContainer;
 pub use mw_com::proxy::NativeInstanceSpecifier;
 pub use mw_com::proxy::ProxyEventBase;
 pub use mw_com::proxy::ProxyWrapperClass;
+pub use mw_com::InstanceSpecifier;
 
 /// Opaque proxy base struct
 #[repr(C)]
@@ -77,6 +80,12 @@ pub struct ProxyBase {
 /// Opaque skeleton base struct
 #[repr(C)]
 pub struct SkeletonBase {
+    dummy: [u8; 0],
+}
+
+/// Handle type for find service operations
+#[repr(C)]
+pub struct FindServiceHandle {
     dummy: [u8; 0],
 }
 
@@ -142,6 +151,30 @@ pub unsafe extern "C" fn mw_com_impl_call_dyn_ref_fnmut_sample(
 
     // Invoke the closure with the void* sample pointer
     callable(sample_ptr);
+}
+
+/// Rust closure invocation for C++ callbacks for FindService
+/// This function is called by C++ to invoke a Rust closure for finding services, passing a vector of service handles.
+/// This function invokes a Rust closure that takes a HandleContainer and a FindServiceHandle.
+#[no_mangle]
+pub unsafe extern "C" fn mw_com_impl_call_dyn_ref_fnmut_find_service(
+    ptr: *const FatPtr,
+    service_handles: *mut NativeHandleContainer,
+    find_service_handle: FindServiceHandle,
+) {
+    if ptr.is_null() || service_handles.is_null() {
+        return;
+    }
+
+    let native_handle_container = HandleContainer {
+        inner: service_handles,
+    };
+
+    // Reconstruct the closure from FatPtr - CORRECT SIGNATURE
+    let callable: &mut dyn FnMut(HandleContainer, FindServiceHandle) = std::mem::transmute(*ptr);
+
+    // Invoke with correct types
+    callable(native_handle_container, find_service_handle);
 }
 
 // FFI declarations for C++ functions implemented in registry_bridge_macro.cpp
@@ -370,6 +403,25 @@ extern "C" {
         proxy_event_ptr: *mut ProxyEventBase,
         event_type: StringView,
     );
+
+    /// Start finding services with callback for results
+    ///
+    /// # Arguments
+    /// * `callback` - FatPtr to callback function that will be called with discovery results
+    /// * `instance_spec` - Pointer to instance specifier for the service to find
+    ///
+    /// # Returns
+    /// Opaque pointer to FindServiceHandle which can be used to stop the find operation
+    fn mw_com_start_find_service(
+        callback: *const FatPtr,
+        instance_spec: *mut NativeInstanceSpecifier,
+    ) -> *mut FindServiceHandle;
+
+    /// Stop finding services using the provided FindServiceHandle
+    ///
+    /// # Arguments
+    /// * `handle` - Opaque pointer to FindServiceHandle returned by mw_com_start_find_service
+    fn mw_com_stop_find_service(handle: *mut FindServiceHandle);
 }
 
 /// Get allocatee pointer from skeleton event of specific type
@@ -740,4 +792,39 @@ pub unsafe fn clear_event_receive_handler(proxy_event_ptr: *mut ProxyEventBase, 
     // SAFETY: proxy_event_ptr must be valid per the caller's contract.
     let c_name = StringView::from(event_type);
     mw_com_proxy_clear_event_receive_handler(proxy_event_ptr, c_name);
+}
+
+/// Unsafe wrapper around mw_com_start_find_service
+///
+/// # Arguments
+/// * `callback` - FatPtr to callback function to be invoked when services are found
+/// * `instance_spec` - InstanceSpecifier identifying the service instance to find
+///
+/// # Returns
+/// Opaque handle pointer for the find service operation, or nullptr on failure
+///
+/// # Safety
+/// callback must be a valid FatPtr referencing a callable compatible with the find service results.
+/// instance_spec must be a valid InstanceSpecifier for the service to find.
+pub unsafe fn start_find_service(
+    callback: &FatPtr,
+    instance_spec: InstanceSpecifier,
+) -> *mut FindServiceHandle {
+    // SAFETY: callback and instance_spec are guaranteed to be valid per the caller's contract.
+    // The C++ implementation handles the find service operation and callback invocation safely.
+    mw_com_start_find_service(callback, instance_spec.inner)
+}
+
+/// Unsafe wrapper around mw_com_stop_find_service
+///
+/// # Arguments
+/// * `handle` - Opaque handle pointer returned from start_find_service()
+///
+/// # Safety
+/// handle must be a valid pointer returned from start_find_service() that has not been stopped yet,
+/// and the caller must ensure no further use of this handle after calling this function.
+pub unsafe fn stop_find_service(handle: *mut FindServiceHandle) {
+    // SAFETY: handle is valid per the caller's contract and has not been stopped yet.
+    // The C++ implementation handles stopping the find service safely.
+    mw_com_stop_find_service(handle);
 }

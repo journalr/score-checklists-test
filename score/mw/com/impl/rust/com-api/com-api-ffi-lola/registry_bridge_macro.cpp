@@ -22,6 +22,7 @@
 /// - C++ side: Template-based, type-erased implementation
 
 #include "score/mw/com/impl/rust/com-api/com-api-ffi-lola/registry_bridge_macro.h"
+#include "score/mw/com/impl/find_service_handler.h"
 #include "score/mw/com/impl/proxy_base.h"
 #include "score/mw/com/impl/proxy_event.h"
 #include "score/mw/com/impl/proxy_event_base.h"
@@ -429,6 +430,62 @@ void mw_com_proxy_clear_event_receive_handler(ProxyEventBase* event_ptr)
         return;
     }
     event_ptr->UnsetReceiveHandler();
+}
+
+/// \brief Start asynchronous service discovery with a callback
+/// \details Initiates a service discovery operation using a Rust callback. The callback will be invoked
+/// when matching services are found. The callback signature is:
+/// void(ServiceHandleContainer<HandleType>, FindServiceHandle)
+///
+/// The callback can be invoked:
+/// - Synchronously: if matching services already exist when StartFindService is called
+/// - Asynchronously: if new services become available after the search starts (called from worker thread)
+///
+/// \param callback FatPtr to Rust FnMut closure that matches the FindServiceHandler signature
+/// \param instance_spec Pointer to InstanceSpecifier for service discovery criteria
+/// \return Opaque pointer to FindServiceHandle on success, nullptr on failure
+/// \note The FindServiceHandle returned is passed to the callback to allow StopFindService calls
+void* mw_com_start_find_service(const FatPtr* callback, InstanceSpecifier* instance_spec)
+{
+    if (callback == nullptr || instance_spec == nullptr)
+    {
+        return nullptr;
+    }
+
+    // Create a RustFnMutCallable with RustBoxedCallable handler
+    // Callback signature: void(ServiceHandleContainer<HandleType>, FindServiceHandle)
+    RustFnMutCallable<RustBoxedCallable, void, ServiceHandleContainer<HandleType>, FindServiceHandle> rust_callable{
+        *callback};
+
+    if (auto result = ::score::mw::com::impl::Runtime::getInstance().GetServiceDiscovery().StartFindService(
+            std::move(rust_callable), std::move(*instance_spec));
+        result.has_value())
+    {
+        return new FindServiceHandle{std::move(result).value()};
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+/// \brief Stop an ongoing service discovery operation
+/// \details Stops the service discovery operation associated with the provided FindServiceHandle.
+/// \param find_service_handle_ptr Opaque pointer to FindServiceHandle returned by mw_com_start_find_service
+void mw_com_stop_find_service(void* find_service_handle_ptr)
+{
+    if (find_service_handle_ptr == nullptr)
+    {
+        return;
+    }
+
+    auto* find_service_handle = static_cast<FindServiceHandle*>(find_service_handle_ptr);
+    if (auto result =
+            ::score::mw::com::impl::Runtime::getInstance().GetServiceDiscovery().StopFindService(*find_service_handle);
+        !result.has_value())
+    {
+        // Log error if needed. added result check because StopFindService has no_discard and returns a Result.
+    }
 }
 
 }  // extern "C"

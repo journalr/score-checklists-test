@@ -575,7 +575,7 @@ pub trait ServiceDiscovery<I: Interface, R: Runtime + ?Sized> {
     #[allow(clippy::manual_async_fn)]
     fn get_available_instances_async(
         &self,
-    ) -> impl Future<Output = Result<Self::ServiceEnumerator>> + Send;
+    ) -> impl Future<Output = Result<Self::ServiceEnumerator>>;
 }
 
 /// Metadata and identification for a discovered service instance.
