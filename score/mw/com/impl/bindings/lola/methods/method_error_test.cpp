@@ -69,6 +69,12 @@ TEST_F(MethodErrorMessageForFixture, MessageForUnknownProxy)
     TestErrorMessage(MethodErrc::kUnknownProxy, "Proxy is not allowed to access method.");
 }
 
+TEST_F(MethodErrorMessageForFixture, MessageForDefaultClause)
+{
+    auto one_past_the_last_lable = static_cast<std::uint32_t>(MethodErrc::kNumEnumElements) + 1;
+    TestErrorMessage(static_cast<MethodErrc>(one_past_the_last_lable), "unknown future error");
+}
+
 using MethodErrorMessageForDeathTest = MethodErrorMessageForFixture;
 TEST_F(MethodErrorMessageForDeathTest, MessageForkInvalidTerminates)
 {
