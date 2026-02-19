@@ -81,7 +81,7 @@ const filesystem::Path kShmPathPrefix{"/dev/shm"};
 #endif
 
 constexpr auto kMethodChannelPrefix{"/lola-methods-0000000000000002-00003-06543-"};
-const auto kMethodShmChannelPrefix{kShmPathPrefix / kMethodChannelPrefix};
+const auto kMethodShmChannelPrefix{kShmPathPrefix / filesystem::Path(kMethodChannelPrefix).RelativePath()};
 
 const std::string kDummyMethodName0{"my_dummy_method_0"};
 const std::string kDummyMethodName1{"my_dummy_method_1"};

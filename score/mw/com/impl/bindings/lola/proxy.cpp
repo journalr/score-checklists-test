@@ -623,7 +623,8 @@ score::ResultBlank Proxy::SetupMethods(const std::vector<std::string_view>& enab
 
     SCORE_LANGUAGE_FUTURECPP_ASSERT_PRD(filesystem_.standard != nullptr);
 
-    const auto are_in_restart_context_result = filesystem_.standard->Exists(kShmPathPrefix / method_shm_path_name);
+    const auto full_path = kShmPathPrefix / filesystem::Path(method_shm_path_name).RelativePath();
+    const auto are_in_restart_context_result = filesystem_.standard->Exists(full_path);
     if (!(are_in_restart_context_result.has_value()))
     {
         score::mw::log::LogWarn("lola") << "Failed to check if method shm path already exists. Exiting.";
