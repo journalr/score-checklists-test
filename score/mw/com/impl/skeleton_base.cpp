@@ -128,31 +128,33 @@ SkeletonBase::SkeletonBase(SkeletonBase&& other) noexcept
 // coverity[autosar_cpp14_a6_2_1_violation]
 SkeletonBase& SkeletonBase::operator=(SkeletonBase&& other) noexcept
 {
-    if (this != &other)
+    if (this == &other)
     {
-        binding_ = std::move(other.binding_);
-        events_ = std::move(other.events_);
-        fields_ = std::move(other.fields_);
-        methods_ = std::move(other.methods_);
-        instance_id_ = std::move(other.instance_id_);
-        skeleton_mock_ = std::move(other.skeleton_mock_);
-        service_offered_flag_ = std::move(other.service_offered_flag_);
+        return *this;
+    }
 
-        // Since the address of this skeleton has changed, we need update the address stored in each of the events and
-        // fields belonging to the skeleton.
-        for (auto& event : events_)
-        {
-            event.second.get().UpdateSkeletonReference(*this);
-        }
+    binding_ = std::move(other.binding_);
+    events_ = std::move(other.events_);
+    fields_ = std::move(other.fields_);
+    methods_ = std::move(other.methods_);
+    instance_id_ = std::move(other.instance_id_);
+    skeleton_mock_ = std::move(other.skeleton_mock_);
+    service_offered_flag_ = std::move(other.service_offered_flag_);
 
-        for (auto& field : fields_)
-        {
-            field.second.get().UpdateSkeletonReference(*this);
-        }
-        for (auto& method : methods_)
-        {
-            method.second.get().UpdateSkeletonReference(*this);
-        }
+    // Since the address of this skeleton has changed, we need update the address stored in each of the events and
+    // fields belonging to the skeleton.
+    for (auto& event : events_)
+    {
+        event.second.get().UpdateSkeletonReference(*this);
+    }
+
+    for (auto& field : fields_)
+    {
+        field.second.get().UpdateSkeletonReference(*this);
+    }
+    for (auto& method : methods_)
+    {
+        method.second.get().UpdateSkeletonReference(*this);
     }
     return *this;
 }

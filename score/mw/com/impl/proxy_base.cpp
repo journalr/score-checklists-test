@@ -65,31 +65,33 @@ ProxyBase::ProxyBase(ProxyBase&& other) noexcept
 
 ProxyBase& ProxyBase::operator=(ProxyBase&& other) noexcept
 {
-    if (this != &other)
+    if (this == &other)
     {
-        proxy_binding_ = std::move(other.proxy_binding_);
-        handle_ = std::move(other.handle_);
-        are_service_element_bindings_valid_ = other.are_service_element_bindings_valid_;
-        events_ = std::move(other.events_);
-        fields_ = std::move(other.fields_);
-        methods_ = std::move(other.methods_);
+        return *this;
+    }
 
-        // Since the address of this proxy has changed, we need update the address stored in each of the events, fields
-        // and methods belonging to the proxy.
-        for (auto& event : events_)
-        {
-            event.second.get().UpdateProxyReference(*this);
-        }
+    proxy_binding_ = std::move(other.proxy_binding_);
+    handle_ = std::move(other.handle_);
+    are_service_element_bindings_valid_ = other.are_service_element_bindings_valid_;
+    events_ = std::move(other.events_);
+    fields_ = std::move(other.fields_);
+    methods_ = std::move(other.methods_);
 
-        for (auto& field : fields_)
-        {
-            field.second.get().UpdateProxyReference(*this);
-        }
+    // Since the address of this proxy has changed, we need update the address stored in each of the events, fields
+    // and methods belonging to the proxy.
+    for (auto& event : events_)
+    {
+        event.second.get().UpdateProxyReference(*this);
+    }
 
-        for (auto& method : methods_)
-        {
-            method.second.get().UpdateProxyReference(*this);
-        }
+    for (auto& field : fields_)
+    {
+        field.second.get().UpdateProxyReference(*this);
+    }
+
+    for (auto& method : methods_)
+    {
+        method.second.get().UpdateProxyReference(*this);
     }
     return *this;
 }
