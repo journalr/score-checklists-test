@@ -738,13 +738,43 @@ TEST_F(ProxyBaseServiceElementReferencesFixture, MoveAssigningToItselfDoesNotDoA
     // be taken without crash.
 }
 
+TEST_F(ProxyBaseServiceElementReferencesFixture, UpdateEventUpdatesCorrectly)
+{
+    // Given a proxy with a registered event
+    ProxyBaseView{proxy_}.RegisterEvent(event_name_0_, event_0_);
+
+    // When we update the event with a new event value
+    ProxyBaseView{proxy_}.UpdateEvent(event_name_0_, event_1_);
+
+    // Then we expect the proxy to contain the new event under the old name
+    auto& updated_event = proxy_.GetEvents().find(event_name_0_)->second.get();
+
+    EXPECT_EQ(&updated_event, &event_1_);
+    EXPECT_NE(&updated_event, &event_0_);
+}
+
 TEST_F(ProxyBaseServiceElementReferencesFixture, UpdateEventTerminatesOnFailiure)
 {
     // Given a proxy with a registered event
     ProxyBaseView{proxy_}.RegisterEvent(event_name_0_, event_0_);
 
-    // When we try to update the even but use a wrong name, then the program terminates
+    // When we try to update the event but use a wrong name, then the program terminates
     SCORE_LANGUAGE_FUTURECPP_EXPECT_CONTRACT_VIOLATED(ProxyBaseView{proxy_}.UpdateEvent("wrong_event_name", event_0_));
+}
+
+TEST_F(ProxyBaseServiceElementReferencesFixture, UpdateFieldUpdatesCorrectly)
+{
+    // Given a proxy with a registered field
+    ProxyBaseView{proxy_}.RegisterField(field_name_0_, field_0_);
+
+    // When we update the field with a new field value
+    ProxyBaseView{proxy_}.UpdateField(field_name_0_, field_1_);
+
+    // Then we expect the proxy to contain the new field under the old name
+    auto& updated_field = proxy_.GetFields().find(field_name_0_)->second.get();
+
+    EXPECT_EQ(&updated_field, &field_1_);
+    EXPECT_NE(&updated_field, &field_0_);
 }
 
 TEST_F(ProxyBaseServiceElementReferencesFixture, UpdateFieldTerminatesOnFailiure)
@@ -754,6 +784,21 @@ TEST_F(ProxyBaseServiceElementReferencesFixture, UpdateFieldTerminatesOnFailiure
 
     // When we try to update the even but use a wrong name, then the program terminates
     SCORE_LANGUAGE_FUTURECPP_EXPECT_CONTRACT_VIOLATED(ProxyBaseView{proxy_}.UpdateField("wrong_field_name", field_0_));
+}
+
+TEST_F(ProxyBaseServiceElementReferencesFixture, UpdateMethodUpdatesCorrectly)
+{
+    // Given a proxy with a registered method
+    ProxyBaseView{proxy_}.RegisterMethod(method_name_0_, method_0_);
+
+    // When we update the method with a new method value
+    ProxyBaseView{proxy_}.UpdateMethod(method_name_0_, method_1_);
+
+    // Then we expect the proxy to contain the new method under the old name
+    auto& updated_method = proxy_.GetMethods().find(method_name_0_)->second.get();
+
+    EXPECT_EQ(&updated_method, &method_1_);
+    EXPECT_NE(&updated_method, &method_0_);
 }
 
 TEST_F(ProxyBaseServiceElementReferencesFixture, UpdateMethodTerminatesOnFailiure)
