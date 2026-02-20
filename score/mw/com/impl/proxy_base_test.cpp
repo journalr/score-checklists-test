@@ -670,8 +670,8 @@ TEST_F(ProxyBaseServiceElementReferencesFixture, MoveConstructingUpdatesReferenc
 
 TEST_F(ProxyBaseServiceElementReferencesFixture, MoveAssigningUpdatesReferencesToServiceElements)
 {
-    RecordProperty("Verifies", "SCR-17432438");
-    RecordProperty("Description", "skeleton is move assignable");
+    RecordProperty("Verifies", "SCR-21290799");
+    RecordProperty("Description", "Proxy is move assignable");
     RecordProperty("TestType", "Requirements-based test");
     RecordProperty("Priority", "1");
     RecordProperty("DerivationTechnique", "Analysis of requirements");

@@ -776,6 +776,13 @@ TEST_F(SkeletonBaseServiceElementReferencesFixture, MoveConstructingUpdatesRefer
 
 TEST_F(SkeletonBaseServiceElementReferencesFixture, MoveAssigningUpdatesReferencesToServiceElements)
 {
+
+    RecordProperty("Verifies", "SCR-17432438");
+    RecordProperty("Description", "Skeleton is move assignable");
+    RecordProperty("TestType", "Requirements-based test");
+    RecordProperty("Priority", "1");
+    RecordProperty("DerivationTechnique", "Analysis of requirements");
+
     constexpr auto other_event_name{"other_event"};
     constexpr auto other_field_name{"other_field"};
     constexpr auto other_method_name{"other_method"};
