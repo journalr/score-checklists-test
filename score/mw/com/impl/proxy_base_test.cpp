@@ -723,6 +723,21 @@ TEST_F(ProxyBaseServiceElementReferencesFixture, MoveAssigningUpdatesReferencesT
     EXPECT_EQ(&methods.at(method_name_1_).get(), &method_1_);
 }
 
+TEST_F(ProxyBaseServiceElementReferencesFixture, MoveAssigningToItselfDoesNotDoAnything)
+{
+    mock_binding::Proxy proxy_binding_mock{};
+    // Given a valid MyProxy object
+    MyProxy proxy_2{std::make_unique<mock_binding::ProxyFacade>(proxy_binding_mock), handle_};
+    // When move assigning the MyProxy object to itself
+
+    auto other_name_same_proxy_p = &proxy_2;
+    proxy_2 = std::move(*other_name_same_proxy_p);
+    // Then nothing happens.
+    // In case of self assignement we would want to know that actually nothing happens and no sideffects occur.
+    // Abscence of sideeffects is not possible to test for. This test only validates that the self assignement branchcan
+    // be taken without crash.
+}
+
 TEST_F(ProxyBaseServiceElementReferencesFixture, UpdateEventTerminatesOnFailiure)
 {
     // Given a proxy with a registered event

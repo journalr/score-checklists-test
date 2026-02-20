@@ -825,5 +825,20 @@ TEST_F(SkeletonBaseServiceElementReferencesFixture, MoveAssigningUpdatesReferenc
     EXPECT_EQ(&methods.at(method_name_1_).get(), &method_1_);
 }
 
+TEST_F(SkeletonBaseServiceElementReferencesFixture, MoveAssigningToItselfDoesNotDoAnything)
+{
+    mock_binding::Skeleton skeleton_binding_mock{};
+    // Given a valid MySkeleton object
+    MySkeleton skeleton_2{std::make_unique<mock_binding::SkeletonFacade>(skeleton_binding_mock), instance_identifier_};
+    // When move assigning the MySkeleton object to itself
+
+    auto other_name_same_skeleton_p = &skeleton_2;
+    skeleton_2 = std::move(*other_name_same_skeleton_p);
+    // Then nothing happens.
+    // In case of self assignement we would want to know that actually nothing happens and no sideffects occur.
+    // Abscence of sideeffects is not possible to test for. This test only validates that the self assignement branchcan
+    // be taken without crash.
+}
+
 }  // namespace
 }  // namespace score::mw::com::impl
