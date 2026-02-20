@@ -762,7 +762,7 @@ void Proxy::InitializeSharedMemoryForMethods(
         auto& emplaced_element = method_data_->method_call_queues_.emplace_back(
             std::piecewise_construct,
             std::forward_as_tuple(method_id),
-            std::forward_as_tuple(*memory_resource.getMemoryResourceProxy(), type_erased_element_infos[i]));
+            std::forward_as_tuple(memory_resource, type_erased_element_infos[i]));
 
         SCORE_LANGUAGE_FUTURECPP_ASSERT_PRD_MESSAGE(
             proxy_methods_.count(method_id) != 0U,

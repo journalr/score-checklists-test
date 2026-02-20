@@ -54,10 +54,9 @@ void TransactionLogSet::TransactionLogNode::Reset() noexcept
 // coverity[autosar_cpp14_a15_5_3_violation : FALSE]
 TransactionLogSet::TransactionLogSet(const TransactionLogIndex max_number_of_logs,
                                      const std::size_t number_of_slots,
-                                     const memory::shared::MemoryResourceProxy* const proxy) noexcept
-    : proxy_transaction_logs_(max_number_of_logs, TransactionLogNode{number_of_slots, proxy}, proxy),
-      skeleton_tracing_transaction_log_{number_of_slots, proxy},
-      proxy_{proxy}
+                                     memory::shared::ManagedMemoryResource& resource) noexcept
+    : proxy_transaction_logs_(max_number_of_logs, TransactionLogNode{number_of_slots, resource}, resource),
+      skeleton_tracing_transaction_log_{number_of_slots, resource}
 {
     SCORE_LANGUAGE_FUTURECPP_PRECONDITION_PRD_MESSAGE(
         max_number_of_logs != kSkeletonIndexSentinel,

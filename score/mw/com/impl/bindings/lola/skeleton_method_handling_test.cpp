@@ -98,7 +98,7 @@ class FakeMethodData
             score::cpp::ignore = method_data_.method_call_queues_.emplace_back(
                 std::piecewise_construct,
                 std::forward_as_tuple(method_id),
-                std::forward_as_tuple(*memory_resource_.getMemoryResourceProxy(), type_erased_element_info));
+                std::forward_as_tuple(memory_resource_, type_erased_element_info));
         }
     }
 

@@ -80,14 +80,14 @@ class EventDataControlCompositeFixture : public ::testing::Test
 
     EventDataControlCompositeFixture& WithQmAndAsilBEventDataControls()
     {
-        qm_ = std::make_unique<EventDataControl>(kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers);
-        asil_ = std::make_unique<EventDataControl>(kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers);
+        qm_ = std::make_unique<EventDataControl>(kMaxSlots, memory_, kMaxSubscribers);
+        asil_ = std::make_unique<EventDataControl>(kMaxSlots, memory_, kMaxSubscribers);
         return *this;
     }
 
     EventDataControlCompositeFixture& WithQmOnlyEventDataControl()
     {
-        qm_ = std::make_unique<EventDataControl>(kMaxSlots, memory_.getMemoryResourceProxy(), kMaxSubscribers);
+        qm_ = std::make_unique<EventDataControl>(kMaxSlots, memory_, kMaxSubscribers);
         return *this;
     }
 
@@ -577,8 +577,8 @@ TEST(EventDataControlCompositeTest, DISABLED_fuzz)
 
     constexpr auto MAX_SLOTS = 100;
     constexpr auto MAX_SUBSCRIBERS = 10;
-    EventDataControl asil{MAX_SLOTS, memory.getMemoryResourceProxy(), MAX_SUBSCRIBERS};
-    EventDataControl qm{MAX_SLOTS, memory.getMemoryResourceProxy(), MAX_SUBSCRIBERS};
+    EventDataControl asil{MAX_SLOTS, memory, MAX_SUBSCRIBERS};
+    EventDataControl qm{MAX_SLOTS, memory, MAX_SUBSCRIBERS};
     EventDataControlComposite unit{&qm, &asil};
 
     std::mutex allocated_slots_mutex{};

@@ -68,12 +68,11 @@ class TypeErasedCallQueueFixture : public ::testing::Test
 
     TypeErasedCallQueueFixture& GivenATypeErasedCallQueue()
     {
-        unit_ = std::make_unique<TypeErasedCallQueue>(*memory_resource_proxy_, type_erased_element_info_);
+        unit_ = std::make_unique<TypeErasedCallQueue>(fake_memory_resource_, type_erased_element_info_);
         return *this;
     }
 
     memory::shared::test::MyBoundedMemoryResource fake_memory_resource_{2000U};
-    const memory::shared::MemoryResourceProxy* memory_resource_proxy_{fake_memory_resource_.getMemoryResourceProxy()};
 
     TypeErasedCallQueue::TypeErasedElementInfo type_erased_element_info_{{}, {}, kQueueSize};
 

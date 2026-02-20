@@ -999,7 +999,7 @@ bool Skeleton::VerifyAllMethodsRegistered() const
 // coverity[autosar_cpp14_a15_5_3_violation : FALSE]
 void Skeleton::InitializeSharedMemoryForData(const std::shared_ptr<score::memory::shared::ManagedMemoryResource>& memory)
 {
-    storage_ = memory->construct<ServiceDataStorage>(memory->getMemoryResourceProxy());
+    storage_ = memory->construct<ServiceDataStorage>(*memory);
     storage_resource_ = memory;
     // Suppress "AUTOSAR C++14 A0-1-1", The rule states: "A project shall not contain instances of non-volatile
     // variables being given values that are not subsequently used"
@@ -1017,7 +1017,7 @@ void Skeleton::InitializeSharedMemoryForControl(
     const std::shared_ptr<score::memory::shared::ManagedMemoryResource>& memory)
 {
     auto& control = (asil_level == QualityType::kASIL_QM) ? control_qm_ : control_asil_b_;
-    control = memory->construct<ServiceDataControl>(memory->getMemoryResourceProxy());
+    control = memory->construct<ServiceDataControl>(*memory);
 }
 
 ResultBlank Skeleton::OnServiceMethodsSubscribed(const ProxyInstanceIdentifier& proxy_instance_identifier,

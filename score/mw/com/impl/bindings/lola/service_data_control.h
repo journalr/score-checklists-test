@@ -37,8 +37,8 @@ class ServiceDataControl
     ///          memory resource, but this would be "uncommon")
     /// \param proxy MemoryResourceProxy pointing to the memory-resource to be used
 
-    explicit ServiceDataControl(const score::memory::shared::MemoryResourceProxy* const proxy)
-        : event_controls_(proxy), application_id_pid_mapping_(kMaxApplicationIdPidMappings, proxy)
+    explicit ServiceDataControl(score::memory::shared::ManagedMemoryResource& resource)
+        : event_controls_(resource), application_id_pid_mapping_(kMaxApplicationIdPidMappings, resource)
     {
     }
 

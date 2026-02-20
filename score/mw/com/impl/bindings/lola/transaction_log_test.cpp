@@ -55,7 +55,7 @@ class TransactionLogFixture : public ::testing::Test
     }
 
     memory::shared::SharedMemoryResourceHeapAllocatorMock memory_resource_{1U};
-    TransactionLog unit_{kNumberOfSlots, memory_resource_.getMemoryResourceProxy()};
+    TransactionLog unit_{kNumberOfSlots, memory_resource_};
 
     StrictMock<MockFunction<void(TransactionLog::SlotIndexType)>> dereference_slot_callback_{};
     StrictMock<MockFunction<void(TransactionLog::MaxSampleCountType)>> unsubscribe_callback_{};

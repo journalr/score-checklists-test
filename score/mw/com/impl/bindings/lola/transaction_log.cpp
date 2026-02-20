@@ -67,8 +67,8 @@ bool DoesLogContainIncrementOrDecrementTransactions(
 
 }  // namespace
 
-TransactionLog::TransactionLog(std::size_t number_of_slots, const memory::shared::MemoryResourceProxy* proxy) noexcept
-    : reference_count_slots_{number_of_slots, proxy}, subscribe_transactions_{}, subscription_max_sample_count_{}
+TransactionLog::TransactionLog(std::size_t number_of_slots, memory::shared::ManagedMemoryResource& resource) noexcept
+    : reference_count_slots_{number_of_slots, resource}, subscribe_transactions_{}, subscription_max_sample_count_{}
 {
 }
 

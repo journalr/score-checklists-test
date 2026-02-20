@@ -69,11 +69,10 @@ class TransactionLogSet
     class TransactionLogNode
     {
       public:
-        TransactionLogNode(const std::size_t number_of_slots,
-                           const memory::shared::MemoryResourceProxy* const proxy) noexcept
+        TransactionLogNode(const std::size_t number_of_slots, memory::shared::ManagedMemoryResource& resource) noexcept
             : needs_rollback_{false},
               transaction_log_id_{kInvalidTransactionLogId},
-              transaction_log_(number_of_slots, proxy)
+              transaction_log_(number_of_slots, resource)
         {
         }
 
@@ -160,7 +159,7 @@ class TransactionLogSet
     /// \param proxy The MemoryResourceProxy that will be used by the DynamicArray of transaction logs
     TransactionLogSet(const TransactionLogIndex max_number_of_logs,
                       const std::size_t number_of_slots,
-                      const memory::shared::MemoryResourceProxy* const proxy) noexcept;
+                      memory::shared::ManagedMemoryResource& resource) noexcept;
     ~TransactionLogSet() noexcept = default;
 
     TransactionLogSet(const TransactionLogSet&) = delete;
@@ -238,7 +237,6 @@ class TransactionLogSet
 
     TransactionLogCollection proxy_transaction_logs_;
     TransactionLogNode skeleton_tracing_transaction_log_;
-    const memory::shared::MemoryResourceProxy* proxy_;
 };
 
 }  // namespace score::mw::com::impl::lola

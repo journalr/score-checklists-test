@@ -67,7 +67,7 @@ class TransactionLogRollbackExecutorFixture : public ::testing::Test
 
     TransactionLogRollbackExecutorFixture& WithTransactionLogRollbackExecutor()
     {
-        service_data_control_ = std::make_unique<ServiceDataControl>(memory_resource_mock_.getMemoryResourceProxy());
+        service_data_control_ = std::make_unique<ServiceDataControl>(memory_resource_mock_);
         unit_ = std::make_unique<TransactionLogRollbackExecutor>(
             *service_data_control_, kDummyQualityType, kDummyProviderPid, kDummyTransactionLogId);
 
@@ -83,7 +83,7 @@ class TransactionLogRollbackExecutorFixture : public ::testing::Test
             std::forward_as_tuple(skeleton_event_properties.number_of_slots,
                                   skeleton_event_properties.max_subscribers,
                                   skeleton_event_properties.enforce_max_samples,
-                                  memory_resource_mock_.getMemoryResourceProxy()));
+                                  memory_resource_mock_));
         ASSERT_TRUE(emplace_result.second);
     }
 

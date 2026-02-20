@@ -418,7 +418,7 @@ auto Skeleton::CreateEventDataFromOpenedSharedMemory(const ElementFqId element_f
 {
     auto* typed_event_data_storage_ptr = storage_resource_->construct<EventDataStorage<SampleType>>(
         element_properties.number_of_slots,
-        memory::shared::PolymorphicOffsetPtrAllocator<SampleType>(storage_resource_->getMemoryResourceProxy()));
+        memory::shared::PolymorphicOffsetPtrAllocator<SampleType>(*storage_resource_));
 
     auto inserted_data_slots = storage_->events_.emplace(std::piecewise_construct,
                                                          std::forward_as_tuple(element_fq_id),
@@ -433,25 +433,24 @@ auto Skeleton::CreateEventDataFromOpenedSharedMemory(const ElementFqId element_f
                                            std::forward_as_tuple(sample_meta_info, event_data_raw_array));
     SCORE_LANGUAGE_FUTURECPP_ASSERT_PRD_MESSAGE(inserted_meta_info.second, "Couldn't register/emplace event-meta-info in data-section.");
 
-    auto control_qm =
-        control_qm_->event_controls_.emplace(std::piecewise_construct,
-                                             std::forward_as_tuple(element_fq_id),
-                                             std::forward_as_tuple(element_properties.number_of_slots,
-                                                                   element_properties.max_subscribers,
-                                                                   element_properties.enforce_max_samples,
-                                                                   control_qm_resource_->getMemoryResourceProxy()));
+    auto control_qm = control_qm_->event_controls_.emplace(std::piecewise_construct,
+                                                           std::forward_as_tuple(element_fq_id),
+                                                           std::forward_as_tuple(element_properties.number_of_slots,
+                                                                                 element_properties.max_subscribers,
+                                                                                 element_properties.enforce_max_samples,
+                                                                                 *control_qm_resource_));
     SCORE_LANGUAGE_FUTURECPP_ASSERT_PRD_MESSAGE(control_qm.second, "Couldn't register/emplace event-meta-info in data-section.");
 
     EventDataControl* control_asil_result{nullptr};
     if (control_asil_resource_ != nullptr)
     {
-        auto iterator = control_asil_b_->event_controls_.emplace(
-            std::piecewise_construct,
-            std::forward_as_tuple(element_fq_id),
-            std::forward_as_tuple(element_properties.number_of_slots,
-                                  element_properties.max_subscribers,
-                                  element_properties.enforce_max_samples,
-                                  control_asil_resource_->getMemoryResourceProxy()));
+        auto iterator =
+            control_asil_b_->event_controls_.emplace(std::piecewise_construct,
+                                                     std::forward_as_tuple(element_fq_id),
+                                                     std::forward_as_tuple(element_properties.number_of_slots,
+                                                                           element_properties.max_subscribers,
+                                                                           element_properties.enforce_max_samples,
+                                                                           *control_asil_resource_));
 
         // Suppress "AUTOSAR C++14 M7-5-1" rule. This rule declares:
         // A function shall not return a reference or a pointer to an automatic variable (including parameters), defined

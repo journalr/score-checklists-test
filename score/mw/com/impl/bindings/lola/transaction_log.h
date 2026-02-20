@@ -60,7 +60,7 @@ class TransactionLog
     using DereferenceSlotCallback = score::cpp::callback<void(SlotIndexType slot_index)>;
     using UnsubscribeCallback = score::cpp::callback<void(MaxSampleCountType subscription_max_sample_count)>;
 
-    TransactionLog(std::size_t number_of_slots, const memory::shared::MemoryResourceProxy* proxy) noexcept;
+    TransactionLog(std::size_t number_of_slots, memory::shared::ManagedMemoryResource& resource) noexcept;
 
     /// \brief Record Subscription / Unsubscription transactions
     ///

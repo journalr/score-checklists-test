@@ -1143,6 +1143,7 @@ cc_gtest_unit_test(
         "//score/mw/com/impl:binding_type",
         "//score/mw/com/impl/test:runtime_mock_guard",
         "@score_baselibs//score/memory/shared:map",
+        "@score_baselibs//score/memory/shared:new_delete_delegate_resource",
         "@score_baselibs//score/os:object_seam",
         "@score_baselibs//score/os/mocklib:unistd_mock",
     ],
