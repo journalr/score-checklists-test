@@ -13,6 +13,7 @@
 #include "score/mw/com/impl/configuration/config_parser.h"
 
 #include "score/mw/com/impl/configuration/service_identifier_type.h"
+#include "score/quality/compiler_warnings/warnings.h"
 
 #include <score/assert_support.hpp>
 
@@ -2276,14 +2277,13 @@ TEST_P(InvalidProcessAsil, DieOnInvalidAsil)
 {
     score::json::JsonParser json_parser_obj;
     json::Any json{json_parser_obj.FromBuffer(GetParam()).value()};
-#if defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-value"  // Comming from gtest, try removing when gtest 1.12 or higher
-#endif
-    SCORE_LANGUAGE_FUTURECPP_EXPECT_CONTRACT_VIOLATED(Configuration{score::mw::com::impl::configuration::Parse(std::move(json))});
-#if defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
+
+    DISABLE_WARNING_PUSH
+    DISABLE_WARNING_UNUSED_VALUE  // Comming from gtest, try removing when gtest 1.12 or higher
+
+        SCORE_LANGUAGE_FUTURECPP_EXPECT_CONTRACT_VIOLATED(Configuration{score::mw::com::impl::configuration::Parse(std::move(json))});
+
+    DISABLE_WARNING_POP
 }
 
 std::string inconsistent_asil_config = R"json(
@@ -2339,14 +2339,13 @@ TEST_P(InvalidMsgQueueSizeFixture, DieOnInvalidMessageQueueSize)
 {
     score::json::JsonParser json_parser_obj;
     json::Any json{json_parser_obj.FromBuffer(GetParam()).value()};
-#if defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-value"  // Comming from gtest, try removing when gtest 1.12 or higher
-#endif
-    SCORE_LANGUAGE_FUTURECPP_EXPECT_CONTRACT_VIOLATED(Configuration{configuration::Parse(std::move(json))});
-#if defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
+
+    DISABLE_WARNING_PUSH
+    DISABLE_WARNING_UNUSED_VALUE  // Comming from gtest, try removing when gtest 1.12 or higher
+
+        SCORE_LANGUAGE_FUTURECPP_EXPECT_CONTRACT_VIOLATED(Configuration{configuration::Parse(std::move(json))});
+
+    DISABLE_WARNING_POP
 }
 
 INSTANTIATE_TEST_SUITE_P(
