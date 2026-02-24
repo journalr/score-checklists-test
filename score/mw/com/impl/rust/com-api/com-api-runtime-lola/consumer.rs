@@ -28,12 +28,13 @@
 //TODO: revist this once com-api is stable - Ticket-234827
 #![allow(clippy::needless_lifetimes)]
 
-use core::cmp::Ordering;
 use core::future::Future;
 use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
 use core::ops::Deref;
 use futures::task::{AtomicWaker, Context, Poll};
+use std::cell::RefCell;
+use std::cmp::Ordering;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::Arc;
@@ -321,6 +322,7 @@ impl<T: CommData> Subscriber<T, LolaRuntimeImpl> for SubscribableImpl<T> {
             waker_storage: Arc::default(),
             _proxy: self.proxy_instance.clone(),
             async_init_status: AtomicBool::new(false),
+            in_progress: AtomicBool::new(false),
             _phantom: PhantomData,
         })
     }
@@ -348,6 +350,7 @@ where
     pub waker_storage: Arc<AtomicWaker>,
     pub _proxy: ProxyInstanceManager,
     async_init_status: AtomicBool,
+    in_progress: AtomicBool,
     _phantom: PhantomData<T>,
 }
 
@@ -456,32 +459,50 @@ where
         max_samples: usize,
     ) -> impl Future<Output = Result<SampleContainer<Self::Sample<'a>>>> + 'a {
         async move {
+            if self
+                .in_progress
+                .swap(true, std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err(Error::Fail);
+            }
+
             if !self
                 .async_init_status
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
                 if let Err(_e) = self.init_async_receive() {
+                    self.in_progress
+                        .store(false, std::sync::atomic::Ordering::SeqCst);
                     return Err(Error::Fail);
                 }
                 self.async_init_status
                     .store(true, std::sync::atomic::Ordering::Relaxed);
             }
-            // Validate parameters
+
             if max_samples > self.max_num_samples || new_samples > self.max_num_samples {
+                self.in_progress
+                    .store(false, std::sync::atomic::Ordering::SeqCst);
                 return Err(Error::Fail);
             }
 
-            if !self.event.is_some() {
+            if self.event.is_none() {
+                self.in_progress
+                    .store(false, std::sync::atomic::Ordering::SeqCst);
                 return Err(Error::Fail);
             }
-            ReceiveFuture {
+
+            let result = ReceiveFuture {
                 subscriber: self,
                 scratch: Some(scratch),
                 new_samples,
                 max_samples,
                 total_received: 0,
             }
-            .await
+            .await;
+
+            self.in_progress
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+            result
         }
     }
 }

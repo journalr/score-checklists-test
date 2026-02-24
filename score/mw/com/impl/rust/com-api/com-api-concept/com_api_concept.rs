@@ -804,15 +804,22 @@ pub trait Subscription<T: CommData, R: Runtime + ?Sized> {
     /// Future that resolves to the number of newly added events to the container with at least `new_samples` number of new events.
     ///
     /// # Notes
-    ///
     /// The `Future` cannot have a `'static` lifetime. If we enforced `'static`, then `self` would
     /// also need to be `'static`, which is not semantically correct for this use case.
     ///
     /// Multiple threads cannot concurrently read the same event from a single subscription.
     /// Therefore, `self` must be borrowed mutably rather than immutably.
     ///
-    ///  TODO design considerations:
-    /// - Consider introducing separate lifetimes for `SampleContainer` and the returned `Future`
+    /// We can not use `&mut self` as the parameter type because future-based APIs typically require `&self` to allow for shared references across await points.
+    /// Also `self` cannot be moved into the future because the subscription needs to remain valid across multiple calls to `receive`.
+    ///
+    /// If we used `&mut self`, it would prevent multiple calls to `receive` on the same subscription instance,
+    /// which is necessary for continuous event consumption. By using `&self`,
+    /// we can allow for multiple calls to `receive` while still ensuring that the subscription instance remains valid and accessible across await points.
+    ///
+    /// If we use some other type to move the ownership of the subscription into the future, it would complicate the API and usage patterns,
+    /// as users would need to manage the lifecycle of that ownership wrapper in addition to the subscription itself.
+    /// Also it create complexity of lifetime management.
     fn receive<'a>(
         &'a self,
         scratch: SampleContainer<Self::Sample<'a>>,
