@@ -645,7 +645,7 @@ impl<T: EventOps, P> Drop for ProxyEventStream<'_, T, P> {
 ///
 /// The main way to create this is by converting from a `str`.
 pub struct InstanceSpecifier {
-    pub inner: *mut ffi::NativeInstanceSpecifier,
+    inner: *mut ffi::NativeInstanceSpecifier,
 }
 
 impl InstanceSpecifier {
@@ -700,7 +700,7 @@ impl Drop for InstanceSpecifier {
 /// If needed, this struct could implement `Iterator`. However, since we only use the first handle
 /// in the current sample code, we do not need that yet.
 pub struct HandleContainer {
-    pub inner: *mut ffi::NativeHandleContainer,
+    inner: *mut ffi::NativeHandleContainer,
 }
 
 //Safety: Here data owned by type so it is safe to send and share between threads.
@@ -709,6 +709,10 @@ unsafe impl Send for HandleContainer {}
 unsafe impl Sync for HandleContainer {}
 
 impl HandleContainer {
+    /// Create a new handle container from a native handle container pointer.
+    pub fn new(inner: *mut ffi::NativeHandleContainer) -> Self {
+        Self { inner }
+    }
     /// Provides the number of handles in the container.
     #[allow(clippy::len_without_is_empty)]
     // Suppressing clippy::len_without_is_empty because length is returning from FFI

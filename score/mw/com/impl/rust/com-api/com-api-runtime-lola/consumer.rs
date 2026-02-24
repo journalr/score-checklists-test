@@ -588,6 +588,26 @@ impl<'a, T: CommData> Future for ReceiveFuture<'a, T> {
     }
 }
 
+/// Holds the shared state of an in-progress service discovery
+struct DiscoveryStateData {
+    //Handle to the ongoing find service operation
+    find_handle: Option<bridge_ffi_rs::FindServiceHandle>,
+    //Container of available service handles, wrapped in Arc for sharing
+    handles: Option<Arc<mw_com::proxy::HandleContainer>>,
+}
+
+impl std::fmt::Debug for DiscoveryStateData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("DiscoveryStateData")
+            .field(
+                "find_handle",
+                &self.find_handle.as_ref().map(|_| "FindServiceHandle"),
+            )
+            .field("handles", &self.handles)
+            .finish()
+    }
+}
+
 pub struct SampleConsumerDiscovery<I> {
     pub instance_specifier: InstanceSpecifier,
     pub _interface: PhantomData<I>,
@@ -653,11 +673,10 @@ where
 
             let waker_storage = Arc::new(futures::task::AtomicWaker::new());
 
-            // Combined state: (find_handle, discovery_result)
-            let discovery_state = Arc::new(std::sync::Mutex::new((
-                None::<bridge_ffi_rs::FindServiceHandle>,
-                None::<Arc<mw_com::proxy::HandleContainer>>,
-            )));
+            let discovery_state = Arc::new(std::sync::Mutex::new(DiscoveryStateData {
+                find_handle: None,
+                handles: None,
+            }));
 
             let state_ref = Arc::clone(&discovery_state);
             let waker_ref = Arc::clone(&waker_storage);
@@ -666,8 +685,8 @@ where
                 move |handles: mw_com::proxy::HandleContainer,
                       find_handle: bridge_ffi_rs::FindServiceHandle| {
                     if let Ok(mut state) = state_ref.lock() {
-                        state.0 = Some(find_handle);
-                        state.1 = Some(Arc::new(handles));
+                        state.find_handle = Some(find_handle);
+                        state.handles = Some(Arc::new(handles));
                     }
                     waker_ref.wake();
                 },
@@ -678,9 +697,13 @@ where
                     + Send
                     + 'static,
             > = discovery_callback;
-
+            //SAFETY: it is safe to transmute the closure to a FatPtr because it has the same representation in memory like FnMut pointer
             let fat_ptr: FatPtr = unsafe { std::mem::transmute(dyn_callback) };
-            let find_handle = unsafe {
+            //SAFETY: this call is safe because the callback will be called by C++ when discovery results are available,
+            //and the callback will update the shared state and wake up the future
+            //It is also safe to pass the instance specifier as it is converted to Lola format and validated before passing to FFI
+            //The lifetime of the callback is managed by Rust, and it will not outlive the scope of this function call.
+            let _find_handle = unsafe {
                 let ptr = bridge_ffi_rs::start_find_service(&fat_ptr, instance_specifier_lola);
                 if ptr.is_null() {
                     return Err(Error::Fail);
@@ -705,12 +728,7 @@ where
 /// It also ensures that the find service is stopped when the future is dropped to clean up resources
 /// Stop find service in Drop implementation to ensure that we clean up the find service if the future is dropped before completion
 struct ServiceDiscoveryFuture<I: Interface> {
-    discovery_state: Arc<
-        std::sync::Mutex<(
-            Option<bridge_ffi_rs::FindServiceHandle>,
-            Option<Arc<mw_com::proxy::HandleContainer>>,
-        )>,
-    >,
+    discovery_state: Arc<std::sync::Mutex<DiscoveryStateData>>,
     waker_storage: Arc<futures::task::AtomicWaker>,
     instance_specifier: InstanceSpecifier,
     _interface: PhantomData<I>,
@@ -718,11 +736,14 @@ struct ServiceDiscoveryFuture<I: Interface> {
 
 impl<I: Interface> Drop for ServiceDiscoveryFuture<I> {
     fn drop(&mut self) {
-        // Ensure we stop the find service when the future is dropped
-        unsafe {
-            bridge_ffi_rs::stop_find_service(
-                &mut self.discovery_state.lock().unwrap().0.take().unwrap(),
-            );
+        //SAFETY: it is safe to call stop_find_service because it will stop the find service discovery with the find handle
+        // and the find handle is valid as it is set in the callback when discovery results are received from C++.
+        if let Ok(mut state) = self.discovery_state.lock() {
+            if let Some(mut find_handle) = state.find_handle.take() {
+                unsafe {
+                    bridge_ffi_rs::stop_find_service(&mut find_handle);
+                }
+            }
         }
     }
 }
@@ -737,9 +758,16 @@ impl<I: Interface> Future for ServiceDiscoveryFuture<I> {
         // Register the waker so C++ callback can wake us up
         self.waker_storage.register(ctx.waker());
 
-        // Check if discovery has completed
+        // NOTE: Lock usage in poll() is acceptable here because:
+        // The callback (running on C++ thread) and this poll (running on executor thread) both
+        // access the same shared mutable state (discovery_state).
+        // Without synchronization, the callback writing find_handle/handles while poll reads
+        // them could cause data races and undefined behavior across thread boundaries.
+        // The lock duration is minimal - just reading two Option fields, not blocking operations.
+        // In practice, contention is zero: callback runs once asynchronously, poll spins until done.
+        // The Mutex is necessary for memory safety, not just performance.
         if let Ok(state_guard) = self.discovery_state.lock() {
-            if let Some(service_handle_arc) = state_guard.1.as_ref() {
+            if let Some(service_handle_arc) = state_guard.handles.as_ref() {
                 // Build the response from discovered handles
                 let available_instances = (0..service_handle_arc.len())
                     .map(|handle_index| {

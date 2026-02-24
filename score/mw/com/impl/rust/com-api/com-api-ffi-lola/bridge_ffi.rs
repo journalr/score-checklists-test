@@ -166,9 +166,7 @@ pub unsafe extern "C" fn mw_com_impl_call_dyn_ref_fnmut_find_service(
         return;
     }
 
-    let native_handle_container = HandleContainer {
-        inner: service_handles,
-    };
+    let native_handle_container = HandleContainer::new(service_handles);
 
     // Reconstruct the closure from FatPtr - CORRECT SIGNATURE
     let callable: &mut dyn FnMut(HandleContainer, FindServiceHandle) = std::mem::transmute(*ptr);
@@ -414,7 +412,7 @@ extern "C" {
     /// Opaque pointer to FindServiceHandle which can be used to stop the find operation
     fn mw_com_start_find_service(
         callback: *const FatPtr,
-        instance_spec: *mut NativeInstanceSpecifier,
+        instance_spec: *const NativeInstanceSpecifier,
     ) -> *mut FindServiceHandle;
 
     /// Stop finding services using the provided FindServiceHandle
@@ -812,7 +810,7 @@ pub unsafe fn start_find_service(
 ) -> *mut FindServiceHandle {
     // SAFETY: callback and instance_spec are guaranteed to be valid per the caller's contract.
     // The C++ implementation handles the find service operation and callback invocation safely.
-    mw_com_start_find_service(callback, instance_spec.inner)
+    mw_com_start_find_service(callback, instance_spec.as_native())
 }
 
 /// Unsafe wrapper around mw_com_stop_find_service
