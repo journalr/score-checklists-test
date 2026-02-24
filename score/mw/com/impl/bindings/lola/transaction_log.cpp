@@ -31,8 +31,8 @@ namespace
 // This allows Thread A to complete its dereference transaction before proceeding.
 void WaitForTransactionEndToBecomeFalse(TransactionLogSlot& slot) noexcept
 {
-    constexpr std::uint8_t kRetryCount = 10;
-    constexpr std::chrono::milliseconds kRetryInterval(10U);
+    constexpr std::uint8_t kRetryCount = 10U;
+    constexpr std::chrono::milliseconds kRetryInterval(10);
     for (std::uint8_t retry = 0U; retry < kRetryCount; ++retry)
     {
         if (!slot.GetTransactionEnd())
