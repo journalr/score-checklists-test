@@ -187,7 +187,7 @@ class "<<SharedMemory>>\nlola::SkeletonDataControl" {
 
 class "<<SharedMemory>>\nlola::EventDataControlImpl" {
   -state_slots: std::vector<std::atomic<EventSlotStatusType::value_type>, PolymorphicOffsetAllocator<std::atomic<EventSlotStatusType::value_type>>>
-  +EventDataControlImpl(MemoryResourceProxy*, SlotIndexType maxSlots)
+  +EventDataControlImpl(ManagedMemoryResource&, SlotIndexType maxSlots)
   +AllocateNextSlot(): std::optional<SlotIndexType>
   +EventReady(SlotIndexType, EventTimestamp): void
   +Discard(SlotIndexType): void
