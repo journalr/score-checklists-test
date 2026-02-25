@@ -358,29 +358,25 @@ mod test {
         let service_id = InstanceSpecifier::new("/Vehicle/Service3/Instance")
             .expect("Failed to create InstanceSpecifier");
         let service_id_clone = service_id.clone();
-
         //consumer create
         let lola_runtime_builder = LolaRuntimeBuilderImpl::new();
         let lola_runtime = lola_runtime_builder.build().unwrap();
-        // let consumer = create_consumer_async(&lola_runtime, service_id).await;
+        //starting service discovery in async way, so that it can be discovered when producer offer service after some delay, and consumer is waiting for discovery result
         let consumer = tokio::spawn(create_consumer_async(lola_runtime, service_id));
-
         //simulate some delay before producer offer service, so that consumer is waiting for discovery
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-
         //Producer create
         let lola_runtime_builder_ = LolaRuntimeBuilderImpl::new();
         let lola_runtime_ = lola_runtime_builder_.build().unwrap();
         let producer = create_producer(&lola_runtime_, service_id_clone);
         // Spawn async data sender
         let sender_join_handle = tokio::spawn(async_data_sender_fn(producer));
+        // Await consumer creation and subscribe to events
         let consumer = consumer.await.expect("Failed to create consumer");
         // Subscribe to one event
         let subscribed = consumer.left_tire.subscribe(5).unwrap();
-
         // Spawn async data processor
         let processor_join_handle = tokio::spawn(async_data_processor_fn(subscribed));
-
         processor_join_handle
             .await
             .expect("Error returned from task");

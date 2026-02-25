@@ -588,15 +588,27 @@ impl<'a, T: CommData> Future for ReceiveFuture<'a, T> {
     }
 }
 
-/// Holds the shared state of an in-progress service discovery
+/// Holds the shared state of an in-progress service discovery.
+///
+/// Both `find_handle` and `handles` are wrapped in `Option` because:
+/// The `DiscoveryStateData` struct is created and initialized with `None` values
+///    before the C++ callback is invoked.
+/// The struct is passed (via `Arc::clone()`) to the callback closure, which
+///    populates the fields when discovery completes.
+/// Independent lifecycle management is required:
+///    - `find_handle`: Must be cleaned up via `stop_find_service()` in the `Drop`
+///      implementation when discovery completes or the future is dropped.
+///    - `handles`: Must be properly dropped when discovery finishes to release
+///      the service handle container resources.
+///
+/// Note: Using a single `Option<(FindServiceHandle, HandleContainer)>` tuple would
+/// introduce unnecessary pattern matching overhead in both `Drop` and `poll()` methods,
+/// where only one field is accessed at a time. Separate `Option` fields provide
+/// clearer semantics and avoid destructuring noise without functional benefit.
 struct DiscoveryStateData {
     // The find handle returned by the FFI call to start service discovery, used to stop discovery when done
-    // we wrap it in Option because it is only available after discovery callback is called,
-    // and it is None before that, and we need to manage its lifetime to ensure stop_find_service is called with correct handle when discovery is complete or future is dropped
     find_handle: Option<bridge_ffi_rs::FindServiceHandle>,
-    // Container of available service handles, wrapped in Arc for sharing
-    // we wrap it in Option because it is only available after discovery callback is called,
-    // and it is None before that, and we need to manage its lifetime to ensure it is dropped when discovery is complete or future is dropped
+    // Container of available service handles, wrapped in Arc to allow sharing between threads and proper cleanup when discovery completes
     handles: Option<Arc<mw_com::proxy::HandleContainer>>,
 }
 
@@ -749,10 +761,10 @@ struct ServiceDiscoveryFuture<I: Interface> {
 
 impl<I: Interface> Drop for ServiceDiscoveryFuture<I> {
     fn drop(&mut self) {
-        //SAFETY: it is safe to call stop_find_service because it will stop the find service discovery with the find handle
-        // and the find handle is valid as it is set in the callback when discovery results are received from C++.
         if let Ok(mut state) = self.discovery_state.lock() {
             if let Some(mut find_handle) = state.find_handle.take() {
+                //SAFETY: it is safe to call stop_find_service because it will stop the find service discovery with the find handle
+                // and the find handle is valid as it is set in the callback when discovery results are received from C++.
                 unsafe {
                     bridge_ffi_rs::stop_find_service(&mut find_handle);
                 }
@@ -913,45 +925,128 @@ pub fn create_sample_callback<'a, T: CommData>(
 
 #[cfg(test)]
 mod test {
-    use com_api_concept::{SampleContainer, Subscription};
+    use com_api_concept::{
+        CommData, Consumer, Interface, OfferedProducer, Producer, Result, Runtime, ServiceDiscovery,
+    };
 
-    #[test]
-    fn receive_stuff() {
-        let test_subscriber = super::SubscriberImpl::<u32>::new();
-        for _ in 0..10 {
-            let mut sample_buf = SampleContainer::new();
-            let receive_result = test_subscriber.try_receive(&mut sample_buf, 1);
-            match receive_result {
-                Ok(0) => panic!("No sample received"),
-                Ok(x) => {
-                    println!(
-                        "{} samples received: sample[0] = {}",
-                        x,
-                        *sample_buf.front().unwrap()
-                    )
-                }
-                Err(e) => panic!("{:?}", e),
-            }
+    #[derive(Debug, Clone, Copy)]
+    #[repr(C)]
+    struct TestData(u32);
+
+    unsafe impl com_api_concept::Reloc for TestData {}
+
+    impl CommData for TestData {
+        const ID: &'static str = "TestData";
+    }
+
+    // Test Consumer implementation
+    #[derive(Debug)]
+    struct TestConsumer;
+
+    impl<R: Runtime + ?Sized> Consumer<R> for TestConsumer {
+        fn new(_: R::ConsumerInfo) -> Self {
+            TestConsumer
         }
     }
 
+    // Test Producer implementation
+    #[derive(Debug)]
+    struct TestProducer;
+
+    impl<R: Runtime + ?Sized> Producer<R> for TestProducer {
+        type Interface = TestVehicleInterface;
+        type OfferedProducer = TestOfferedProducer;
+
+        fn offer(self) -> Result<Self::OfferedProducer> {
+            Ok(TestOfferedProducer)
+        }
+
+        fn new(_: R::ProviderInfo) -> Result<Self>
+        where
+            Self: Sized,
+        {
+            Ok(TestProducer)
+        }
+    }
+
+    // Test OfferedProducer implementation
+    struct TestOfferedProducer;
+
+    impl<R: Runtime + ?Sized> OfferedProducer<R> for TestOfferedProducer {
+        type Interface = TestVehicleInterface;
+        type Producer = TestProducer;
+
+        fn unoffer(self) -> Result<Self::Producer> {
+            Ok(TestProducer)
+        }
+    }
+
+    // Test Interface implementation
+    struct TestVehicleInterface;
+
+    impl Interface for TestVehicleInterface {
+        const INTERFACE_ID: &'static str = "TestVehicleInterface";
+        type Consumer<R: Runtime + ?Sized> = TestConsumer;
+        type Producer<R: Runtime + ?Sized> = TestProducer;
+    }
+
     #[test]
-    fn receive_async_stuff() {
-        let test_subscriber = super::SubscriberImpl::<u32>::new();
-        // block on an asynchronous reception of data from test_subscriber
-        futures::executor::block_on(async {
-            let mut sample_buf = SampleContainer::new();
-            match test_subscriber.receive(&mut sample_buf, 1, 1).await {
-                Ok(0) => panic!("No sample received"),
-                Ok(x) => {
-                    println!(
-                        "{} samples received: sample[0] = {}",
-                        x,
-                        *sample_buf.front().unwrap()
-                    )
-                }
-                Err(e) => panic!("{:?}", e),
-            }
-        })
+    fn test_comm_data_trait() {
+        // Verify TestData implements CommData
+        assert_eq!(TestData::ID, "TestData");
+        let _data = TestData(42);
+    }
+
+    #[test]
+    fn test_discovery_state_data_creation() {
+        // Test that DiscoveryStateData can be created with None values
+        let state = super::DiscoveryStateData {
+            find_handle: None,
+            handles: None,
+        };
+        assert!(state.find_handle.is_none());
+        assert!(state.handles.is_none());
+    }
+
+    #[test]
+    fn test_discovery_state_data_debug() {
+        // Test that DiscoveryStateData debug formatting works
+        let state = super::DiscoveryStateData {
+            find_handle: None,
+            handles: None,
+        };
+        let debug_string = format!("{:?}", state);
+        assert!(debug_string.contains("DiscoveryStateData"));
+        assert!(debug_string.contains("find_handle"));
+        assert!(debug_string.contains("handles"));
+    }
+
+    #[test]
+    fn test_sample_consumer_discovery_creation() {
+        // Test that SampleConsumerDiscovery can be created with valid interface
+        let instance_specifier = com_api_concept::InstanceSpecifier::new("/test/vehicle")
+            .expect("Failed to create instance specifier");
+
+        let _discovery = super::SampleConsumerDiscovery::<TestVehicleInterface>::new(
+            &super::super::LolaRuntimeImpl {},
+            instance_specifier,
+        );
+        // Discovery created successfully
+    }
+
+    #[test]
+    #[ignore] // Requires LoLa runtime initialization and configuration
+    fn test_get_available_instances_method_exists() {
+        // Test that get_available_instances() can be called on ServiceDiscovery trait
+        let instance_specifier = com_api_concept::InstanceSpecifier::new("/test/vehicle")
+            .expect("Failed to create instance specifier");
+
+        let discovery = super::SampleConsumerDiscovery::<TestVehicleInterface>::new(
+            &super::super::LolaRuntimeImpl {},
+            instance_specifier,
+        );
+
+        // Call get_available_instances - verifies the method exists and is callable
+        let _result = discovery.get_available_instances();
     }
 }

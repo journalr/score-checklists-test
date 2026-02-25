@@ -488,7 +488,6 @@ void mw_com_stop_find_service(void* find_service_handle_ptr)
     }
 }
 
-
 /// \brief Delete FindServiceHandle pointer
 /// \details Deallocates the FindServiceHandle pointer created by mw_com_start_find_service.
 /// This should be called after stopping service discovery to clean up resources.
