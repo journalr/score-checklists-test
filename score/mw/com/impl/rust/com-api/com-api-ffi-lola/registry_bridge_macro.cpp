@@ -488,5 +488,20 @@ void mw_com_stop_find_service(void* find_service_handle_ptr)
     }
 }
 
+
+/// \brief Delete FindServiceHandle pointer
+/// \details Deallocates the FindServiceHandle pointer created by mw_com_start_find_service.
+/// This should be called after stopping service discovery to clean up resources.
+/// \param find_service_handle_ptr Opaque pointer to FindServiceHandle to delete
+void mw_com_delete_find_service_handle(void* find_service_handle_ptr)
+{
+    if (find_service_handle_ptr == nullptr)
+    {
+        return;
+    }
+    auto* find_service_handle = static_cast<FindServiceHandle*>(find_service_handle_ptr);
+    delete find_service_handle;
+}
+
 }  // extern "C"
 }  // namespace score::mw::com::impl::rust

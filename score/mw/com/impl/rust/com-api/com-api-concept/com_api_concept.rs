@@ -94,7 +94,7 @@ pub trait Builder<Output> {
 /// the implementation.
 pub trait Runtime {
     /// `ServiceDiscovery<I>` types for Discovers available service instances of a specific interface
-    type ServiceDiscovery<I: Interface>: ServiceDiscovery<I, Self>;
+    type ServiceDiscovery<I: Interface + Send>: ServiceDiscovery<I, Self>;
 
     /// `Subscriber<T>` types for Manages subscriptions to event notifications
     type Subscriber<T: CommData>: Subscriber<T, Self>;
@@ -123,7 +123,7 @@ pub trait Runtime {
     ///
     /// # Returns
     /// Service discovery handle for querying available instances
-    fn find_service<I: Interface>(
+    fn find_service<I: Interface + Send>(
         &self,
         instance_specifier: FindServiceSpecifier,
     ) -> Self::ServiceDiscovery<I>;
@@ -575,7 +575,7 @@ pub trait ServiceDiscovery<I: Interface, R: Runtime + ?Sized> {
     #[allow(clippy::manual_async_fn)]
     fn get_available_instances_async(
         &self,
-    ) -> impl Future<Output = Result<Self::ServiceEnumerator>>;
+    ) -> impl Future<Output = Result<Self::ServiceEnumerator>> + Send;
 }
 
 /// Metadata and identification for a discovered service instance.

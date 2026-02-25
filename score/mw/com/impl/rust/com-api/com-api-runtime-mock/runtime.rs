@@ -62,14 +62,14 @@ pub struct MockConsumerInfo {
 }
 
 impl Runtime for MockRuntimeImpl {
-    type ServiceDiscovery<I: Interface> = SampleConsumerDiscovery<I>;
+    type ServiceDiscovery<I: Interface + Send> = SampleConsumerDiscovery<I>;
     type Subscriber<T: CommData> = SubscribableImpl<T>;
     type ProducerBuilder<I: Interface> = SampleProducerBuilder<I>;
     type Publisher<T: CommData> = Publisher<T>;
     type ProviderInfo = MockProviderInfo;
     type ConsumerInfo = MockConsumerInfo;
 
-    fn find_service<I: Interface>(
+    fn find_service<I: Interface + Send>(
         &self,
         _instance_specifier: FindServiceSpecifier,
     ) -> Self::ServiceDiscovery<I> {
@@ -393,7 +393,7 @@ impl<I> SampleConsumerDiscovery<I> {
     }
 }
 
-impl<I: Interface> ServiceDiscovery<I, MockRuntimeImpl> for SampleConsumerDiscovery<I>
+impl<I: Interface + Send> ServiceDiscovery<I, MockRuntimeImpl> for SampleConsumerDiscovery<I>
 where
     SampleConsumerBuilder<I>: ConsumerBuilder<I, MockRuntimeImpl>,
 {
@@ -407,7 +407,7 @@ where
     #[allow(clippy::manual_async_fn)]
     fn get_available_instances_async(
         &self,
-    ) -> impl Future<Output = com_api_concept::Result<Self::ServiceEnumerator>> {
+    ) -> impl Future<Output = com_api_concept::Result<Self::ServiceEnumerator>> + Send {
         async { Ok(Vec::new()) }
     }
 }

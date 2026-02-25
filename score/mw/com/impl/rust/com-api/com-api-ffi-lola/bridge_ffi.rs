@@ -420,6 +420,12 @@ extern "C" {
     /// # Arguments
     /// * `handle` - Opaque pointer to FindServiceHandle returned by mw_com_start_find_service
     fn mw_com_stop_find_service(handle: *mut FindServiceHandle);
+
+    /// Delete FindServiceHandle pointer
+    ///
+    /// # Arguments
+    /// * `handle` - Opaque pointer to FindServiceHandle to delete
+    fn mw_com_delete_find_service_handle(handle: *mut FindServiceHandle);
 }
 
 /// Get allocatee pointer from skeleton event of specific type
@@ -825,4 +831,18 @@ pub unsafe fn stop_find_service(handle: *mut FindServiceHandle) {
     // SAFETY: handle is valid per the caller's contract and has not been stopped yet.
     // The C++ implementation handles stopping the find service safely.
     mw_com_stop_find_service(handle);
+}
+
+/// Unsafe wrapper around delete_find_service_handle
+///
+/// # Arguments
+/// * `handle` - Opaque handle pointer to delete
+///
+/// # Safety
+/// handle must be a valid pointer returned from start_find_service() that has been stopped via stop_find_service(),
+/// and the caller must ensure no further use of this handle after calling this function.
+pub unsafe fn delete_find_service_handle(handle: *mut FindServiceHandle) {
+    // SAFETY: handle is valid per the caller's contract and has been stopped via stop_find_service().
+    // The C++ implementation handles deletion safely.
+    mw_com_delete_find_service_handle(handle);
 }

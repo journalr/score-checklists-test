@@ -25,14 +25,14 @@ use com_api_concept::{
 pub struct LolaRuntimeImpl {}
 
 impl Runtime for LolaRuntimeImpl {
-    type ServiceDiscovery<I: Interface> = SampleConsumerDiscovery<I>;
+    type ServiceDiscovery<I: Interface + Send> = SampleConsumerDiscovery<I>;
     type Subscriber<T: CommData> = SubscribableImpl<T>;
     type ProducerBuilder<I: Interface> = SampleProducerBuilder<I>;
     type Publisher<T: CommData> = Publisher<T>;
     type ProviderInfo = LolaProviderInfo;
     type ConsumerInfo = LolaConsumerInfo;
 
-    fn find_service<I: Interface>(
+    fn find_service<I: Interface + Send>(
         &self,
         instance_specifier: FindServiceSpecifier,
     ) -> Self::ServiceDiscovery<I> {

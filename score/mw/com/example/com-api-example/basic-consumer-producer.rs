@@ -111,8 +111,10 @@ fn create_consumer<R: Runtime>(runtime: &R, service_id: InstanceSpecifier) -> Ve
     consumer_builder.build().unwrap()
 }
 
+#[allow(dead_code)]
+//it is used in async test, but to avoid unused code warning in main example, it is marked as allow(dead_code)
 async fn create_consumer_async<R: Runtime>(
-    runtime: &R,
+    runtime: R,
     service_id: InstanceSpecifier,
 ) -> VehicleConsumer<R> {
     let consumer_discovery =
@@ -355,15 +357,24 @@ mod test {
         println!("Starting async subscription test with Lola runtime");
         let service_id = InstanceSpecifier::new("/Vehicle/Service3/Instance")
             .expect("Failed to create InstanceSpecifier");
+        let service_id_clone = service_id.clone();
 
+        //consumer create
         let lola_runtime_builder = LolaRuntimeBuilderImpl::new();
         let lola_runtime = lola_runtime_builder.build().unwrap();
-        let producer = create_producer(&lola_runtime, service_id.clone());
+        // let consumer = create_consumer_async(&lola_runtime, service_id).await;
+        let consumer = tokio::spawn(create_consumer_async(lola_runtime, service_id));
 
-        let consumer = create_consumer_async(&lola_runtime, service_id).await;
+        //simulate some delay before producer offer service, so that consumer is waiting for discovery
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        //Producer create
+        let lola_runtime_builder_ = LolaRuntimeBuilderImpl::new();
+        let lola_runtime_ = lola_runtime_builder_.build().unwrap();
+        let producer = create_producer(&lola_runtime_, service_id_clone);
         // Spawn async data sender
         let sender_join_handle = tokio::spawn(async_data_sender_fn(producer));
-
+        let consumer = consumer.await.expect("Failed to create consumer");
         // Subscribe to one event
         let subscribed = consumer.left_tire.subscribe(5).unwrap();
 
