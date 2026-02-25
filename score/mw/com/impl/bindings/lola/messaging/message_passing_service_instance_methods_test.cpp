@@ -140,6 +140,16 @@ class MessagePassingServiceInstanceMethodsFixture : public ::testing::Test
         return *this;
     }
 
+    void ExpectReplyContainsSkeletonAlreadyDestroyed()
+    {
+        EXPECT_CALL(server_connection_mock_, Reply(_))
+            .WillOnce(Invoke([this](auto reply_buffer) -> score::cpp::expected_blank<score::os::Error> {
+                const auto reply_result = DeserializeMethodReplyMessage(reply_buffer);
+                EXPECT_THAT(reply_result, ContainsError(MethodErrc::kSkeletonAlreadyDestroyed));
+                return score::cpp::make_unexpected(os::Error::createFromErrno());
+            }));
+    }
+
     MessagePassingServiceInstanceMethodsFixture& WithARegisteredSubscribeMethodHandler(
         SkeletonInstanceIdentifier skeleton_instance_identifier,
         IMessagePassingService::AllowedConsumerUids allowed_consumer_uids)
@@ -752,7 +762,7 @@ TEST_F(MessagePassingServiceInstanceHandleMessageWithReplyTest, ReturnsErrorWhen
 
 TEST_F(MessagePassingServiceInstanceHandleMessageWithReplyTest, RepliesWithErrorWhenUnexpectedMessageReceived)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess();
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess();
 
     // Expecting that a reply will be sent containing an unexpected message error
     EXPECT_CALL(server_connection_mock_, Reply(_))
@@ -768,6 +778,41 @@ TEST_F(MessagePassingServiceInstanceHandleMessageWithReplyTest, RepliesWithError
     const auto result = received_send_message_with_reply_callback_(
         server_connection_mock_,
         score::cpp::span<std::uint8_t>{payload_with_unexpected_type.data(), payload_with_unexpected_type.size()});
+}
+
+TEST_F(MessagePassingServiceInstanceHandleMessageWithReplyTest,
+       ReturnsErrorWhenMessageCallbackWithReplyScopeExpiredAndReplyFails)
+{
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess();
+
+    // and given that the service instance is destroyed, expiring the callback scope
+    unit_.reset();
+
+    // Expecting that a reply will be attempted and fail
+    this->ExpectReplyContainsSkeletonAlreadyDestroyed();
+
+    // When a valid MessageWithReply message is received
+    const auto result =
+        received_send_message_with_reply_callback_(server_connection_mock_, CreateValidCallMethodMessage());
+
+    // Then an error is returned because replying failed
+    ASSERT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), os::Error::Code::kUnexpected);
+}
+
+TEST_F(MessagePassingServiceInstanceHandleMessageWithReplyTest,
+       RepliesWithErrorWhenMessageCallbackWithReplyScopeExpired)
+{
+    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess();
+
+    // and given that the service instance is destroyed, expiring the callback scope
+    unit_.reset();
+
+    // Expecting that a reply will be attempted containing a skeleton already destroyed error
+    this->ExpectReplyContainsSkeletonAlreadyDestroyed();
+
+    // When a valid MessageWithReply message is received
+    score::cpp::ignore = received_send_message_with_reply_callback_(server_connection_mock_, CreateValidCallMethodMessage());
 }
 
 using MessagePassingServiceInstanceHandleCallMethodMessageTest = MessagePassingServiceInstanceMethodsFixture;
