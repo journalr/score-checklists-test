@@ -72,7 +72,6 @@ class ProxyMethod : public ProxyMethodBinding
     bool IsSubscribed() const;
 
   private:
-    pid_t skeleton_pid_;
     QualityType asil_level_;
     IRuntime& lola_runtime_;
     TypeErasedCallQueue::TypeErasedElementInfo type_erased_element_info_;
@@ -82,6 +81,7 @@ class ProxyMethod : public ProxyMethodBinding
 
     // is_subscribed_ is an atomic since it may be modified by the FindServiceHandler registered within the Proxy
     std::atomic_bool is_subscribed_;
+    Proxy& proxy_;
 };
 
 }  // namespace score::mw::com::impl::lola
