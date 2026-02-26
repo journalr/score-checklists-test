@@ -17,10 +17,13 @@ pub use com_api_runtime_mock::MockRuntimeImpl;
 pub use com_api_runtime_mock::RuntimeBuilderImpl as MockRuntimeBuilderImpl;
 
 pub use com_api_concept::{
-    Builder, CommData, Consumer, ConsumerBuilder, ConsumerDescriptor, Error, FindServiceSpecifier,
-    InstanceSpecifier, Interface, OfferedProducer, PlacementDefault, Producer, ProducerBuilder,
-    ProviderInfo, Publisher, Reloc, Result, Runtime, RuntimeBuilder, SampleContainer,
-    SampleMaybeUninit, SampleMut, ServiceDiscovery, Subscriber, Subscription,
+    interface, interface_common, interface_consumer, interface_producer, Builder, CommData,
+    Consumer, ConsumerBuilder, ConsumerDescriptor, Error, FindServiceSpecifier, InstanceSpecifier,
+    Interface, OfferedProducer, PlacementDefault, Producer, ProducerBuilder, ProviderInfo,
+    Publisher, Reloc, Result, Runtime, RuntimeBuilder, SampleContainer, SampleMaybeUninit,
+    SampleMut, ServiceDiscovery, Subscriber, Subscription,
 };
 
-pub use com_api_concept_interface_macros::interface;
+#[doc(hidden)]
+// See eclipse-score/communication/issues/173 - `paste`crate is still in discussion regarding rust safety certification.
+pub use com_api_concept::paste;
