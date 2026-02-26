@@ -66,16 +66,18 @@ class MethodResourceMap
     ///        ProxyInstanceIdentifier AND pid.
     bool Contains(const ProxyInstanceIdentifier proxy_instance_identifier, const pid_t proxy_pid) const;
 
-    /// \brief Inserts a new ISharedMemoryResource and cleans up any resources corresponding to the provided
-    ///        ApplicationId but different pid.
+    /// \brief Inserts a new ISharedMemoryResource.
+    auto Insert(const ProxyInstanceIdentifier proxy_instance_identifier,
+                const pid_t proxy_pid,
+                const std::shared_ptr<memory::shared::ISharedMemoryResource>& methods_shm_resource) -> iterator;
+
+    /// \brief Cleans up any resources corresponding to the provided ApplicationId but different pid.
     ///
-    /// This function inserts a newly created region while cleaning up any resources corresponding to the same Proxy
-    /// instance which previously crashed and has restarted (i.e. it has the ApplicationId as the old Proxy instance
-    /// but different pid since the process restarted).
-    auto InsertAndCleanUpOldRegions(const ProxyInstanceIdentifier proxy_instance_identifier,
-                                    const pid_t proxy_pid,
-                                    const std::shared_ptr<memory::shared::ISharedMemoryResource>& methods_shm_resource)
-        -> std::pair<iterator, CleanUpResult>;
+    /// This function cleanis up any resources corresponding to the same Proxy instance which previously crashed and has
+    /// restarted (i.e. it has the ApplicationId as the old Proxy instance but different pid since the process
+    /// restarted).
+    auto CleanUpOldRegions(const ProxyInstanceIdentifier proxy_instance_identifier, const pid_t proxy_pid)
+        -> CleanUpResult;
 
     void Clear();
 

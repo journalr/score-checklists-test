@@ -1052,8 +1052,7 @@ ResultBlank Skeleton::OnServiceMethodsSubscribed(const ProxyInstanceIdentifier& 
         return MakeUnexpected(ComErrc::kBindingFailure);
     }
 
-    const auto [resource_it, _] =
-        method_resources_.InsertAndCleanUpOldRegions(proxy_instance_identifier, proxy_pid, opened_shm_region);
+    const auto resource_it = method_resources_.Insert(proxy_instance_identifier, proxy_pid, opened_shm_region);
 
     auto& method_data = GetMethodData(*(resource_it->second));
 
