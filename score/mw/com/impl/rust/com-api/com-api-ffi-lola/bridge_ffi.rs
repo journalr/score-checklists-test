@@ -89,6 +89,29 @@ pub struct FindServiceHandle {
     dummy: [u8; 0],
 }
 
+/// This struct holds the find handle and the discovered service handles.
+pub struct NativeFindServiceHandle {
+    handle: *mut FindServiceHandle,
+}
+
+impl NativeFindServiceHandle {
+    /// Create a new NativeFindServiceHandle from a raw pointer to FindServiceHandle
+    pub fn new(handle: *mut FindServiceHandle) -> Self {
+        Self { handle }
+    }
+    /// Get the raw pointer to the FindServiceHandle
+    pub fn as_ptr(&self) -> *mut FindServiceHandle {
+        self.handle
+    }
+}
+
+//SAFETY: NativeFindServiceHandle is safe to send between threads because
+// It is created by FFI call and there is no state associated with the current thread.
+// The pointer can be safely moved to another thread without thread-local concerns.
+// And the lifetime is managed safely through ServiceDiscoveryFuture
+// which ensures the handle is not used after discovery completes and the handle is cleaned up properly.
+unsafe impl Send for NativeFindServiceHandle {}
+
 /// Opaque skeleton event base struct
 #[repr(C)]
 pub struct SkeletonEventBase {
@@ -160,19 +183,23 @@ pub unsafe extern "C" fn mw_com_impl_call_dyn_ref_fnmut_sample(
 pub unsafe extern "C" fn mw_com_impl_call_dyn_ref_fnmut_find_service(
     ptr: *const FatPtr,
     service_handles: *mut NativeHandleContainer,
-    find_service_handle: FindServiceHandle,
+    find_service_handle: *mut FindServiceHandle,
 ) {
     if ptr.is_null() || service_handles.is_null() {
         return;
     }
 
-    let native_handle_container = HandleContainer::new(service_handles);
-
     // Reconstruct the closure from FatPtr - CORRECT SIGNATURE
-    let callable: &mut dyn FnMut(HandleContainer, FindServiceHandle) = std::mem::transmute(*ptr);
+    let callable: &mut dyn FnMut(HandleContainer, NativeFindServiceHandle) =
+        std::mem::transmute(*ptr);
 
     // Invoke with correct types
-    callable(native_handle_container, find_service_handle);
+    callable(
+        HandleContainer::new(service_handles),
+        NativeFindServiceHandle {
+            handle: find_service_handle,
+        },
+    );
 }
 
 // FFI declarations for C++ functions implemented in registry_bridge_macro.cpp
@@ -420,12 +447,6 @@ extern "C" {
     /// # Arguments
     /// * `handle` - Opaque pointer to FindServiceHandle returned by mw_com_start_find_service
     fn mw_com_stop_find_service(handle: *mut FindServiceHandle);
-
-    /// Delete FindServiceHandle pointer
-    ///
-    /// # Arguments
-    /// * `handle` - Opaque pointer to FindServiceHandle to delete
-    fn mw_com_delete_find_service_handle(handle: *mut FindServiceHandle);
 }
 
 /// Get allocatee pointer from skeleton event of specific type
@@ -831,18 +852,4 @@ pub unsafe fn stop_find_service(handle: *mut FindServiceHandle) {
     // SAFETY: handle is valid per the caller's contract and has not been stopped yet.
     // The C++ implementation handles stopping the find service safely.
     mw_com_stop_find_service(handle);
-}
-
-/// Unsafe wrapper around delete_find_service_handle
-///
-/// # Arguments
-/// * `handle` - Opaque handle pointer to delete
-///
-/// # Safety
-/// handle must be a valid pointer returned from start_find_service() that has been stopped via stop_find_service(),
-/// and the caller must ensure no further use of this handle after calling this function.
-pub unsafe fn delete_find_service_handle(handle: *mut FindServiceHandle) {
-    // SAFETY: handle is valid per the caller's contract and has been stopped via stop_find_service().
-    // The C++ implementation handles deletion safely.
-    mw_com_delete_find_service_handle(handle);
 }

@@ -607,22 +607,9 @@ impl<'a, T: CommData> Future for ReceiveFuture<'a, T> {
 /// clearer semantics and avoid destructuring noise without functional benefit.
 struct DiscoveryStateData {
     // The find handle returned by the FFI call to start service discovery, used to stop discovery when done
-    find_handle: Option<bridge_ffi_rs::FindServiceHandle>,
-    // Container of available service handles, wrapped in Arc to allow sharing between threads and proper cleanup when discovery completes
-    handles: Option<Arc<mw_com::proxy::HandleContainer>>,
-}
-
-impl Drop for DiscoveryStateData {
-    fn drop(&mut self) {
-        // delete the find handle if it exists to clean up resources on C++ side
-        if let Some(mut find_handle) = self.find_handle.take() {
-            // SAFETY: it is safe to call delete_find_service_handle because it will clean up the find service handle on C++ side
-            // and it is checked that find_handle is Some before calling, so we are not calling with invalid handle
-            unsafe {
-                bridge_ffi_rs::delete_find_service_handle(&mut find_handle);
-            }
-        }
-    }
+    find_handle: Option<bridge_ffi_rs::NativeFindServiceHandle>,
+    // Container of available service handles
+    handles: Option<mw_com::proxy::HandleContainer>,
 }
 
 impl std::fmt::Debug for DiscoveryStateData {
@@ -712,17 +699,17 @@ where
 
         let discovery_callback = Box::new(
             move |handles: mw_com::proxy::HandleContainer,
-                  find_handle: bridge_ffi_rs::FindServiceHandle| {
+                  find_handle: bridge_ffi_rs::NativeFindServiceHandle| {
                 if let Ok(mut state) = state_ref.lock() {
                     state.find_handle = Some(find_handle);
-                    state.handles = Some(Arc::new(handles));
+                    state.handles = Some(handles);
                 }
                 waker_ref.wake();
             },
         );
 
         let dyn_callback: Box<
-            dyn FnMut(mw_com::proxy::HandleContainer, bridge_ffi_rs::FindServiceHandle)
+            dyn FnMut(mw_com::proxy::HandleContainer, bridge_ffi_rs::NativeFindServiceHandle)
                 + Send
                 + 'static,
         > = discovery_callback;
@@ -730,20 +717,33 @@ where
         // SAFETY: it is safe to transmute the closure to a FatPtr because it has the same representation in memory like FnMut pointer
         let fat_ptr: FatPtr = unsafe { std::mem::transmute(dyn_callback) };
 
-        // Call FFI without validation - C++ side will handle callback
-        if let Ok(lola_specifier) = instance_specifier_lola {
+        let find_service_status = if let Ok(instance_specifier_lola) = instance_specifier_lola {
             // SAFETY: this call is safe because the callback will be called by C++ when discovery results are available
-            unsafe {
-                bridge_ffi_rs::start_find_service(&fat_ptr, lola_specifier);
+            let handle =
+                unsafe { bridge_ffi_rs::start_find_service(&fat_ptr, instance_specifier_lola) };
+            if handle.is_null() {
+                Err(Error::Fail)
+            } else {
+                if let Ok(mut discovery_state_lock) = discovery_state.lock() {
+                    discovery_state_lock.find_handle =
+                        Some(bridge_ffi_rs::NativeFindServiceHandle::new(handle));
+                }
+                Ok(())
             }
-        }
-
-        // Create and await the discovery future
-        ServiceDiscoveryFuture {
-            discovery_state,
-            waker_storage,
-            instance_specifier,
-            _interface: PhantomData,
+        } else {
+            Err(Error::Fail)
+        };
+        async move {
+            // Early return error if starting service discovery failed, to avoid awaiting on the future when there is error in starting discovery
+            find_service_status?;
+            // Create and await the discovery future
+            ServiceDiscoveryFuture {
+                discovery_state,
+                waker_storage,
+                instance_specifier,
+                _interface: PhantomData,
+            }
+            .await
         }
     }
 }
@@ -762,11 +762,11 @@ struct ServiceDiscoveryFuture<I: Interface> {
 impl<I: Interface> Drop for ServiceDiscoveryFuture<I> {
     fn drop(&mut self) {
         if let Ok(mut state) = self.discovery_state.lock() {
-            if let Some(mut find_handle) = state.find_handle.take() {
+            if let Some(find_handle) = state.find_handle.take() {
                 //SAFETY: it is safe to call stop_find_service because it will stop the find service discovery with the find handle
                 // and the find handle is valid as it is set in the callback when discovery results are received from C++.
                 unsafe {
-                    bridge_ffi_rs::stop_find_service(&mut find_handle);
+                    bridge_ffi_rs::stop_find_service(find_handle.as_ptr());
                 }
             }
         }
@@ -791,8 +791,10 @@ impl<I: Interface> Future for ServiceDiscoveryFuture<I> {
         // The lock duration is minimal - just reading two Option fields, not blocking operations.
         // In practice, contention is zero: callback runs once asynchronously, poll spins until done.
         // The Mutex is necessary for memory safety, not just performance.
-        if let Ok(state_guard) = self.discovery_state.lock() {
-            if let Some(service_handle_arc) = state_guard.handles.as_ref() {
+        if let Ok(mut state_guard) = self.discovery_state.lock() {
+            if let Some(service_handle) = state_guard.handles.take() {
+                //create Arc for service handle to share between instances
+                let service_handle_arc = Arc::new(service_handle);
                 // Build the response from discovered handles
                 let available_instances = (0..service_handle_arc.len())
                     .map(|handle_index| {

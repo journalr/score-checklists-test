@@ -30,6 +30,7 @@
 #include "score/mw/com/impl/skeleton_event.h"
 #include "score/mw/com/impl/skeleton_event_base.h"
 #include "score/mw/com/types.h"
+#include "score/mw/log/logging.h"
 
 #include <limits>
 #include <string_view>
@@ -469,8 +470,9 @@ void* mw_com_start_find_service(const FatPtr* callback, InstanceSpecifier* insta
     }
 }
 
-/// \brief Stop an ongoing service discovery operation
-/// \details Stops the service discovery operation associated with the provided FindServiceHandle.
+/// \brief Stop an ongoing service discovery operation and delete the handle
+/// \details Stops the service discovery operation associated with the provided FindServiceHandle
+/// and deallocates the handle. This is the only place where the handle should be deleted.
 /// \param find_service_handle_ptr Opaque pointer to FindServiceHandle returned by mw_com_start_find_service
 void mw_com_stop_find_service(void* find_service_handle_ptr)
 {
@@ -480,25 +482,16 @@ void mw_com_stop_find_service(void* find_service_handle_ptr)
     }
 
     auto* find_service_handle = static_cast<FindServiceHandle*>(find_service_handle_ptr);
-    if (auto result =
-            ::score::mw::com::impl::Runtime::getInstance().GetServiceDiscovery().StopFindService(*find_service_handle);
-        !result.has_value())
-    {
-        // Log error if needed. added result check because StopFindService has no_discard and returns a Result.
-    }
-}
 
-/// \brief Delete FindServiceHandle pointer
-/// \details Deallocates the FindServiceHandle pointer created by mw_com_start_find_service.
-/// This should be called after stopping service discovery to clean up resources.
-/// \param find_service_handle_ptr Opaque pointer to FindServiceHandle to delete
-void mw_com_delete_find_service_handle(void* find_service_handle_ptr)
-{
-    if (find_service_handle_ptr == nullptr)
+    // Stop the service discovery
+    auto result =
+        ::score::mw::com::impl::Runtime::getInstance().GetServiceDiscovery().StopFindService(*find_service_handle);
+
+    if (!result.has_value())
     {
-        return;
+        mw::log::LogError("com-api") << "Failed to stop service discovery for handle: " << result.error();
     }
-    auto* find_service_handle = static_cast<FindServiceHandle*>(find_service_handle_ptr);
+
     delete find_service_handle;
 }
 
