@@ -17,14 +17,12 @@ namespace score::mw::com::impl::lola
 
 bool operator==(const ProxyInstanceIdentifier& lhs, const ProxyInstanceIdentifier& rhs) noexcept
 {
-    return ((lhs.process_identifier == rhs.process_identifier) &&
-            (lhs.proxy_instance_counter == rhs.proxy_instance_counter));
+    return ((lhs.application_id == rhs.application_id) && (lhs.proxy_instance_counter == rhs.proxy_instance_counter));
 }
 
 mw::log::LogStream& operator<<(score::mw::log::LogStream& stream, const ProxyInstanceIdentifier& value) noexcept
 {
-    stream << "Application ID:" << value.process_identifier
-           << ". Proxy Instance Counter:" << value.proxy_instance_counter;
+    stream << "Application ID:" << value.application_id << ". Proxy Instance Counter:" << value.proxy_instance_counter;
     return stream;
 }
 

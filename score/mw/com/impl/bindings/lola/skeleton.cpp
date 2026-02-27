@@ -1033,7 +1033,7 @@ ResultBlank Skeleton::OnServiceMethodsSubscribed(const ProxyInstanceIdentifier& 
     std::lock_guard lock{on_service_methods_subscribed_mutex_};
     if (method_resources_.Contains(proxy_instance_identifier, proxy_pid))
     {
-        score::mw::log::LogDebug("lola") << "Method" << proxy_instance_identifier.process_identifier << "/"
+        score::mw::log::LogDebug("lola") << "Method" << proxy_instance_identifier.application_id << "/"
                                        << proxy_instance_identifier.proxy_instance_counter << "with PID:" << proxy_pid
                                        << "already subscribed. Not re-opening shared memory region";
         return {};

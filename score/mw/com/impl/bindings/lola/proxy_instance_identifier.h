@@ -39,7 +39,7 @@ struct ProxyInstanceIdentifier
 
     // According to our configuration schema an application id has to be unique during runtime. Thus, there are no two
     // processes running with the same application id -> application id uniquely identifies a process.
-    GlobalConfiguration::ApplicationId process_identifier;
+    GlobalConfiguration::ApplicationId application_id;
     ProxyInstanceCounter proxy_instance_counter;
 };
 
@@ -60,13 +60,13 @@ class hash<score::mw::com::impl::lola::ProxyInstanceIdentifier>
         const score::mw::com::impl::lola::ProxyInstanceIdentifier& proxy_instance_identifier) const noexcept
     {
         using ProxyInstanceIdentifier = score::mw::com::impl::lola::ProxyInstanceIdentifier;
-        static_assert(sizeof(ProxyInstanceIdentifier::process_identifier) +
+        static_assert(sizeof(ProxyInstanceIdentifier::application_id) +
                           sizeof(ProxyInstanceIdentifier::proxy_instance_counter) <
                       sizeof(std::uint64_t));
 
         constexpr auto proxy_instance_counter_bit_width =
             std::numeric_limits<decltype(proxy_instance_identifier.proxy_instance_counter)>::digits;
-        return std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(proxy_instance_identifier.process_identifier)
+        return std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(proxy_instance_identifier.application_id)
                                            << static_cast<std::uint64_t>(proxy_instance_counter_bit_width)) |
                                           static_cast<std::uint64_t>(proxy_instance_identifier.proxy_instance_counter));
     }

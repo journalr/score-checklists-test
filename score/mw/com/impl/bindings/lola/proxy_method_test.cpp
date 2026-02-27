@@ -322,8 +322,7 @@ TEST_F(ProxyMethodDoCallFixture, DispatchesToMessagePassingBinding)
         .WillOnce(WithArg<1>(Invoke([](auto proxy_method_instance_identifier) -> ResultBlank {
             // Then CallMethod is called with a ProxyMethodInstanceIdentifier containing the application id from the
             // configuration
-            EXPECT_EQ(proxy_method_instance_identifier.proxy_instance_identifier.process_identifier,
-                      kDummyApplicationId);
+            EXPECT_EQ(proxy_method_instance_identifier.proxy_instance_identifier.application_id, kDummyApplicationId);
             return ResultBlank{};
         })));
 

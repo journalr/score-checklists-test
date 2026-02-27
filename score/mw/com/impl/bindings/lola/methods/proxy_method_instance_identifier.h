@@ -51,7 +51,7 @@ class hash<score::mw::com::impl::lola::ProxyMethodInstanceIdentifier>
     {
         using ProxyMethodInstanceIdentifier = score::mw::com::impl::lola::ProxyMethodInstanceIdentifier;
         using ProxyInstanceIdentifier = score::mw::com::impl::lola::ProxyInstanceIdentifier;
-        static_assert((sizeof(ProxyInstanceIdentifier::process_identifier) +
+        static_assert((sizeof(ProxyInstanceIdentifier::application_id) +
                        sizeof(ProxyInstanceIdentifier::proxy_instance_counter) +
                        sizeof(ProxyMethodInstanceIdentifier::method_id)) <= sizeof(std::uint64_t));
 
@@ -60,7 +60,7 @@ class hash<score::mw::com::impl::lola::ProxyMethodInstanceIdentifier>
         constexpr auto method_id_bit_width =
             std::numeric_limits<decltype(proxy_method_instance_identifier.method_id)>::digits;
         return std::hash<std::uint64_t>{}(
-            (static_cast<std::uint64_t>(proxy_method_instance_identifier.proxy_instance_identifier.process_identifier)
+            (static_cast<std::uint64_t>(proxy_method_instance_identifier.proxy_instance_identifier.application_id)
              << (proxy_instance_counter_bit_width + method_id_bit_width)) |
             (static_cast<std::uint64_t>(
                  proxy_method_instance_identifier.proxy_instance_identifier.proxy_instance_counter)
