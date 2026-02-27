@@ -89,7 +89,7 @@ pub struct FindServiceHandle {
     dummy: [u8; 0],
 }
 
-/// This struct holds the find handle and the discovered service handles.
+/// This struct wraps the raw pointer to FindServiceHandle returned by C++ and provides safe access to it
 pub struct NativeFindServiceHandle {
     handle: *mut FindServiceHandle,
 }
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn mw_com_impl_call_dyn_ref_fnmut_find_service(
         return;
     }
 
-    // Reconstruct the closure from FatPtr - CORRECT SIGNATURE
+    // Reconstruct the closure from FatPtr
     let callable: &mut dyn FnMut(HandleContainer, NativeFindServiceHandle) =
         std::mem::transmute(*ptr);
 

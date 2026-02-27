@@ -588,37 +588,28 @@ impl<'a, T: CommData> Future for ReceiveFuture<'a, T> {
     }
 }
 
-/// Holds the shared state of an in-progress service discovery.
+/// Holds the shared state populated asynchronously by the C++ service discovery callback.
 ///
-/// Both `find_handle` and `handles` are wrapped in `Option` because:
-/// The `DiscoveryStateData` struct is created and initialized with `None` values
-///    before the C++ callback is invoked.
-/// The struct is passed (via `Arc::clone()`) to the callback closure, which
-///    populates the fields when discovery completes.
-/// Independent lifecycle management is required:
-///    - `find_handle`: Must be cleaned up via `stop_find_service()` in the `Drop`
-///      implementation when discovery completes or the future is dropped.
-///    - `handles`: Must be properly dropped when discovery finishes to release
-///      the service handle container resources.
+/// `handles` is wrapped in `Option` because:
+/// - It is populated asynchronously when the C++ callback fires, not synchronously.
+/// - Before the callback completes, `handles` must represent "not yet available" → `None`.
+/// - After the callback completes, `handles` contains `Some(ServiceHandleContainer)`.
+/// - `poll()` takes ownership via `.take()` to prevent double-processing of the same result.
 ///
-/// Note: Using a single `Option<(FindServiceHandle, HandleContainer)>` tuple would
-/// introduce unnecessary pattern matching overhead in both `Drop` and `poll()` methods,
-/// where only one field is accessed at a time. Separate `Option` fields provide
-/// clearer semantics and avoid destructuring noise without functional benefit.
+/// `find_handle` is intentionally NOT stored here — it is owned directly by `ServiceDiscoveryFuture`.
+/// Rationale:
+/// - `start_find_service` returns it synchronously, guaranteeing availability for cleanup.
+/// - Storing in callback would create a race: if the future drops before the callback fires,
+///   `find_handle` remains `None` → `stop_find_service` is never called → C++ discovery leaks.
+/// - C++ passes the same handle both as return value and callback argument; we use only the
+///   return value to eliminate double-write races and ensure deterministic cleanup.
 struct DiscoveryStateData {
-    // The find handle returned by the FFI call to start service discovery, used to stop discovery when done
-    find_handle: Option<bridge_ffi_rs::NativeFindServiceHandle>,
-    // Container of available service handles
     handles: Option<mw_com::proxy::HandleContainer>,
 }
 
 impl std::fmt::Debug for DiscoveryStateData {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("DiscoveryStateData")
-            .field(
-                "find_handle",
-                &self.find_handle.as_ref().map(|_| "FindServiceHandle"),
-            )
             .field("handles", &self.handles)
             .finish()
     }
@@ -674,9 +665,6 @@ where
     /// It uses FFI to call the underlying C++ service discovery mechanism and sets up a callback to receive the discovery results.
     /// The future will poll for discovery results and return them once available, while also ensuring stop find service is called when the future is dropped to clean up resources.
     /// The implementation uses an AtomicWaker to wake up the future when discovery results are received from the C++ callback, and it manages the shared state of discovery results using a Mutex.
-    /// User can not spwan this future as discovery should be initiated by runtime, and runtime will await on this future to get the discovery result and then create consumer instance using the result
-    /// So not allowing user to spawn on this future to avoid multiple discovery process for same service instance and
-    /// also until service is not discovered we should not allow user to create consumer instance or any other consumer related operation, as it may cause undefined behavior
     fn get_available_instances_async(
         &self,
     ) -> impl Future<Output = Result<Self::ServiceEnumerator>> + Send {
@@ -689,19 +677,21 @@ where
 
         let waker_storage = Arc::new(futures::task::AtomicWaker::new());
 
-        let discovery_state = Arc::new(std::sync::Mutex::new(DiscoveryStateData {
-            find_handle: None,
-            handles: None,
-        }));
+        let discovery_state = Arc::new(std::sync::Mutex::new(DiscoveryStateData { handles: None }));
 
         let state_ref = Arc::clone(&discovery_state);
         let waker_ref = Arc::clone(&waker_storage);
 
+        // The C++ StartFindService API mandates the callback receives both:
+        //   (ServiceHandleContainer<HandleType>, FindServiceHandle)
+        // We store only `handles` here. The `find_handle` callback argument is
+        // intentionally ignored because the same handle is already captured
+        // synchronously from `start_find_service`'s return value and stored
+        // directly in `ServiceDiscoveryFuture`, eliminating the double-write race.
         let discovery_callback = Box::new(
             move |handles: mw_com::proxy::HandleContainer,
-                  find_handle: bridge_ffi_rs::NativeFindServiceHandle| {
+                  _find_handle: bridge_ffi_rs::NativeFindServiceHandle| {
                 if let Ok(mut state) = state_ref.lock() {
-                    state.find_handle = Some(find_handle);
                     state.handles = Some(handles);
                 }
                 waker_ref.wake();
@@ -714,30 +704,30 @@ where
                 + 'static,
         > = discovery_callback;
 
-        // SAFETY: it is safe to transmute the closure to a FatPtr because it has the same representation in memory like FnMut pointer
+        // SAFETY: it is safe to transmute the closure to a FatPtr because it has
+        // the same representation in memory as a FnMut fat pointer
         let fat_ptr: FatPtr = unsafe { std::mem::transmute(dyn_callback) };
 
-        let find_service_status = if let Ok(instance_specifier_lola) = instance_specifier_lola {
-            // SAFETY: this call is safe because the callback will be called by C++ when discovery results are available
-            let handle =
-                unsafe { bridge_ffi_rs::start_find_service(&fat_ptr, instance_specifier_lola) };
-            if handle.is_null() {
+        let find_service_result = instance_specifier_lola.and_then(|spec| {
+            // SAFETY: start_find_service is safe because fat_ptr is valid and
+            // instance specifier is valid. The returned handle is stored
+            // synchronously — before any async polling — guaranteeing
+            // stop_find_service is always called in Drop.
+            let raw_handle = unsafe { bridge_ffi_rs::start_find_service(&fat_ptr, spec) };
+            if raw_handle.is_null() {
                 Err(Error::Fail)
             } else {
-                if let Ok(mut discovery_state_lock) = discovery_state.lock() {
-                    discovery_state_lock.find_handle =
-                        Some(bridge_ffi_rs::NativeFindServiceHandle::new(handle));
-                }
-                Ok(())
+                // Single authoritative source of find_handle — return value only.
+                // Callback's find_handle argument is ignored to prevent double-write.
+                Ok(bridge_ffi_rs::NativeFindServiceHandle::new(raw_handle))
             }
-        } else {
-            Err(Error::Fail)
-        };
+        });
         async move {
             // Early return error if starting service discovery failed, to avoid awaiting on the future when there is error in starting discovery
-            find_service_status?;
+            let find_handle = find_service_result?;
             // Create and await the discovery future
             ServiceDiscoveryFuture {
+                find_handle,
                 discovery_state,
                 waker_storage,
                 instance_specifier,
@@ -753,6 +743,7 @@ where
 /// It also ensures that the find service is stopped when the future is dropped to clean up resources
 /// Stop find service in Drop implementation to ensure that we clean up the find service if the future is dropped before completion
 struct ServiceDiscoveryFuture<I: Interface> {
+    find_handle: bridge_ffi_rs::NativeFindServiceHandle,
     discovery_state: Arc<std::sync::Mutex<DiscoveryStateData>>,
     waker_storage: Arc<futures::task::AtomicWaker>,
     instance_specifier: InstanceSpecifier,
@@ -761,14 +752,12 @@ struct ServiceDiscoveryFuture<I: Interface> {
 
 impl<I: Interface> Drop for ServiceDiscoveryFuture<I> {
     fn drop(&mut self) {
-        if let Ok(mut state) = self.discovery_state.lock() {
-            if let Some(find_handle) = state.find_handle.take() {
-                //SAFETY: it is safe to call stop_find_service because it will stop the find service discovery with the find handle
-                // and the find handle is valid as it is set in the callback when discovery results are received from C++.
-                unsafe {
-                    bridge_ffi_rs::stop_find_service(find_handle.as_ptr());
-                }
-            }
+        // SAFETY: find_handle is always valid here — it was stored synchronously
+        // from start_find_service return value before any async polling began.
+        // This unconditional call ensures the C++ discovery operation is always
+        // cleaned up, even when the future is dropped before the callback fires.
+        unsafe {
+            bridge_ffi_rs::stop_find_service(self.find_handle.as_ptr());
         }
     }
 }
@@ -786,7 +775,7 @@ impl<I: Interface> Future for ServiceDiscoveryFuture<I> {
         // NOTE: Lock usage in poll() is acceptable here because:
         // The callback (running on C++ thread) and this poll (running on executor thread) both
         // access the same shared mutable state (discovery_state).
-        // Without synchronization, the callback writing find_handle/handles while poll reads
+        // Without synchronization, the callback writing handles while poll reads
         // them could cause data races and undefined behavior across thread boundaries.
         // The lock duration is minimal - just reading two Option fields, not blocking operations.
         // In practice, contention is zero: callback runs once asynchronously, poll spins until done.
