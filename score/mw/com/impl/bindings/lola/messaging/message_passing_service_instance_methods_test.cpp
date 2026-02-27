@@ -668,7 +668,8 @@ TEST_F(MessagePassingServiceInstanceRemoteSubscribeMethodTest, ReturnsErrorWhenR
 }
 
 using MessagePassingServiceInstanceRegisterMethodCallHandlerTest = MessagePassingServiceInstanceMethodsFixture;
-TEST_F(MessagePassingServiceInstanceRegisterMethodCallHandlerTest, ReregisteringHandlerOverwritesStoredHandler)
+TEST_F(MessagePassingServiceInstanceRegisterMethodCallHandlerTest,
+       ReregisteringHandlerWhenOneIsAlreadyStoredViolatesAPrecondition)
 {
     ::testing::MockFunction<void(std::size_t)> mock_method_call_handler_2{};
     safecpp::Scope<> method_call_handler_scope_2{};
@@ -678,17 +679,12 @@ TEST_F(MessagePassingServiceInstanceRegisterMethodCallHandlerTest, Reregistering
     GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredMethodCallHandler(
         kProxyMethodInstanceIdentifier, client_identity_->uid);
 
-    // Expecting that only the newly registered method call handler will be called
-    EXPECT_CALL(mock_method_call_handler_, Call(_)).Times(0);
-    EXPECT_CALL(mock_method_call_handler_2, Call(_));
-
     // When registering a new method call handler
-    auto result = unit_->RegisterMethodCallHandler(
-        kProxyMethodInstanceIdentifier, scoped_method_call_handler_2, client_identity_->uid);
-    EXPECT_TRUE(result.has_value());
-
-    // Then when calling the method
-    score::cpp::ignore = unit_->CallMethod(kProxyMethodInstanceIdentifier, kQueuePosition, kLocalPid);
+    // Then we expect a contarct violation since the previous
+    // handler should have been cleand up before registering the new one
+    SCORE_LANGUAGE_FUTURECPP_EXPECT_CONTRACT_VIOLATED(score::cpp::ignore = unit_->RegisterMethodCallHandler(kProxyMethodInstanceIdentifier,
+                                                                                scoped_method_call_handler_2,
+                                                                                client_identity_->uid));
 }
 
 using MessagePassingServiceInstanceRegisterSubscribeHandlerTest = MessagePassingServiceInstanceMethodsFixture;

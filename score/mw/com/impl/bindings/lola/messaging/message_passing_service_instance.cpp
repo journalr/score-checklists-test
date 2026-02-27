@@ -1134,19 +1134,12 @@ ResultBlank MessagePassingServiceInstance::RegisterMethodCallHandler(
 {
     std::unique_lock<std::shared_mutex> write_lock(call_method_handlers_mutex_);
 
-    /// TODO: Add in a comment explaining that we need to overwrite handlers here in case the Proxy has restarted and
-    /// needs to register NEW method call handlers with pointers in the NEW shared memory region.
-    const auto handler_it = call_method_handlers_.find(proxy_method_instance_identifier);
-    if (handler_it == call_method_handlers_.cend())
-    {
-        score::cpp::ignore = call_method_handlers_.insert(
-            {proxy_method_instance_identifier, {std::move(method_call_callback), allowed_proxy_uid}});
-    }
-    else
-    {
-        handler_it->second.first = std::move(method_call_callback);
-        handler_it->second.second = allowed_proxy_uid;
-    }
+    const auto insertion_result = call_method_handlers_.insert(
+        {proxy_method_instance_identifier, {std::move(method_call_callback), allowed_proxy_uid}});
+    SCORE_LANGUAGE_FUTURECPP_PRECONDITION_PRD_MESSAGE(
+        insertion_result.second,
+        "A previous handler registered for this ProxyMethodInstanceIdentifier must be unregistered by the caller (by "
+        "destroying its registration guard) before registering the new handler.");
 
     return {};
 }
