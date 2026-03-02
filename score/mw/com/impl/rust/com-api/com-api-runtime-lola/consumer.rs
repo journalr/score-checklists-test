@@ -31,10 +31,10 @@
 use core::future::Future;
 use core::marker::PhantomData;
 use core::mem::ManuallyDrop;
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 use futures::task::{AtomicWaker, Context, Poll};
-use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::fmt::Debug;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::Arc;
@@ -50,10 +50,9 @@ use crate::LolaRuntimeImpl;
 
 #[derive(Clone, Debug)]
 pub struct LolaConsumerInfo {
-    pub instance_specifier: InstanceSpecifier,
-    pub handle_container: Arc<mw_com::proxy::HandleContainer>,
-    pub handle_index: usize,
-    pub interface_id: &'static str,
+    handle_container: Arc<mw_com::proxy::HandleContainer>,
+    handle_index: usize,
+    interface_id: &'static str,
 }
 
 impl LolaConsumerInfo {
@@ -70,7 +69,7 @@ pub struct LolaBinding<T>
 where
     T: CommData,
 {
-    pub data: ManuallyDrop<sample_ptr_rs::SamplePtr<T>>,
+    data: ManuallyDrop<sample_ptr_rs::SamplePtr<T>>,
 }
 
 impl<T> Drop for LolaBinding<T>
@@ -96,8 +95,8 @@ where
     T: CommData,
 {
     //we need unique id for each sample to implement Ord and Eq traits for sorting in SampleContainer
-    pub id: usize,
-    pub inner: LolaBinding<T>,
+    id: usize,
+    inner: LolaBinding<T>,
 }
 
 pub static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -166,7 +165,7 @@ where
 
 /// Manages the lifetime of the native proxy instance, user should clone this to share between threads
 /// Always use this struct to manage the proxy instance pointer
-pub struct ProxyInstanceManager(pub Arc<NativeProxyBase>);
+pub struct ProxyInstanceManager(Arc<NativeProxyBase>);
 
 impl Clone for ProxyInstanceManager {
     fn clone(&self) -> Self {
@@ -190,7 +189,7 @@ impl std::fmt::Debug for ProxyInstanceManager {
 /// As it has Send and Sync unsafe impls, it must not expose any mutable access to the proxy instance
 /// Or must not provide any method to access the proxy instance directly
 pub struct NativeProxyBase {
-    pub proxy: *mut ProxyBase, // Stores the proxy instance
+    proxy: *mut ProxyBase, // Stores the proxy instance
 }
 
 //SAFETY: NativeProxyBase is safe to share between threads because:
@@ -243,15 +242,6 @@ pub struct NativeProxyEventBase {
 // which ensures the proxy handle remains valid as long as events are in use
 unsafe impl Send for NativeProxyEventBase {}
 
-//SAFETY: NativeProxyEventBase is safe to sync between threads because:
-// It does not provide any mutable access to the underlying proxy event pointer
-// Pointer is created during consumer creation and it is valid as long as the parent proxy instance is valid
-// The proxy event lifetime is managed safely through Drop of the parent proxy instance
-// which ensures the proxy handle remains valid as long as events are in use
-// Also there is no internal mutability in this struct which ensures pointer won't be mutated from multiple threads
-// using get_proxy_event_ptr method user can get the raw pointer but it won't mutate the underlying pointer
-unsafe impl Sync for NativeProxyEventBase {}
-
 impl NativeProxyEventBase {
     pub fn new(proxy: *mut ProxyBase, interface_id: &str, identifier: &str) -> Self {
         //SAFETY: It is safe as we are passing valid proxy pointer and interface id to get event
@@ -275,10 +265,10 @@ impl std::fmt::Debug for NativeProxyEventBase {
 
 #[derive(Debug)]
 pub struct SubscribableImpl<T> {
-    pub identifier: &'static str,
-    pub instance_info: LolaConsumerInfo,
-    pub proxy_instance: ProxyInstanceManager,
-    pub data: PhantomData<T>,
+    identifier: &'static str,
+    instance_info: LolaConsumerInfo,
+    proxy_instance: ProxyInstanceManager,
+    data: PhantomData<T>,
 }
 
 impl<T: CommData> Subscriber<T, LolaRuntimeImpl> for SubscribableImpl<T> {
@@ -315,42 +305,114 @@ impl<T: CommData> Subscriber<T, LolaRuntimeImpl> for SubscribableImpl<T> {
         }
         // Store in SubscriberImpl with event, max_num_samples
         Ok(SubscriberImpl {
-            event: Some(event_instance),
+            event: ProxyEventManager::new(event_instance.get_proxy_event_ptr()),
             event_id: self.identifier,
             max_num_samples,
             instance_info,
             waker_storage: Arc::default(),
             _proxy: self.proxy_instance.clone(),
             async_init_status: AtomicBool::new(false),
-            in_progress: AtomicBool::new(false),
             _phantom: PhantomData,
         })
     }
 }
 
-/// `SubscriberImpl<T>` represents an active subscription to a specific event, encapsulating the native proxy event and subscription details.
-///
-/// The `receive()` method returns a Future bound by lifetime `'a` but NOT by `+ Send`.
-/// This enforces single-threaded sequential access to the subscriber:
-/// - The Future captures `&'a self` and cannot be moved across threads
-/// - Users cannot spawn the Future on multi-threaded runtimes without wrapping `SubscriberImpl` in `Arc<Mutex<_>>`
-/// - This prevents accidental concurrent receivers accessing the same subscriber instance
-/// Adding `+ Send` to the Future would require `unsafe impl Sync for SubscriberImpl<T>`,
-/// which may create potential risk for receiving data concurrently on the same subscriber instance without proper synchronization.
+/// The ProxyEventManager struct manages the proxy event pointer and
+/// ensures that concurrent receive calls are not allowed on the same subscriber instance.
+struct ProxyEventManager {
+    event: *mut ProxyEventBase,
+    in_progress: AtomicBool,
+}
+
+//SAFETY: ProxyEventManager is safe to send between threads because:
+// Pointer is created during subscription and it is valid as long as the subscriber instance is valid
+// The proxy event lifetime is managed safely through Drop of the parent subscriber instance
+// which ensures the proxy handle remains valid as long as events are in use
+// However, it uses an AtomicBool to ensure that concurrent receive calls are not allowed on the same subscriber instance,
+// which provides thread safety for receive operations.
+unsafe impl Send for ProxyEventManager {}
+unsafe impl Sync for ProxyEventManager {}
+
+impl ProxyEventManager {
+    /// Creates a new ProxyEventManager with the given proxy event pointer.
+    pub fn new(event: *mut ProxyEventBase) -> Self {
+        Self {
+            event,
+            in_progress: AtomicBool::new(false),
+        }
+    }
+    /// Provides access to the proxy event pointer while ensuring that concurrent receive calls are not allowed.
+    pub fn get_proxy_event(&self) -> ProxyEventManagerGuard<'_> {
+        //Acquire the lock to ensure that only one receive call can access the proxy event at a time
+        //Relaxed ordering is not sufficient here because we need to ensure that the in_progress flag is updated before any receive call can access the proxy event
+        if self
+            .in_progress
+            .swap(true, std::sync::atomic::Ordering::Acquire)
+        {
+            panic!("Concurrent receive calls are not allowed on the same subscriber instance");
+        }
+        ProxyEventManagerGuard { manager: self }
+    }
+}
+
+impl Debug for ProxyEventManager {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ProxyEventManager")
+            .field(
+                "in_progress",
+                &self.in_progress.load(std::sync::atomic::Ordering::Relaxed),
+            )
+            .finish()
+    }
+}
+
+/// The ProxyEventManagerGuard struct provides safe access to the proxy event pointer
+/// while ensuring that concurrent receive calls are not allowed on the same subscriber instance.
+/// It implements Deref and DerefMut to allow access to the underlying ProxyEventBase pointer,
+/// and it uses the Drop trait to reset the in_progress flag when the guard goes out of scope.
+struct ProxyEventManagerGuard<'a> {
+    manager: &'a ProxyEventManager,
+}
+
+impl<'a> Drop for ProxyEventManagerGuard<'a> {
+    fn drop(&mut self) {
+        self.manager
+            .in_progress
+            .store(false, std::sync::atomic::Ordering::Release);
+    }
+}
+
+impl<'a> Deref for ProxyEventManagerGuard<'a> {
+    type Target = ProxyEventBase;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { self.manager.event.as_ref().expect("Event pointer is null") }
+    }
+}
+
+impl<'a> DerefMut for ProxyEventManagerGuard<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { self.manager.event.as_mut().expect("Event pointer is null") }
+    }
+}
+
+/// The SubscriberImpl struct implements the Subscriber trait for LolaRuntimeImpl.
+/// It manages the subscription to a specific event and provides methods to receive samples.
+/// It uses the ProxyEventManager to manage access to the proxy event pointer and ensure thread safety
+/// during receive operations. It also manages the asynchronous initialization of the receive callback
+/// and the waker storage for async notifications when new samples arrive.
 #[derive(Debug)]
 pub struct SubscriberImpl<T>
 where
     T: CommData,
 {
-    //SAFETY: This can be used as raw pointer because it comes under proxy instance lifetime
-    pub event: Option<NativeProxyEventBase>,
-    pub event_id: &'static str,
-    pub max_num_samples: usize,
-    pub instance_info: LolaConsumerInfo,
-    pub waker_storage: Arc<AtomicWaker>,
-    pub _proxy: ProxyInstanceManager,
+    event: ProxyEventManager,
+    event_id: &'static str,
+    max_num_samples: usize,
+    instance_info: LolaConsumerInfo,
+    waker_storage: Arc<AtomicWaker>,
+    _proxy: ProxyInstanceManager,
     async_init_status: AtomicBool,
-    in_progress: AtomicBool,
     _phantom: PhantomData<T>,
 }
 
@@ -361,10 +423,7 @@ impl<T: CommData> Drop for SubscriberImpl<T> {
         // so it won't be called after the handler is cleared
         unsafe {
             bridge_ffi_rs::clear_event_receive_handler(
-                self.event
-                    .as_mut()
-                    .expect("Event is None")
-                    .get_proxy_event_ptr(),
+                self.event.get_proxy_event().deref_mut(),
                 T::ID,
             );
         }
@@ -384,16 +443,12 @@ impl<T: CommData> SubscriberImpl<T> {
         // SAFETY: it is safe to set the event receive handler because event ptr is a valid ProxyEventBase pointer
         // The callback is a simple waker that wakes the future when new samples arrive,
         // and the lifetime of the callback is managed by Rust, it will not outlive the scope of this function call.
-        if let Some(event) = &self.event {
-            unsafe {
-                bridge_ffi_rs::set_event_receive_handler(
-                    event.get_proxy_event_ptr(),
-                    &fat_ptr,
-                    T::ID,
-                );
-            }
-        } else {
-            return Err(Error::Fail);
+        unsafe {
+            bridge_ffi_rs::set_event_receive_handler(
+                self.event.get_proxy_event().deref_mut(),
+                &fat_ptr,
+                T::ID,
+            );
         }
         Ok(())
     }
@@ -420,36 +475,12 @@ where
         scratch: &'_ mut SampleContainer<Self::Sample<'a>>,
         max_samples: usize,
     ) -> Result<usize> {
-        if max_samples > self.max_num_samples {
-            return Err(Error::Fail);
-        }
-        if let Some(event) = &self.event {
-            // Create a callback that will be called by the C++ side for each new sample arrival
-            let mut callback = create_sample_callback(scratch, max_samples);
-            // Convert closure to FatPtr for C++ callback
-            let dyn_callback: &mut dyn FnMut(*mut sample_ptr_rs::SamplePtr<T>) = &mut callback;
-            // SAFETY: it is safe to transmute the closure reference to a FatPtr because
-            // it has the same representation in memory like FnMut pointer
-            let fat_ptr: FatPtr = unsafe { std::mem::transmute(dyn_callback) };
-            // SAFETY: this call is safe because event ptr is a valid ProxyEventBase pointer
-            // obtained during subscription
-            // The lifetime of the callback is managed by Rust, and it will not outlive
-            // the scope of this function call.
-            let count = unsafe {
-                bridge_ffi_rs::get_samples_from_event(
-                    event.proxy_event_ptr,
-                    T::ID,
-                    &fat_ptr,
-                    self.max_num_samples as u32,
-                )
-            };
-            if count > self.max_num_samples as u32 {
-                return Err(Error::Fail);
-            }
-            Ok(count as usize)
-        } else {
-            Err(Error::Fail)
-        }
+        try_receive_samples::<T>(
+            self.event.get_proxy_event().deref_mut(),
+            scratch,
+            self.max_num_samples,
+            max_samples,
+        )
     }
 
     fn receive<'a>(
@@ -459,20 +490,11 @@ where
         max_samples: usize,
     ) -> impl Future<Output = Result<SampleContainer<Self::Sample<'a>>>> + 'a {
         async move {
-            if self
-                .in_progress
-                .swap(true, std::sync::atomic::Ordering::SeqCst)
-            {
-                return Err(Error::Fail);
-            }
-
             if !self
                 .async_init_status
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
                 if let Err(_e) = self.init_async_receive() {
-                    self.in_progress
-                        .store(false, std::sync::atomic::Ordering::SeqCst);
                     return Err(Error::Fail);
                 }
                 self.async_init_status
@@ -480,39 +502,31 @@ where
             }
 
             if max_samples > self.max_num_samples || new_samples > self.max_num_samples {
-                self.in_progress
-                    .store(false, std::sync::atomic::Ordering::SeqCst);
                 return Err(Error::Fail);
             }
 
-            if self.event.is_none() {
-                self.in_progress
-                    .store(false, std::sync::atomic::Ordering::SeqCst);
-                return Err(Error::Fail);
-            }
-
-            let result = ReceiveFuture {
-                subscriber: self,
+            ReceiveFuture {
+                event_guard: Some(self.event.get_proxy_event()),
+                waker_storage: Arc::clone(&self.waker_storage),
+                max_num_samples: self.max_num_samples,
                 scratch: Some(scratch),
                 new_samples,
                 max_samples,
                 total_received: 0,
             }
-            .await;
-
-            self.in_progress
-                .store(false, std::sync::atomic::Ordering::SeqCst);
-            result
+            .await
         }
     }
 }
 
-/// `ReceiveFuture` is a Future that manages the asynchronous reception of samples for a subscriber.
-/// It uses the subscriber's `try_receive` method to attempt to receive samples, and if not enough samples are received,
-/// it registers the current task's waker to be notified when new samples arrive.
-/// The future will complete when the desired number of new samples have been received.
+// The ReceiveFuture struct encapsulates the state and logic for asynchronously receiving samples from the proxy event.
+// It holds a reference to the proxy event manager, a waker storage for async notifications, and parameters for managing the receive operation.
+// The Future implementation for ReceiveFuture defines the polling logic,
+// which attempts to receive samples and manages the state of the receive operation.
 struct ReceiveFuture<'a, T: CommData> {
-    subscriber: &'a SubscriberImpl<T>,
+    event_guard: Option<ProxyEventManagerGuard<'a>>,
+    waker_storage: Arc<AtomicWaker>,
+    max_num_samples: usize,
     scratch: Option<SampleContainer<Sample<T>>>,
     new_samples: usize,
     max_samples: usize,
@@ -526,20 +540,27 @@ impl<'a, T: CommData> Future for ReceiveFuture<'a, T> {
         // Extract all immutable values upfront to avoid borrow conflicts with self in the callback
         let max_samples = self.max_samples;
         let new_samples = self.new_samples;
+        let max_num_samples = self.max_num_samples;
         let total_received = self.total_received;
 
-        // Register the current waker in the subscriber's waker_storage
-        // This allows the FFI callback to wake us when new samples arrive
-        self.subscriber.waker_storage.register(ctx.waker());
+        // Register the current waker to be notified when new samples arrive via FFI callback
+        self.waker_storage.register(ctx.waker());
 
         let samples_received = {
             // Temporarily take ownership of scratch to avoid borrow issues
             if let Some(mut scratch) = self.scratch.take() {
-                let result = self
-                    .subscriber
-                    .try_receive(&mut scratch, max_samples - total_received);
-                self.scratch = Some(scratch);
-                result
+                if let Some(event_guard) = self.event_guard.as_mut() {
+                    let result = try_receive_samples::<T>(
+                        event_guard.deref_mut(),
+                        &mut scratch,
+                        max_num_samples,
+                        max_samples - total_received,
+                    );
+                    self.scratch = Some(scratch);
+                    result
+                } else {
+                    Err(Error::Fail)
+                }
             } else {
                 Err(Error::Fail)
             }
@@ -550,15 +571,14 @@ impl<'a, T: CommData> Future for ReceiveFuture<'a, T> {
 
                 // Check if we've received enough samples
                 if self.total_received >= new_samples {
-                    let result = self.scratch.take().ok_or(Error::Fail);
-                    return Poll::Ready(result);
+                    //event_guard will be dropped here, allowing new receive calls to access the proxy event
+                    self.event_guard = None;
+                    return Poll::Ready(self.scratch.take().ok_or(Error::Fail));
                 }
                 // Have some samples but not enough yet, wait for more via waker
-                return Poll::Pending;
+                Poll::Pending
             }
-            Err(e) => {
-                return Poll::Ready(Err(e));
-            }
+            Err(e) => Poll::Ready(Err(e)),
         }
     }
 }
@@ -597,7 +617,6 @@ where
         let available_instances = (0..service_handle_arc.len())
             .map(|handle_index| {
                 let instance_info = LolaConsumerInfo {
-                    instance_specifier: self.instance_specifier.clone(),
                     handle_container: Arc::clone(&service_handle_arc),
                     handle_index,
                     interface_id: I::INTERFACE_ID,
@@ -638,6 +657,48 @@ impl<I: Interface> ConsumerDescriptor<LolaRuntimeImpl> for SampleConsumerBuilder
         //then this API should get InstanceSpecifier from FFI Call
         todo!()
     }
+}
+
+/// Fetches available samples from a proxy event into the scratch buffer.
+///
+/// This is the standalone implementation of the sample-receive logic, shared by
+/// `Subscription::try_receive` and `ReceiveFuture::poll`.
+///
+/// # Parameters
+/// * `event` - Mutable reference to the proxy event to fetch samples from
+/// * `scratch` - Mutable reference to the sample container
+/// * `max_num_samples` - Maximum allowed samples for this subscription
+/// * `max_samples` - How many samples to fetch in this call
+pub fn try_receive_samples<T: CommData>(
+    event: &mut ProxyEventBase,
+    scratch: &mut SampleContainer<Sample<T>>,
+    max_num_samples: usize,
+    max_samples: usize,
+) -> Result<usize> {
+    if max_samples > max_num_samples {
+        return Err(Error::Fail);
+    }
+    // Create a callback that will be called by the C++ side for each new sample arrival
+    let mut callback = create_sample_callback(scratch, max_samples);
+    // Convert closure to FatPtr for C++ callback
+    let dyn_callback: &mut dyn FnMut(*mut sample_ptr_rs::SamplePtr<T>) = &mut callback;
+    // SAFETY: it is safe to transmute the closure reference to a FatPtr because
+    // it has the same representation in memory like FnMut pointer
+    let fat_ptr: FatPtr = unsafe { std::mem::transmute(dyn_callback) };
+    // SAFETY: event is a valid ProxyEventBase pointer obtained during subscription.
+    // The lifetime of the callback is managed by Rust and will not outlive this function call.
+    let count = unsafe {
+        bridge_ffi_rs::get_samples_from_event(
+            event as *mut ProxyEventBase,
+            T::ID,
+            &fat_ptr,
+            max_num_samples as u32,
+        )
+    };
+    if count > max_num_samples as u32 {
+        return Err(Error::Fail);
+    }
+    Ok(count as usize)
 }
 
 /// Creates a callback function for processing FFI samples into the sample container.

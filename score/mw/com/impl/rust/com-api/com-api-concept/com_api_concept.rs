@@ -753,9 +753,6 @@ pub trait Subscription<T: CommData, R: Runtime + ?Sized> {
     /// to `try_receive` of the same `Subscription` instance. If there are samples from other
     /// instances, the method fails. These sample pointers can then be reused by the method:
     ///
-    /// TODO: How to make sure that the provided container contains samples from the same
-    /// TODO: `Subscription` instance?
-    ///
     /// - If there are less than `max_samples` in the communication buffer, the method will reuse
     ///   samples contained in the provided sample container, beginning from the last, going
     ///   backwards.
@@ -803,23 +800,17 @@ pub trait Subscription<T: CommData, R: Runtime + ?Sized> {
     /// # Returns
     /// Future that resolves to the number of newly added events to the container with at least `new_samples` number of new events.
     ///
-    /// # Notes
-    /// The `Future` cannot have a `'static` lifetime. If we enforced `'static`, then `self` would
-    /// also need to be `'static`, which is not semantically correct for this use case.
-    ///
-    /// Multiple threads cannot concurrently read the same event from a single subscription.
-    /// Therefore, `self` must be borrowed mutably rather than immutably.
-    ///
-    /// We can not use `&mut self` as the parameter type because future-based APIs typically require `&self` to allow for shared references across await points.
-    /// Also `self` cannot be moved into the future because the subscription needs to remain valid across multiple calls to `receive`.
-    ///
-    /// If we used `&mut self`, it would prevent multiple calls to `receive` on the same subscription instance,
-    /// which is necessary for continuous event consumption. By using `&self`,
-    /// we can allow for multiple calls to `receive` while still ensuring that the subscription instance remains valid and accessible across await points.
-    ///
-    /// If we use some other type to move the ownership of the subscription into the future, it would complicate the API and usage patterns,
-    /// as users would need to manage the lifecycle of that ownership wrapper in addition to the subscription itself.
-    /// Also it create complexity of lifetime management.
+    /// # Important Notes
+    /// User can not concurrenly call `receive` on the same subscription instance from multiple threads or tasks.
+    /// The subscription instance must be used from a single thread or task at a time.
+    /// If concurrent calls to `receive` are made on the same subscription instance, it will lead to panic.
+    /// If user want to process samples concurrenly, then user should spwan to sample processing once the samples are received and stored in the container.
+    /// The `receive` method itself should be called sequentially on the same subscription instance.
+
+    //Notes for developers
+    // The `Future` cannot have a `'static` lifetime. If we enforced `'static`, then `self` would
+    // also need to be `'static`, which is not semantically correct for this use case.
+    // Multiple threads cannot concurrently read the same event from a single subscription.
     fn receive<'a>(
         &'a self,
         scratch: SampleContainer<Self::Sample<'a>>,
