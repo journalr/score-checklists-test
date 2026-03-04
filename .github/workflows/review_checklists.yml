@@ -50,6 +50,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  checks: write
   contents: write
   pull-requests: write
   statuses: write
@@ -101,13 +102,15 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
 
       # Step 4: Always re-check acknowledgement status.
-      # Uses check_strict so the job fails when acknowledgements are
-      # incomplete — this ensures the workflow check run itself reports
-      # failure, not just the commit status.
+      # The script creates/updates a GitHub check run named
+      # "review-checklists" via the Checks API.  Check runs with the
+      # same name on the same SHA are deduplicated, so the latest
+      # result from any trigger always wins.  The workflow job itself
+      # always succeeds — the check run is the gate.
       - name: Check acknowledgements
         uses: ./actions/review-checklists
         with:
-          action: check_strict
+          action: check
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-number: ${{ github.event.pull_request.number }}
 
@@ -147,7 +150,3 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-number: ${{ steps.pr-info.outputs.pr-number }}
           branch: ${{ steps.pr-info.outputs.branch }}
-
-
-
-

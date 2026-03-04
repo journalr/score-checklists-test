@@ -208,6 +208,78 @@ def set_commit_status(
     )
 
 
+def set_check_run(
+    repo: Any,
+    sha: str,
+    conclusion: str,
+    summary: str,
+    name: str = "review-checklists",
+) -> None:
+    """Create or update a GitHub check run on the given SHA.
+
+    Unlike commit statuses, check runs with the same *name* on the same
+    SHA are deduplicated — calling this from different workflow triggers
+    (``pull_request``, ``pull_request_review``, etc.) always updates the
+    **same** check, so the latest result wins.
+
+    The *conclusion* parameter accepts the standard Checks API values
+    (``"success"``, ``"failure"``, ``"action_required"``, …) as well as
+    ``"pending"`` which is translated to an ``"in_progress"`` status
+    without a conclusion.
+
+    Args:
+        repo: PyGithub Repository object.
+        sha: The commit SHA to attach the check run to.
+        conclusion: ``"success"``, ``"failure"``, ``"pending"``, or any
+            valid Checks API conclusion value.
+        summary: A short summary shown in the check run output.
+        name: The check run name (must be constant across all triggers).
+    """
+    token = os.environ["GITHUB_TOKEN"]
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    url = f"https://api.github.com/repos/{repo.full_name}/check-runs"
+
+    if conclusion == "pending":
+        # "pending" is not a valid Checks API conclusion.  Use
+        # status=in_progress (no conclusion) so the check shows as
+        # running / incomplete.
+        payload: dict[str, Any] = {
+            "name": name,
+            "head_sha": sha,
+            "status": "in_progress",
+            "output": {
+                "title": summary[:140],
+                "summary": summary,
+            },
+        }
+    else:
+        payload = {
+            "name": name,
+            "head_sha": sha,
+            "status": "completed",
+            "conclusion": conclusion,
+            "output": {
+                "title": summary[:140],
+                "summary": summary,
+            },
+        }
+
+    resp = requests.post(url, headers=headers, json=payload, timeout=30)
+
+    if resp.status_code not in (200, 201):
+        print(
+            f"WARNING: Could not create check run: "
+            f"HTTP {resp.status_code} — {resp.text}"
+        )
+    else:
+        print(f"Check run '{name}' set to '{conclusion}': {summary}")
+
+
 def check_merge_queue_protection(repo: Any, branch_name: str) -> None:
     """Verify the target branch enforces a merge queue with max group size 1.
 

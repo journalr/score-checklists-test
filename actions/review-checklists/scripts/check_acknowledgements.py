@@ -45,7 +45,7 @@ from helpers import (
     get_repo_and_pr,
     load_checklists,
     match_checklists,
-    set_commit_status,
+    set_check_run,
 )
 
 
@@ -114,7 +114,7 @@ def main(strict: bool = False) -> None:
     relevant = match_checklists(checklists, changed_files)
 
     if not relevant:
-        set_commit_status(
+        set_check_run(
             repo, pr.head.sha, "success", "No checklists applicable"
         )
         return
@@ -124,7 +124,7 @@ def main(strict: bool = False) -> None:
 
     if not relevant_ids:
         # Checklists haven't been posted yet — keep pending.
-        set_commit_status(
+        set_check_run(
             repo,
             pr.head.sha,
             "pending",
@@ -138,7 +138,7 @@ def main(strict: bool = False) -> None:
     approvers = get_approving_reviewers(pr)
 
     if not approvers:
-        set_commit_status(
+        set_check_run(
             repo,
             pr.head.sha,
             "pending",
@@ -161,7 +161,7 @@ def main(strict: bool = False) -> None:
         for cid, users in missing.items():
             summary_parts.append(f"{cid}: awaiting {', '.join(users)}")
         summary = "; ".join(summary_parts)
-        set_commit_status(
+        set_check_run(
             repo,
             pr.head.sha,
             "pending",
@@ -171,7 +171,7 @@ def main(strict: bool = False) -> None:
         if strict:
             sys.exit(1)
     else:
-        set_commit_status(
+        set_check_run(
             repo,
             pr.head.sha,
             "success",
