@@ -59,9 +59,8 @@ SAMPLE_CHECKLISTS = [
 
 class TestCollectAcknowledgementDetails:
     def test_collects_marker_ack(self):
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
+        cl_comment = MagicMock()
+        cl_comment.id = 100
 
         ok = _make_comment(
             101,
@@ -69,10 +68,11 @@ class TestCollectAcknowledgementDetails:
             "alice",
             datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
         )
+        ok.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [ok]
+        pr.get_review_comments.return_value = [ok]
 
-        existing = {"api-review": cl_review}
+        existing = {"api-review": cl_comment}
         details = _collect_acknowledgement_details(
             pr, existing, ["api-review"]
         )
@@ -81,14 +81,13 @@ class TestCollectAcknowledgementDetails:
         assert "2026-02-15" in details["api-review"][0]["acknowledged_at"]
 
     def test_no_acks(self):
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
+        cl_comment = MagicMock()
+        cl_comment.id = 100
 
         pr = MagicMock()
-        pr.get_issue_comments.return_value = []
+        pr.get_review_comments.return_value = []
 
-        existing = {"api-review": cl_review}
+        existing = {"api-review": cl_comment}
         details = _collect_acknowledgement_details(
             pr, existing, ["api-review"]
         )
@@ -96,9 +95,8 @@ class TestCollectAcknowledgementDetails:
 
     def test_bare_ok_without_marker_not_collected(self):
         """Bare OK without marker is not collected for evidence (must be tagged first)."""
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
+        cl_comment = MagicMock()
+        cl_comment.id = 100
 
         ok = _make_comment(
             101,
@@ -106,10 +104,32 @@ class TestCollectAcknowledgementDetails:
             "bob",
             datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc),
         )
+        ok.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [ok]
+        pr.get_review_comments.return_value = [ok]
 
-        existing = {"api-review": cl_review}
+        existing = {"api-review": cl_comment}
+        details = _collect_acknowledgement_details(
+            pr, existing, ["api-review"]
+        )
+        assert details["api-review"] == []
+
+    def test_reply_to_different_comment_ignored(self):
+        """A reply to a different comment is not collected."""
+        cl_comment = MagicMock()
+        cl_comment.id = 100
+
+        ok = _make_comment(
+            101,
+            "OK\n<!-- checklist-ok:api-review -->",
+            "alice",
+            datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
+        )
+        ok.in_reply_to_id = 999  # different comment
+        pr = MagicMock()
+        pr.get_review_comments.return_value = [ok]
+
+        existing = {"api-review": cl_comment}
         details = _collect_acknowledgement_details(
             pr, existing, ["api-review"]
         )
@@ -206,7 +226,7 @@ class TestMergeEvidenceMain:
         repo = MagicMock()
         pr = MagicMock()
         pr.get_files.return_value = [_make_file("src/api/foo.py")]
-        pr.get_issue_comments.return_value = []
+        pr.get_review_comments.return_value = []
         mock_repo_pr.return_value = (repo, pr)
 
         with patch(
@@ -232,17 +252,17 @@ class TestMergeEvidenceMain:
         pr.base.ref = "main"
         pr.get_files.return_value = [_make_file("src/api/foo.py")]
 
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
+        cl_comment = MagicMock()
+        cl_comment.id = 100
 
-        ok_comment = _make_comment(
+        ok_reply = _make_comment(
             101,
             "OK\n<!-- checklist-ok:api-review -->",
             "alice",
             datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
         )
-        pr.get_issue_comments.return_value = [ok_comment]
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
         mock_repo_pr.return_value = (repo, pr)
 
         # Set up git ref / commit mocks.
@@ -260,7 +280,7 @@ class TestMergeEvidenceMain:
 
         with patch(
             "merge_evidence_commit.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
+            return_value={"api-review": cl_comment},
         ):
             main()
 

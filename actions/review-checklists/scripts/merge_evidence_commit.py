@@ -40,7 +40,7 @@ from helpers import (
 
 
 def _collect_acknowledgement_details(
-    pr: Any, existing_reviews: dict[str, Any], relevant_ids: list[str]
+    pr: Any, existing_comments: dict[str, Any], relevant_ids: list[str]
 ) -> dict[str, list[dict[str, str]]]:
     """Collect detailed acknowledgement information.
 
@@ -48,28 +48,37 @@ def _collect_acknowledgement_details(
         - reviewer: username
         - acknowledged_at: ISO timestamp
 
-    Checklist findings are posted as PR reviews; OK replies are issue
-    comments tagged with the checklist-ok marker.
+    Checklist findings are posted as file-level PR review comments; OK
+    replies are threaded review comment replies tagged with the
+    checklist-ok marker.
     """
     details: dict[str, list[dict[str, str]]] = {
         cid: [] for cid in relevant_ids
     }
 
-    all_comments = sorted(pr.get_issue_comments(), key=lambda c: c.created_at)
+    # Build a mapping of checklist comment id → checklist id.
+    cl_comment_ids: dict[int, str] = {}
+    for cid, comment in existing_comments.items():
+        if cid in relevant_ids:
+            cl_comment_ids[comment.id] = cid
 
-    for comment in all_comments:
+    for comment in pr.get_review_comments():
+        reply_to = getattr(comment, "in_reply_to_id", None)
+        if reply_to is None or reply_to not in cl_comment_ids:
+            continue
+
+        cid = cl_comment_ids[reply_to]  # type: ignore[index]
         body = (comment.body or "").strip()
         user = comment.user.login
 
-        for cid in relevant_ids:
-            marker = OK_MARKER.format(checklist_id=cid)
-            if marker in body:
-                details[cid].append(
-                    {
-                        "reviewer": user,
-                        "acknowledged_at": comment.created_at.isoformat(),
-                    }
-                )
+        marker = OK_MARKER.format(checklist_id=cid)
+        if marker in body:
+            details[cid].append(
+                {
+                    "reviewer": user,
+                    "acknowledged_at": comment.created_at.isoformat(),
+                }
+            )
 
     return details
 

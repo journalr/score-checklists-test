@@ -115,7 +115,7 @@ def match_checklists(
 
 
 def make_checklist_comment_body(checklist: dict) -> str:
-    """Build the Markdown body for a checklist PR review finding."""
+    """Build the Markdown body for a checklist PR review comment (finding)."""
     marker = CHECKLIST_MARKER.format(checklist_id=checklist["id"])
     body = (
         f"{marker}\n"
@@ -126,56 +126,56 @@ def make_checklist_comment_body(checklist: dict) -> str:
         f"### Checklist\n\n"
         f"{checklist['checklist'].strip()}\n\n"
         f"---\n"
-        f"**To acknowledge this checklist, post a comment containing "
-        f"exactly `{OK_KEYWORD}` with the marker "
-        f"`{OK_MARKER.format(checklist_id=checklist['id'])}`.** "
-        f"Each approving reviewer must "
+        f"**To acknowledge this checklist, reply to this conversation "
+        f"with exactly `{OK_KEYWORD}`.** Each approving reviewer must "
         f"acknowledge every applicable checklist before the PR can be merged.\n"
     )
     return body
 
 
 def find_existing_checklist_comments(pr: PullRequest) -> dict[str, Any]:
-    """Find existing bot-managed checklist reviews on the PR.
+    """Find existing bot-managed checklist review comments (findings) on the PR.
 
-    Returns a dict mapping checklist-id → review object.
+    Returns a dict mapping checklist-id → PullRequestComment object.
 
-    Checklist reviews are identified by the ``CHECKLIST_MARKER`` HTML comment
-    in their body.  We search PR reviews (not issue comments) because
-    checklists are posted as review findings so that users can reply in
-    threaded conversations.
+    Checklist findings are identified by the ``CHECKLIST_MARKER`` HTML comment
+    in their body.  We search PR review comments (``get_review_comments()``)
+    because checklists are posted as file-level review comments that support
+    threaded conversations where reviewers can reply with OK.
     """
     result = {}
-    for review in pr.get_reviews():
-        body = review.body or ""
-        for prefix in ("<!-- review-checklist:",):
-            if prefix in body:
-                # Extract checklist id from the marker.
-                start = body.index(prefix) + len(prefix)
-                end = body.index(" -->", start)
-                cid = body[start:end]
-                result[cid] = review
+    for comment in pr.get_review_comments():
+        body = comment.body or ""
+        prefix = "<!-- review-checklist:"
+        if prefix in body:
+            start = body.index(prefix) + len(prefix)
+            end = body.index(" -->", start)
+            cid = body[start:end]
+            # Only keep top-level checklist comments (not replies).
+            if not getattr(comment, "in_reply_to_id", None):
+                result[cid] = comment
     return result
 
 
 def find_ok_replies(
-    pr: PullRequest, checklist_review_id: int, checklist_id: str
+    pr: PullRequest, checklist_comment_id: int, checklist_id: str
 ) -> list[Any]:
-    """Find valid OK reply comments for a given checklist review.
+    """Find valid OK reply comments for a given checklist review comment.
 
-    We look at issue comments that contain the OK marker for this checklist
-    or a raw OK keyword.  Since checklist findings are posted as PR reviews,
-    OK replies are issue comments tagged with the checklist-ok marker.
+    We look at PR review comment replies (threaded conversation) where
+    ``in_reply_to_id`` matches the checklist comment id.  A reply counts
+    as an OK if it contains the OK marker or the bare OK keyword.
     """
     ok_replies = []
     ok_marker = OK_MARKER.format(checklist_id=checklist_id)
-    for comment in pr.get_issue_comments():
+    for comment in pr.get_review_comments():
+        reply_to = getattr(comment, "in_reply_to_id", None)
+        if reply_to != checklist_comment_id:
+            continue
         body = (comment.body or "").strip()
         if ok_marker in body:
             ok_replies.append(comment)
         elif body.upper() == OK_KEYWORD:
-            # Heuristic: a bare "OK" comment is matched by proximity.
-            # The check_acknowledgements script will tag it with the marker.
             ok_replies.append(comment)
     return ok_replies
 
