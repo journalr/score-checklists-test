@@ -11,11 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-# Python dependencies for integration testing framework
--r ./quality/integration_testing/requirements.txt
+bazel-runfiles==1.8.4
+PyGithub>=2.1.1
+PyYAML>=6.0.1
 
-# Python dependencies for traceability tools
--r ./third_party/traceability/requirements.txt
-
-# Python dependencies for review-checklists tools
--r ./actions/review-checklists/requirements.txt

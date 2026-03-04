@@ -11,11 +11,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-# Python dependencies for integration testing framework
--r ./quality/integration_testing/requirements.txt
+name: Merge Queue Check
 
-# Python dependencies for traceability tools
--r ./third_party/traceability/requirements.txt
+on:
+  merge_group:
+    types: [checks_requested]
 
-# Python dependencies for review-checklists tools
--r ./actions/review-checklists/requirements.txt
+jobs:
+  merge-queue-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Pass
+        run: echo "This is a placeholder job to ensure the workflow is valid."

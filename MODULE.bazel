@@ -218,25 +218,26 @@ bazel_dep(name = "score_logging", version = "0.1.0")
 bazel_dep(name = "score_baselibs_rust", version = "0.1.0")
 
 # Doxygen extension for documentation generation
-doxygen_extension = use_extension("@rules_doxygen//:extensions.bzl", "doxygen_extension", dev_dependency=True)
+doxygen_extension = use_extension("@rules_doxygen//:extensions.bzl", "doxygen_extension", dev_dependency = True)
 use_repo(doxygen_extension, "doxygen")
 
 # Python 3.12 toolchain for Bazel
 bazel_dep(name = "rules_python", version = "1.5.1")
 
-python = use_extension("@rules_python//python/extensions:python.bzl", "python", dev_dependency=True)
+python = use_extension("@rules_python//python/extensions:python.bzl", "python", dev_dependency = True)
 python.toolchain(
     python_version = "3.12",
 )
 
 # Python pip dependencies
-pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip", dev_dependency=True)
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip", dev_dependency = True)
 pip.parse(
     hub_name = "score_communication_pip",
     python_version = "3.12",
     requirements_lock = "//:requirements_lock.txt",
 )
 use_repo(pip, "score_communication_pip")
+
 pip.parse(
     hub_name = "codeql_coding_standards_pip_hub",
     python_version = "3.12",

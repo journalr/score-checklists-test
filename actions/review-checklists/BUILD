@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2024 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -10,12 +10,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+filegroup(
+    name = "pip_requirements",
+    srcs = ["requirements.txt"],
+    visibility = ["//:__pkg__"],
+)
 
-# Python dependencies for integration testing framework
--r ./quality/integration_testing/requirements.txt
-
-# Python dependencies for traceability tools
--r ./third_party/traceability/requirements.txt
-
-# Python dependencies for review-checklists tools
--r ./actions/review-checklists/requirements.txt
+filegroup(
+    name = "checklists_config",
+    srcs = ["checklists.yml"],
+    visibility = ["//visibility:public"],
+)

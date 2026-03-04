@@ -1,0 +1,104 @@
+# *******************************************************************************
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+
+# Keep review-checklists up to date on pull requests and report whether all
+# checklists have been acknowledged by every approving reviewer.
+#
+# Triggers:
+#   pull_request (opened/reopened/synchronize)
+#     → Post or update checklist findings on the PR.
+#     → On synchronize: invalidate stale OKs for affected checklists.
+#     → Re-check acknowledgements.
+#   pull_request_review_comment (created/edited/deleted)
+#     → Restore checklist findings if they were tampered with or deleted.
+#     → On edit/delete: dismiss approval if an OK was retracted.
+#     → Re-check acknowledgements.
+#   pull_request_review (submitted/dismissed)
+#     → Re-check acknowledgements (approver set may have changed).
+
+name: Review Checklists
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+    branches:
+      - main
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  pull_request_review:
+    types: [submitted, dismissed]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  pull-requests: write
+  statuses: write
+
+jobs:
+  review-checklists:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      # Step 1: Post or update checklist findings.
+      # Runs on PR open/reopen/sync, and also on review comment events so
+      # that tampered or deleted checklist findings are restored.
+      - name: Post / update checklist findings
+        if: >-
+          github.event_name == 'pull_request' ||
+          github.event_name == 'pull_request_review_comment'
+        uses: ./actions/review-checklists
+        with:
+          action: post
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+
+      # Step 2: Invalidate stale OKs when new commits are pushed.
+      - name: Invalidate stale acknowledgements
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.action == 'synchronize'
+        uses: ./actions/review-checklists
+        with:
+          action: dismiss_sync
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+          before-sha: ${{ github.event.before }}
+          after-sha: ${{ github.event.after }}
+
+      # Step 3: Dismiss approval if a reviewer retracted their OK.
+      - name: Handle OK retraction
+        if: >-
+          github.event_name == 'pull_request_review_comment' &&
+          (github.event.action == 'edited' || github.event.action == 'deleted')
+        uses: ./actions/review-checklists
+        with:
+          action: dismiss_edit
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+
+      # Step 4: Always re-check acknowledgement status.
+      # The script sets the commit status context "review-checklists"
+      # to "pending" or "success".  Commit statuses with the same
+      # context on the same SHA are deduplicated, so the latest result
+      # from any trigger always wins.  The workflow job itself always
+      # succeeds — branch protection must require the commit status
+      # context (not the workflow check run) to gate merges.
+      - name: Check acknowledgements
+        uses: ./actions/review-checklists
+        with:
+          action: check
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          head-sha: ${{ github.event.merge_group.head_sha || '' }}
