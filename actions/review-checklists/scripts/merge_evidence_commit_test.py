@@ -351,15 +351,17 @@ class TestVerifyAllAcknowledged:
 
 
 class TestMergeEvidenceStrict:
+    @patch("merge_evidence_commit.set_commit_status")
     @patch("merge_evidence_commit.get_approving_reviewers", return_value=[])
     @patch("merge_evidence_commit.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("merge_evidence_commit.get_repo_and_pr")
     @patch("merge_evidence_commit.get_github_client")
     def test_strict_no_approvers_exits_nonzero(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
     ):
         repo = MagicMock()
         pr = MagicMock()
+        pr.head.sha = "abc"
         pr.get_files.return_value = [_make_file("src/api/foo.py")]
 
         cl_comment = MagicMock()
@@ -377,7 +379,12 @@ class TestMergeEvidenceStrict:
 
         # No commit should have been created.
         repo.create_git_commit.assert_not_called()
+        # Commit status should be set to failure.
+        mock_status.assert_called_once_with(
+            repo, "abc", "failure", "No approving reviewers"
+        )
 
+    @patch("merge_evidence_commit.set_commit_status")
     @patch(
         "merge_evidence_commit.get_approving_reviewers",
         return_value=["alice", "bob"],
@@ -386,10 +393,11 @@ class TestMergeEvidenceStrict:
     @patch("merge_evidence_commit.get_repo_and_pr")
     @patch("merge_evidence_commit.get_github_client")
     def test_strict_missing_ack_exits_nonzero(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
     ):
         repo = MagicMock()
         pr = MagicMock()
+        pr.head.sha = "abc"
         pr.get_files.return_value = [_make_file("src/api/foo.py")]
 
         cl_comment = MagicMock()
@@ -415,7 +423,11 @@ class TestMergeEvidenceStrict:
             assert exc_info.value.code == 1
 
         repo.create_git_commit.assert_not_called()
+        mock_status.assert_called_once_with(
+            repo, "abc", "failure", "api-review: awaiting bob"
+        )
 
+    @patch("merge_evidence_commit.set_commit_status")
     @patch(
         "merge_evidence_commit.get_approving_reviewers",
         return_value=["alice"],
@@ -424,7 +436,7 @@ class TestMergeEvidenceStrict:
     @patch("merge_evidence_commit.get_repo_and_pr")
     @patch("merge_evidence_commit.get_github_client")
     def test_strict_all_acked_creates_commit(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
     ):
         repo = MagicMock()
         pr = MagicMock()
@@ -432,6 +444,7 @@ class TestMergeEvidenceStrict:
         pr.title = "My PR"
         pr.html_url = "https://github.com/org/repo/pull/42"
         pr.base.ref = "main"
+        pr.head.sha = "abc"
         pr.get_files.return_value = [_make_file("src/api/foo.py")]
 
         cl_comment = MagicMock()
@@ -467,6 +480,78 @@ class TestMergeEvidenceStrict:
             main(strict=True)
 
         repo.create_git_commit.assert_called_once()
+        # Commit status should NOT be set to failure.
+        mock_status.assert_not_called()
+
+    @patch("merge_evidence_commit.set_commit_status")
+    @patch("merge_evidence_commit.load_checklists", return_value=SAMPLE_CHECKLISTS)
+    @patch("merge_evidence_commit.get_repo_and_pr")
+    @patch("merge_evidence_commit.get_github_client")
+    def test_strict_no_existing_comments_exits_nonzero(
+        self, mock_gh, mock_repo_pr, mock_load, mock_status
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.head.sha = "abc"
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+        mock_repo_pr.return_value = (repo, pr)
+
+        with patch(
+            "merge_evidence_commit.find_existing_checklist_comments",
+            return_value={},
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main(strict=True)
+            assert exc_info.value.code == 1
+
+        mock_status.assert_called_once_with(
+            repo, "abc", "failure", "Checklist findings not found"
+        )
+
+    @patch("merge_evidence_commit.set_commit_status")
+    @patch("merge_evidence_commit.load_checklists", return_value=SAMPLE_CHECKLISTS)
+    @patch("merge_evidence_commit.get_repo_and_pr")
+    @patch("merge_evidence_commit.get_github_client")
+    def test_evidence_commit_creation_failure_sets_status(
+        self, mock_gh, mock_repo_pr, mock_load, mock_status
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.number = 42
+        pr.title = "My PR"
+        pr.html_url = "https://github.com/org/repo/pull/42"
+        pr.base.ref = "main"
+        pr.head.sha = "abc"
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_comment = MagicMock()
+        cl_comment.id = 100
+
+        ok_reply = _make_comment(
+            101,
+            "OK",
+            "alice",
+            datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
+        )
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
+        mock_repo_pr.return_value = (repo, pr)
+
+        # Simulate git API failure.
+        repo.get_git_ref.side_effect = Exception("API error")
+
+        with patch(
+            "merge_evidence_commit.find_existing_checklist_comments",
+            return_value={"api-review": cl_comment},
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
+
+        repo.create_git_commit.assert_not_called()
+        mock_status.assert_called_once_with(
+            repo, "abc", "failure", "Evidence commit creation failed"
+        )
 
 
 # ---------------------------------------------------------------------------
