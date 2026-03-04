@@ -1,0 +1,149 @@
+# *******************************************************************************
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+
+# Keep review-checklists up to date on pull requests and report whether all
+# checklists have been acknowledged by every approving reviewer.
+#
+# Triggers:
+#   pull_request (opened/reopened/synchronize)
+#     → Post or update checklist findings on the PR.
+#     → On synchronize: invalidate stale OKs for affected checklists.
+#     → Re-check acknowledgements.
+#   pull_request_review_comment (created/edited/deleted)
+#     → Restore checklist findings if they were tampered with or deleted.
+#     → On edit/delete: dismiss approval if an OK was retracted.
+#     → Re-check acknowledgements.
+#   pull_request_review (submitted/dismissed)
+#     → Re-check acknowledgements (approver set may have changed).
+#   merge_group
+#     → Final verification of all acknowledgements.
+#     → Create evidence commit on the merge queue's temporary branch.
+#     → If verification fails the PR is ejected from the queue.
+
+name: Review Checklists
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  pull_request_review:
+    types: [submitted, dismissed]
+  merge_group:
+
+concurrency:
+  group: >-
+    review-checklists-${{
+      github.event.pull_request.number ||
+      github.event.merge_group.head_ref
+    }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  review-checklists:
+    # Skip merge_group events — they are handled by the dedicated job below.
+    if: github.event_name != 'merge_group'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      # Step 1: Post or update checklist findings.
+      # Runs on PR open/reopen/sync, and also on review comment events so
+      # that tampered or deleted checklist findings are restored.
+      - name: Post / update checklist findings
+        if: >-
+          github.event_name == 'pull_request' ||
+          github.event_name == 'pull_request_review_comment'
+        uses: ./actions/review-checklists
+        with:
+          action: post
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+
+      # Step 2: Invalidate stale OKs when new commits are pushed.
+      - name: Invalidate stale acknowledgements
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.action == 'synchronize'
+        uses: ./actions/review-checklists
+        with:
+          action: dismiss_sync
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+          before-sha: ${{ github.event.before }}
+          after-sha: ${{ github.event.after }}
+
+      # Step 3: Dismiss approval if a reviewer retracted their OK.
+      - name: Handle OK retraction
+        if: >-
+          github.event_name == 'pull_request_review_comment' &&
+          (github.event.action == 'edited' || github.event.action == 'deleted')
+        uses: ./actions/review-checklists
+        with:
+          action: dismiss_edit
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+
+      # Step 4: Always re-check acknowledgement status.
+      - name: Check acknowledgements
+        uses: ./actions/review-checklists
+        with:
+          action: check
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+
+  # Merge-queue gate: runs when the PR enters the merge queue.
+  # Atomically verifies all acknowledgements and creates the evidence
+  # commit on the temporary merge branch.  If verification fails the
+  # step exits non-zero and the PR is ejected from the queue.
+  merge-queue-evidence:
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      # Extract the PR number from the merge group head ref.
+      # The ref format is: refs/heads/gh-readonly-queue/<base>/pr-<number>-<sha>
+      - name: Extract PR number from merge group
+        id: pr-info
+        shell: bash
+        run: |
+          HEAD_REF="${{ github.event.merge_group.head_ref }}"
+          PR_NUM=$(echo "$HEAD_REF" | grep -oP 'pr-\K[0-9]+')
+          if [ -z "$PR_NUM" ]; then
+            echo "ERROR: Could not extract PR number from head_ref: $HEAD_REF"
+            exit 1
+          fi
+          echo "pr-number=$PR_NUM" >> "$GITHUB_OUTPUT"
+          # Convert refs/heads/... to heads/... for the git ref API.
+          BRANCH_REF="${HEAD_REF#refs/}"
+          echo "branch=$BRANCH_REF" >> "$GITHUB_OUTPUT"
+          echo "Extracted PR #$PR_NUM, branch ref: $BRANCH_REF"
+
+      - name: Verify acknowledgements and create evidence commit
+        uses: ./actions/review-checklists
+        with:
+          action: evidence_strict
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ steps.pr-info.outputs.pr-number }}
+          branch: ${{ steps.pr-info.outputs.branch }}
+
+
+

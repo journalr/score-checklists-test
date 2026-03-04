@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import sys
 from typing import Any
 
+import requests
 import yaml
 from github import Github
 from github.PullRequest import PullRequest
@@ -115,7 +117,7 @@ def match_checklists(
 
 
 def make_checklist_comment_body(checklist: dict) -> str:
-    """Build the Markdown body for a checklist PR review finding."""
+    """Build the Markdown body for a checklist PR review comment (finding)."""
     marker = CHECKLIST_MARKER.format(checklist_id=checklist["id"])
     body = (
         f"{marker}\n"
@@ -126,56 +128,56 @@ def make_checklist_comment_body(checklist: dict) -> str:
         f"### Checklist\n\n"
         f"{checklist['checklist'].strip()}\n\n"
         f"---\n"
-        f"**To acknowledge this checklist, post a comment containing "
-        f"exactly `{OK_KEYWORD}` with the marker "
-        f"`{OK_MARKER.format(checklist_id=checklist['id'])}`.** "
-        f"Each approving reviewer must "
+        f"**To acknowledge this checklist, reply to this conversation "
+        f"with exactly `{OK_KEYWORD}`.** Each approving reviewer must "
         f"acknowledge every applicable checklist before the PR can be merged.\n"
     )
     return body
 
 
 def find_existing_checklist_comments(pr: PullRequest) -> dict[str, Any]:
-    """Find existing bot-managed checklist reviews on the PR.
+    """Find existing bot-managed checklist review comments (findings) on the PR.
 
-    Returns a dict mapping checklist-id → review object.
+    Returns a dict mapping checklist-id → PullRequestComment object.
 
-    Checklist reviews are identified by the ``CHECKLIST_MARKER`` HTML comment
-    in their body.  We search PR reviews (not issue comments) because
-    checklists are posted as review findings so that users can reply in
-    threaded conversations.
+    Checklist findings are identified by the ``CHECKLIST_MARKER`` HTML comment
+    in their body.  We search PR review comments (``get_review_comments()``)
+    because checklists are posted as file-level review comments that support
+    threaded conversations where reviewers can reply with OK.
     """
     result = {}
-    for review in pr.get_reviews():
-        body = review.body or ""
-        for prefix in ("<!-- review-checklist:",):
-            if prefix in body:
-                # Extract checklist id from the marker.
-                start = body.index(prefix) + len(prefix)
-                end = body.index(" -->", start)
-                cid = body[start:end]
-                result[cid] = review
+    for comment in pr.get_review_comments():
+        body = comment.body or ""
+        prefix = "<!-- review-checklist:"
+        if prefix in body:
+            start = body.index(prefix) + len(prefix)
+            end = body.index(" -->", start)
+            cid = body[start:end]
+            # Only keep top-level checklist comments (not replies).
+            if not getattr(comment, "in_reply_to_id", None):
+                result[cid] = comment
     return result
 
 
 def find_ok_replies(
-    pr: PullRequest, checklist_review_id: int, checklist_id: str
+    pr: PullRequest, checklist_comment_id: int, checklist_id: str
 ) -> list[Any]:
-    """Find valid OK reply comments for a given checklist review.
+    """Find valid OK reply comments for a given checklist review comment.
 
-    We look at issue comments that contain the OK marker for this checklist
-    or a raw OK keyword.  Since checklist findings are posted as PR reviews,
-    OK replies are issue comments tagged with the checklist-ok marker.
+    We look at PR review comment replies (threaded conversation) where
+    ``in_reply_to_id`` matches the checklist comment id.  A reply counts
+    as an OK if it contains the OK marker or the bare OK keyword.
     """
     ok_replies = []
     ok_marker = OK_MARKER.format(checklist_id=checklist_id)
-    for comment in pr.get_issue_comments():
+    for comment in pr.get_review_comments():
+        reply_to = getattr(comment, "in_reply_to_id", None)
+        if reply_to != checklist_comment_id:
+            continue
         body = (comment.body or "").strip()
         if ok_marker in body:
             ok_replies.append(comment)
         elif body.upper() == OK_KEYWORD:
-            # Heuristic: a bare "OK" comment is matched by proximity.
-            # The check_acknowledgements script will tag it with the marker.
             ok_replies.append(comment)
     return ok_replies
 
@@ -205,3 +207,72 @@ def set_commit_status(
         context=context,
     )
 
+
+def check_merge_queue_protection(repo: Any, branch_name: str) -> None:
+    """Verify the target branch enforces a merge queue with max group size 1.
+
+    Uses the GitHub repository rulesets API to inspect the rules applied
+    to *branch_name*.  Exits with ``sys.exit(1)`` if:
+
+    - The API call fails.
+    - No ``merge_queue`` rule is found for the branch.
+    - The merge queue allows a group size greater than 1.
+
+    The GitHub REST API is used directly because PyGithub does not expose
+    merge-queue ruleset parameters.
+    """
+    token = os.environ["GITHUB_TOKEN"]
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    url = (
+        f"https://api.github.com/repos/{repo.full_name}"
+        f"/rules/branches/{branch_name}"
+    )
+    resp = requests.get(url, headers=headers, timeout=30)
+
+    if resp.status_code != 200:
+        print(
+            f"ERROR: Could not fetch branch rules for '{branch_name}': "
+            f"HTTP {resp.status_code} — {resp.text}"
+        )
+        sys.exit(1)
+
+    rules = resp.json()
+
+    merge_queue_rule = None
+    for rule in rules:
+        if rule.get("type") == "merge_queue":
+            merge_queue_rule = rule
+            break
+
+    if merge_queue_rule is None:
+        print(
+            f"ERROR: Branch '{branch_name}' does not have a merge queue "
+            f"rule.  A merge queue is required for review-checklist "
+            f"enforcement."
+        )
+        sys.exit(1)
+
+    params = merge_queue_rule.get("parameters", {})
+    max_group_size = params.get("max_entries_to_merge", None)
+
+    # Fall back to alternative key name used in some API versions.
+    if max_group_size is None:
+        max_group_size = params.get("group_size_limit", None)
+
+    if max_group_size is not None and int(max_group_size) != 1:
+        print(
+            f"ERROR: Branch '{branch_name}' merge queue allows a group "
+            f"size of {max_group_size}.  The maximum group size must be 1 "
+            f"to ensure evidence commits are created correctly."
+        )
+        sys.exit(1)
+
+    print(
+        f"Branch '{branch_name}' merge queue protection verified: "
+        f"merge queue enabled, max group size = {max_group_size or 1}."
+    )
