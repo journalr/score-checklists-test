@@ -34,7 +34,7 @@ from helpers import (
     load_checklists,
     make_checklist_comment_body,
     match_checklists,
-    set_check_run,
+    set_commit_status,
 )
 
 
@@ -51,7 +51,7 @@ def main() -> None:
 
     if not relevant:
         print("No checklists are relevant for this PR.")
-        set_check_run(
+        set_commit_status(
             repo,
             pr.head.sha,
             "success",
@@ -93,7 +93,7 @@ def main() -> None:
             print(f"Created checklist finding for '{cl['id']}'")
 
     # Set a pending check — actual pass/fail is determined by check_acknowledgements.
-    set_check_run(
+    set_commit_status(
         repo,
         pr.head.sha,
         "pending",

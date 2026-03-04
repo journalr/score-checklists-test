@@ -164,7 +164,7 @@ class TestCollectOkAcknowledgements:
 
 
 class TestCheckAcknowledgementsMain:
-    @patch("check_acknowledgements.set_check_run")
+    @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.load_checklists",
         return_value=SAMPLE_CHECKLISTS,
@@ -186,7 +186,7 @@ class TestCheckAcknowledgementsMain:
             repo, "abc", "success", "No checklists applicable"
         )
 
-    @patch("check_acknowledgements.set_check_run")
+    @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.find_existing_checklist_comments",
         return_value={},
@@ -212,7 +212,7 @@ class TestCheckAcknowledgementsMain:
             repo, "abc", "pending", "Checklist comments not yet posted"
         )
 
-    @patch("check_acknowledgements.set_check_run")
+    @patch("check_acknowledgements.set_commit_status")
     @patch("check_acknowledgements.get_approving_reviewers", return_value=[])
     @patch(
         "check_acknowledgements.load_checklists",
@@ -244,7 +244,7 @@ class TestCheckAcknowledgementsMain:
             repo, "abc", "pending", "Awaiting at least one approving review"
         )
 
-    @patch("check_acknowledgements.set_check_run")
+    @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.get_approving_reviewers",
         return_value=["alice"],
@@ -298,7 +298,7 @@ class TestCheckAcknowledgementsMain:
             data = json.load(f)
         assert data["api-review"] == ["alice"]
 
-    @patch("check_acknowledgements.set_check_run")
+    @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.get_approving_reviewers",
         return_value=["alice", "bob"],
@@ -352,7 +352,7 @@ class TestCheckAcknowledgementsMain:
 
 
 class TestCheckAcknowledgementsStrict:
-    @patch("check_acknowledgements.set_check_run")
+    @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.get_approving_reviewers",
         return_value=["alice", "bob"],
@@ -397,7 +397,7 @@ class TestCheckAcknowledgementsStrict:
                 main(strict=True)
             assert exc_info.value.code == 1
 
-    @patch("check_acknowledgements.set_check_run")
+    @patch("check_acknowledgements.set_commit_status")
     @patch("check_acknowledgements.get_approving_reviewers", return_value=[])
     @patch(
         "check_acknowledgements.load_checklists",
@@ -427,7 +427,7 @@ class TestCheckAcknowledgementsStrict:
                 main(strict=True)
             assert exc_info.value.code == 1
 
-    @patch("check_acknowledgements.set_check_run")
+    @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.get_approving_reviewers",
         return_value=["alice"],
@@ -477,7 +477,7 @@ class TestCheckAcknowledgementsStrict:
             "All checklists acknowledged by all approving reviewers",
         )
 
-    @patch("check_acknowledgements.set_check_run")
+    @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.find_existing_checklist_comments",
         return_value={},

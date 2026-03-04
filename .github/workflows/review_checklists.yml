@@ -50,7 +50,6 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  checks: write
   contents: write
   pull-requests: write
   statuses: write
@@ -102,11 +101,12 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
 
       # Step 4: Always re-check acknowledgement status.
-      # The script creates/updates a GitHub check run named
-      # "review-checklists" via the Checks API.  Check runs with the
-      # same name on the same SHA are deduplicated, so the latest
-      # result from any trigger always wins.  The workflow job itself
-      # always succeeds — the check run is the gate.
+      # The script sets the commit status context "review-checklists"
+      # to "pending" or "success".  Commit statuses with the same
+      # context on the same SHA are deduplicated, so the latest result
+      # from any trigger always wins.  The workflow job itself always
+      # succeeds — branch protection must require the commit status
+      # context (not the workflow check run) to gate merges.
       - name: Check acknowledgements
         uses: ./actions/review-checklists
         with:
@@ -150,3 +150,5 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-number: ${{ steps.pr-info.outputs.pr-number }}
           branch: ${{ steps.pr-info.outputs.branch }}
+
+

@@ -36,7 +36,6 @@ from helpers import (
     load_checklists,
     make_checklist_comment_body,
     match_checklists,
-    set_check_run,
     set_commit_status,
 )
 
@@ -144,8 +143,6 @@ class TestLoadChecklists:
         monkeypatch.setenv("CHECKLISTS_CONFIG", "")
         monkeypatch.delenv("RUNFILES_DIR", raising=False)
         monkeypatch.delenv("RUNFILES_MANIFEST_FILE", raising=False)
-        # Patch _find_checklists_config to raise directly so we don't depend
-        # on file-system layout during tests.
         with patch(
             "helpers._find_checklists_config",
             side_effect=FileNotFoundError("Cannot locate checklists.yml"),
@@ -219,7 +216,6 @@ class TestMatchChecklists:
         files = ["src/api/handler.py"]
         original_len = len(SAMPLE_CHECKLISTS[0])
         match_checklists(SAMPLE_CHECKLISTS, files)
-        # The original dict should not have gained a 'matched_files' key.
         assert len(SAMPLE_CHECKLISTS[0]) == original_len
 
 
@@ -462,7 +458,6 @@ class TestCheckMergeQueueProtection:
         mock_resp.json.return_value = rules
 
         with patch("helpers.requests.get", return_value=mock_resp):
-            # Should not raise.
             check_merge_queue_protection(repo, "main")
 
     def test_fails_when_no_merge_queue_rule(self, monkeypatch):
@@ -526,7 +521,6 @@ class TestCheckMergeQueueProtection:
         mock_resp.json.return_value = rules
 
         with patch("helpers.requests.get", return_value=mock_resp):
-            # Should not raise — when max_group_size is None we treat it as 1.
             check_merge_queue_protection(repo, "main")
 
     def test_passes_with_alternative_key_name(self, monkeypatch):
@@ -571,107 +565,3 @@ class TestCheckMergeQueueProtection:
         assert "myorg/myrepo" in call_args[0][0]
         assert "develop" in call_args[0][0]
 
-
-# ---------------------------------------------------------------------------
-# set_check_run
-# ---------------------------------------------------------------------------
-
-
-class TestSetCheckRun:
-    def test_success_sends_completed_conclusion(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 201
-
-        with patch("helpers.requests.post", return_value=mock_resp) as mock_post:
-            set_check_run(repo, "abc123", "success", "All good")
-
-        mock_post.assert_called_once()
-        payload = mock_post.call_args[1]["json"]
-        assert payload["status"] == "completed"
-        assert payload["conclusion"] == "success"
-        assert payload["head_sha"] == "abc123"
-        assert payload["name"] == "review-checklists"
-        assert payload["output"]["title"] == "All good"
-
-    def test_failure_sends_completed_conclusion(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 201
-
-        with patch("helpers.requests.post", return_value=mock_resp) as mock_post:
-            set_check_run(repo, "abc123", "failure", "Missing acks")
-
-        payload = mock_post.call_args[1]["json"]
-        assert payload["status"] == "completed"
-        assert payload["conclusion"] == "failure"
-
-    def test_pending_sends_in_progress_without_conclusion(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 201
-
-        with patch("helpers.requests.post", return_value=mock_resp) as mock_post:
-            set_check_run(repo, "abc123", "pending", "Awaiting review")
-
-        payload = mock_post.call_args[1]["json"]
-        assert payload["status"] == "in_progress"
-        assert "conclusion" not in payload
-
-    def test_custom_name(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 201
-
-        with patch("helpers.requests.post", return_value=mock_resp) as mock_post:
-            set_check_run(
-                repo, "abc123", "success", "ok", name="my-check"
-            )
-
-        payload = mock_post.call_args[1]["json"]
-        assert payload["name"] == "my-check"
-
-    def test_truncates_long_title(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 201
-
-        long_summary = "x" * 200
-
-        with patch("helpers.requests.post", return_value=mock_resp) as mock_post:
-            set_check_run(repo, "abc123", "success", long_summary)
-
-        payload = mock_post.call_args[1]["json"]
-        assert len(payload["output"]["title"]) == 140
-        # Full summary is preserved.
-        assert payload["output"]["summary"] == long_summary
-
-    def test_calls_correct_api_url(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "myorg/myrepo"
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 201
-
-        with patch("helpers.requests.post", return_value=mock_resp) as mock_post:
-            set_check_run(repo, "abc123", "success", "ok")
-
-        url = mock_post.call_args[0][0]
-        assert "myorg/myrepo" in url
-        assert "/check-runs" in url

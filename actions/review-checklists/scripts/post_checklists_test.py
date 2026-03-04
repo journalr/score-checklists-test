@@ -42,7 +42,7 @@ class TestPostChecklistsMain:
     """Integration-level tests for the main() entry point."""
 
     @patch("post_checklists.check_merge_queue_protection")
-    @patch("post_checklists.set_check_run")
+    @patch("post_checklists.set_commit_status")
     @patch("post_checklists.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("post_checklists.get_repo_and_pr")
     @patch("post_checklists.get_github_client")
@@ -63,7 +63,7 @@ class TestPostChecklistsMain:
         )
 
     @patch("post_checklists.check_merge_queue_protection")
-    @patch("post_checklists.set_check_run")
+    @patch("post_checklists.set_commit_status")
     @patch("post_checklists.find_existing_checklist_comments", return_value={})
     @patch("post_checklists.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("post_checklists.get_repo_and_pr")
@@ -97,7 +97,7 @@ class TestPostChecklistsMain:
         )
 
     @patch("post_checklists.check_merge_queue_protection")
-    @patch("post_checklists.set_check_run")
+    @patch("post_checklists.set_commit_status")
     @patch("post_checklists.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("post_checklists.get_repo_and_pr")
     @patch("post_checklists.get_github_client")
@@ -122,7 +122,7 @@ class TestPostChecklistsMain:
         existing_review.edit.assert_called_once()
 
     @patch("post_checklists.check_merge_queue_protection")
-    @patch("post_checklists.set_check_run")
+    @patch("post_checklists.set_commit_status")
     @patch("post_checklists.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("post_checklists.get_repo_and_pr")
     @patch("post_checklists.get_github_client")
