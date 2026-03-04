@@ -64,70 +64,96 @@ SAMPLE_CHECKLISTS = [
 
 class TestCollectOkAcknowledgements:
     def test_marker_based_ack(self):
-        """A comment with the OK marker is recognized."""
-        ok_comment = _make_comment(
+        """A reply with the OK marker is recognized."""
+        cl_comment = MagicMock(id=100)
+        ok_reply = _make_comment(
             101,
             "OK\n<!-- checklist-ok:api-review -->",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
+        ok_reply.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [ok_comment]
+        pr.get_review_comments.return_value = [ok_reply]
 
-        existing = {"api-review": MagicMock(id=100)}
+        existing = {"api-review": cl_comment}
         acks = _collect_ok_acknowledgements(pr, existing, ["api-review"])
         assert "alice" in acks["api-review"]
 
-    def test_bare_ok_associated_to_first_unacked_checklist(self):
-        """A bare 'OK' is assigned to the first unacknowledged checklist."""
-        ok_comment = _make_comment(
+    def test_bare_ok_reply_tagged_with_marker(self):
+        """A bare 'OK' reply is recognized and tagged with marker."""
+        cl_comment = MagicMock(id=100)
+        ok_reply = _make_comment(
             101,
             "OK",
             "bob",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
+        ok_reply.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [ok_comment]
+        pr.get_review_comments.return_value = [ok_reply]
 
-        existing = {"api-review": MagicMock(id=100)}
+        existing = {"api-review": cl_comment}
         acks = _collect_ok_acknowledgements(pr, existing, ["api-review"])
         assert "bob" in acks["api-review"]
         # The bare OK should be tagged with the marker.
-        ok_comment.edit.assert_called_once()
+        ok_reply.edit.assert_called_once()
+
+    def test_reply_to_different_comment_ignored(self):
+        """A reply to a different comment is not counted."""
+        cl_comment = MagicMock(id=100)
+        ok_reply = _make_comment(
+            101,
+            "OK",
+            "bob",
+            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
+        )
+        ok_reply.in_reply_to_id = 999  # different comment
+        pr = MagicMock()
+        pr.get_review_comments.return_value = [ok_reply]
+
+        existing = {"api-review": cl_comment}
+        acks = _collect_ok_acknowledgements(pr, existing, ["api-review"])
+        assert acks["api-review"] == set()
 
     def test_multiple_reviewers(self):
-        """Two reviewers both posting OK are collected."""
+        """Two reviewers both replying OK are collected."""
+        cl_comment = MagicMock(id=100)
         ok1 = _make_comment(
             101,
             "OK\n<!-- checklist-ok:api-review -->",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
+        ok1.in_reply_to_id = 100
         ok2 = _make_comment(
             102,
             "OK\n<!-- checklist-ok:api-review -->",
             "bob",
             datetime(2026, 1, 1, 0, 2, tzinfo=timezone.utc),
         )
+        ok2.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [ok1, ok2]
+        pr.get_review_comments.return_value = [ok1, ok2]
 
-        existing = {"api-review": MagicMock(id=100)}
+        existing = {"api-review": cl_comment}
         acks = _collect_ok_acknowledgements(pr, existing, ["api-review"])
         assert acks["api-review"] == {"alice", "bob"}
 
-    def test_unrelated_comment_ignored(self):
-        """A regular comment that is not OK is not counted."""
+    def test_unrelated_reply_ignored(self):
+        """A reply that is not OK is not counted."""
+        cl_comment = MagicMock(id=100)
         normal = _make_comment(
             101,
             "Looks good to me!",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
+        normal.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [normal]
+        pr.get_review_comments.return_value = [normal]
 
-        existing = {"api-review": MagicMock(id=100)}
+        existing = {"api-review": cl_comment}
         acks = _collect_ok_acknowledgements(pr, existing, ["api-review"])
         assert acks["api-review"] == set()
 
@@ -205,7 +231,7 @@ class TestCheckAcknowledgementsMain:
         cl_review = MagicMock()
         cl_review.id = 100
         cl_review.body = "<!-- review-checklist:api-review -->"
-        pr.get_issue_comments.return_value = []
+        pr.get_review_comments.return_value = []
         mock_repo_pr.return_value = (repo, pr)
 
         with patch(
@@ -242,13 +268,14 @@ class TestCheckAcknowledgementsMain:
         cl_review.id = 100
         cl_review.body = "<!-- review-checklist:api-review -->"
 
-        ok_comment = _make_comment(
+        ok_reply = _make_comment(
             101,
             "OK\n<!-- checklist-ok:api-review -->",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
-        pr.get_issue_comments.return_value = [ok_comment]
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
         mock_repo_pr.return_value = (repo, pr)
 
         ack_path = str(tmp_path / "acks.json")
@@ -296,13 +323,14 @@ class TestCheckAcknowledgementsMain:
         cl_review.body = "<!-- review-checklist:api-review -->"
 
         # Only alice acked, bob did not.
-        ok_comment = _make_comment(
+        ok_reply = _make_comment(
             101,
             "OK\n<!-- checklist-ok:api-review -->",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
-        pr.get_issue_comments.return_value = [ok_comment]
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
         mock_repo_pr.return_value = (repo, pr)
 
         ack_path = str(tmp_path / "acks.json")

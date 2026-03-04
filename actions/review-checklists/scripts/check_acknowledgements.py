@@ -15,11 +15,11 @@
 """Verify that all relevant checklists have been acknowledged by every approving
 reviewer, and set the commit status accordingly.
 
-An acknowledgement is an issue comment that contains the ``OK`` keyword
-along with the checklist-ok marker.  This script:
+An acknowledgement is a reply in the threaded conversation of a checklist
+review comment (finding) that contains the ``OK`` keyword.  This script:
 
 1. Enumerates relevant checklists for the PR.
-2. For each checklist, finds the bot-posted review finding and its OK replies.
+2. For each checklist, finds the bot-posted review comment and its OK replies.
 3. Builds a mapping: checklist-id → set of reviewers who said OK.
 4. Compares against the set of approving reviewers.
 5. Sets commit status to *success* only when every approving reviewer has
@@ -48,58 +48,57 @@ from helpers import (
 
 
 def _collect_ok_acknowledgements(
-    pr: Any, existing_reviews: dict[str, Any], relevant_ids: list[str]
+    pr: Any, existing_comments: dict[str, Any], relevant_ids: list[str]
 ) -> dict[str, set[str]]:
     """Return a mapping of checklist_id → set of usernames who acknowledged.
 
-    We inspect all issue comments on the PR.  A comment counts as an OK for
-    a checklist if it contains the ``OK_MARKER`` for that checklist.
+    We inspect PR review comment replies (threaded conversations).  A reply
+    counts as an OK for a checklist if:
+      - Its ``in_reply_to_id`` matches the checklist finding comment id, AND
+      - It contains the ``OK_MARKER`` for that checklist, OR
+      - Its body is the bare ``OK`` keyword.
 
-    Bare ``OK`` comments (without a marker) are associated with a checklist
-    heuristically and then tagged with the marker for future determinism.
-
-    Checklist findings are posted as PR reviews, so they do not appear in
-    issue comments.  Only OK reply comments are issue comments.
+    When a bare OK reply is found, the script **edits** the comment to append
+    the invisible marker for deterministic future identification.
     """
     acks: dict[str, set[str]] = {cid: set() for cid in relevant_ids}
 
-    # Walk all issue comments looking for OK markers or bare OKs.
-    all_comments = sorted(pr.get_issue_comments(), key=lambda c: c.created_at)
+    # Build a mapping of checklist comment id → checklist id.
+    cl_comment_ids: dict[int, str] = {}
+    for cid, comment in existing_comments.items():
+        if cid in relevant_ids:
+            cl_comment_ids[comment.id] = cid
 
-    for comment in all_comments:
+    # Walk all review comments looking for replies to checklist findings.
+    for comment in pr.get_review_comments():
+        reply_to = getattr(comment, "in_reply_to_id", None)
+        if reply_to is None or reply_to not in cl_comment_ids:
+            continue
+
+        cid = cl_comment_ids[reply_to]  # type: ignore[index]
         body = (comment.body or "").strip()
         user = comment.user.login
 
-        # Check for explicit OK markers.
-        found_marker = False
-        for cid in relevant_ids:
-            marker = OK_MARKER.format(checklist_id=cid)
-            if marker in body:
-                acks[cid].add(user)
-                found_marker = True
-
-        if found_marker:
+        # Check for explicit OK marker.
+        ok_marker = OK_MARKER.format(checklist_id=cid)
+        if ok_marker in body:
+            acks[cid].add(user)
             continue
 
         # Check for bare OK keyword.
         if body.upper() == OK_KEYWORD:
-            # Associate with the first relevant checklist that the user
-            # hasn't acknowledged yet.
-            for cid in relevant_ids:
-                if user not in acks[cid]:
-                    acks[cid].add(user)
-                    marker = OK_MARKER.format(checklist_id=cid)
-                    try:
-                        comment.edit(f"{body}\n{marker}")
-                        print(
-                            f"Tagged bare OK comment {comment.id} from {user} "
-                            f"with marker for checklist '{cid}'"
-                        )
-                    except Exception as exc:
-                        print(
-                            f"Warning: could not tag comment {comment.id}: {exc}"
-                        )
-                    break
+            acks[cid].add(user)
+            # Tag the reply with the marker so future runs are deterministic.
+            try:
+                comment.edit(body=f"{body}\n{ok_marker}")
+                print(
+                    f"Tagged bare OK reply {comment.id} from {user} "
+                    f"with marker for checklist '{cid}'"
+                )
+            except Exception as exc:
+                print(
+                    f"Warning: could not tag comment {comment.id}: {exc}"
+                )
 
     return acks
 

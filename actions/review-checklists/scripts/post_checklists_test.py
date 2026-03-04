@@ -65,7 +65,7 @@ class TestPostChecklistsMain:
     @patch("post_checklists.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("post_checklists.get_repo_and_pr")
     @patch("post_checklists.get_github_client")
-    def test_creates_new_review(
+    def test_creates_new_review_comment(
         self, mock_gh, mock_repo_pr, mock_load, mock_existing, mock_status
     ):
         repo = MagicMock()
@@ -76,10 +76,12 @@ class TestPostChecklistsMain:
 
         main()
 
-        pr.create_review.assert_called_once()
-        call_kwargs = pr.create_review.call_args[1]
+        pr.create_review_comment.assert_called_once()
+        call_kwargs = pr.create_review_comment.call_args[1]
         assert "api-review" in call_kwargs["body"]
-        assert call_kwargs["event"] == "COMMENT"
+        assert call_kwargs["path"] == "src/api/handler.py"
+        assert call_kwargs["subject_type"] == "file"
+        assert call_kwargs["commit"] == "abc123"
         mock_status.assert_called_with(
             repo,
             "abc123",
