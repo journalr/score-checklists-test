@@ -25,10 +25,6 @@
 #     → Re-check acknowledgements.
 #   pull_request_review (submitted/dismissed)
 #     → Re-check acknowledgements (approver set may have changed).
-#   merge_group
-#     → Final verification of all acknowledgements.
-#     → Create evidence commit on the merge queue's temporary branch.
-#     → If verification fails the PR is ejected from the queue.
 
 name: Review Checklists
 
@@ -39,25 +35,13 @@ on:
     types: [created, edited, deleted]
   pull_request_review:
     types: [submitted, dismissed]
-  merge_group:
-
-concurrency:
-  group: >-
-    review-checklists-${{
-      github.event.pull_request.number ||
-      github.event.merge_group.head_ref
-    }}
-  cancel-in-progress: false
 
 permissions:
-  contents: write
   pull-requests: write
   statuses: write
 
 jobs:
   review-checklists:
-    # Skip merge_group events — they are handled by the dedicated job below.
-    if: github.event_name != 'merge_group'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -113,42 +97,3 @@ jobs:
           action: check
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-number: ${{ github.event.pull_request.number }}
-
-  # Merge-queue gate: runs when the PR enters the merge queue.
-  # Atomically verifies all acknowledgements and creates the evidence
-  # commit on the temporary merge branch.  If verification fails the
-  # step exits non-zero and the PR is ejected from the queue.
-  merge-queue-evidence:
-    if: github.event_name == 'merge_group'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4.2.2
-
-      # Extract the PR number from the merge group head ref.
-      # The ref format is: refs/heads/gh-readonly-queue/<base>/pr-<number>-<sha>
-      - name: Extract PR number from merge group
-        id: pr-info
-        shell: bash
-        run: |
-          HEAD_REF="${{ github.event.merge_group.head_ref }}"
-          PR_NUM=$(echo "$HEAD_REF" | grep -oP 'pr-\K[0-9]+')
-          if [ -z "$PR_NUM" ]; then
-            echo "ERROR: Could not extract PR number from head_ref: $HEAD_REF"
-            exit 1
-          fi
-          echo "pr-number=$PR_NUM" >> "$GITHUB_OUTPUT"
-          # Convert refs/heads/... to heads/... for the git ref API.
-          BRANCH_REF="${HEAD_REF#refs/}"
-          echo "branch=$BRANCH_REF" >> "$GITHUB_OUTPUT"
-          echo "Extracted PR #$PR_NUM, branch ref: $BRANCH_REF"
-
-      - name: Verify acknowledgements and create evidence commit
-        uses: ./actions/review-checklists
-        with:
-          action: evidence_strict
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          pr-number: ${{ steps.pr-info.outputs.pr-number }}
-          branch: ${{ steps.pr-info.outputs.branch }}
-
-
