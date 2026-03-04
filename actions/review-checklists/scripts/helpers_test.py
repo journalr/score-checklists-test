@@ -261,32 +261,47 @@ class TestMakeChecklistCommentBody:
 
 
 class TestFindExistingChecklistComments:
-    def test_finds_checklist_reviews(self):
-        r1 = _make_review(
-            "bot", "COMMENTED", review_id=1,
-            body="<!-- review-checklist:api-review --> body here",
+    def test_finds_checklist_review_comments(self):
+        c1 = _make_comment(
+            1, "<!-- review-checklist:api-review --> body here"
         )
-        r2 = _make_review(
-            "alice", "APPROVED", review_id=2,
-            body="just a normal review",
+        c1.in_reply_to_id = None
+        c2 = _make_comment(2, "just a normal comment")
+        c2.in_reply_to_id = None
+        c3 = _make_comment(
+            3, "<!-- review-checklist:docs-review --> docs body"
         )
-        r3 = _make_review(
-            "bot", "COMMENTED", review_id=3,
-            body="<!-- review-checklist:docs-review --> docs body",
-        )
+        c3.in_reply_to_id = None
         pr = MagicMock()
-        pr.get_reviews.return_value = [r1, r2, r3]
+        pr.get_review_comments.return_value = [c1, c2, c3]
 
         result = find_existing_checklist_comments(pr)
         assert set(result.keys()) == {"api-review", "docs-review"}
         assert result["api-review"].id == 1
         assert result["docs-review"].id == 3
 
+    def test_ignores_reply_comments(self):
+        """A reply to a checklist comment should not be treated as a checklist."""
+        c1 = _make_comment(
+            1, "<!-- review-checklist:api-review --> body"
+        )
+        c1.in_reply_to_id = None
+        c2 = _make_comment(
+            2, "<!-- review-checklist:api-review --> reply copy"
+        )
+        c2.in_reply_to_id = 1  # this is a reply
+        pr = MagicMock()
+        pr.get_review_comments.return_value = [c1, c2]
+
+        result = find_existing_checklist_comments(pr)
+        assert len(result) == 1
+        assert result["api-review"].id == 1
+
     def test_returns_empty_when_none(self):
         pr = MagicMock()
-        pr.get_reviews.return_value = [
-            _make_review("alice", "APPROVED", review_id=1, body="nothing here")
-        ]
+        c1 = _make_comment(1, "nothing here")
+        c1.in_reply_to_id = None
+        pr.get_review_comments.return_value = [c1]
         assert find_existing_checklist_comments(pr) == {}
 
 
@@ -298,26 +313,42 @@ class TestFindExistingChecklistComments:
 class TestFindOkReplies:
     def test_finds_marker_based_ok(self):
         marker = OK_MARKER.format(checklist_id="api-review")
-        c1 = _make_comment(11, f"OK\n{marker}", "reviewer1")
+        c1 = _make_comment(10, "checklist body", "bot")
+        c1.in_reply_to_id = None
+        c2 = _make_comment(11, f"OK\n{marker}", "reviewer1")
+        c2.in_reply_to_id = 10
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [c1]
+        pr.get_review_comments.return_value = [c1, c2]
 
         result = find_ok_replies(pr, 10, "api-review")
         assert len(result) == 1
         assert result[0].id == 11
 
     def test_finds_bare_ok(self):
-        c1 = _make_comment(11, "OK", "reviewer1")
+        c1 = _make_comment(10, "checklist body", "bot")
+        c1.in_reply_to_id = None
+        c2 = _make_comment(11, "OK", "reviewer1")
+        c2.in_reply_to_id = 10
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [c1]
+        pr.get_review_comments.return_value = [c1, c2]
 
         result = find_ok_replies(pr, 10, "api-review")
         assert len(result) == 1
 
-    def test_ignores_unrelated_comment(self):
-        c1 = _make_comment(11, "looks good but not OK keyword", "reviewer1")
+    def test_ignores_reply_to_different_comment(self):
+        c1 = _make_comment(11, "OK", "reviewer1")
+        c1.in_reply_to_id = 99  # different checklist
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [c1]
+        pr.get_review_comments.return_value = [c1]
+
+        result = find_ok_replies(pr, 10, "api-review")
+        assert len(result) == 0
+
+    def test_ignores_unrelated_reply(self):
+        c1 = _make_comment(11, "looks good but not OK keyword", "reviewer1")
+        c1.in_reply_to_id = 10
+        pr = MagicMock()
+        pr.get_review_comments.return_value = [c1]
 
         result = find_ok_replies(pr, 10, "api-review")
         assert len(result) == 0

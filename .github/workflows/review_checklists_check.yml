@@ -12,20 +12,22 @@
 # *******************************************************************************
 
 # Check review-checklist acknowledgements when:
-# - A new issue comment is created (reviewer posting OK)
-# - An issue comment is edited or deleted (reviewer retracting OK)
+# - A PR review comment is created (reviewer posting OK in checklist thread)
+# - A PR review comment is edited or deleted (reviewer retracting OK)
 # - A pull-request review is submitted or dismissed
+# Note: OK replies live in PR review comment threads (not issue comments),
+# so we trigger on pull_request_review_comment, not issue_comment.
 
 name: Review Checklists – Check Acknowledgements
 
 on:
-  issue_comment:
+  pull_request_review_comment:
     types: [created, edited, deleted]
   pull_request_review:
     types: [submitted, dismissed]
 
 concurrency:
-  group: review-checklists-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: review-checklists-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 permissions:
@@ -34,31 +36,28 @@ permissions:
   statuses: write
 
 jobs:
-  check-on-comment:
-    # Only run on PR-related issue comments (not issue-only comments).
-    if: >-
-      github.event_name == 'issue_comment' &&
-      github.event.issue.pull_request
+  check-on-review-comment:
+    if: github.event_name == 'pull_request_review_comment'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4.2.2
 
-      # If the comment was edited or deleted, check if it was an OK retraction.
+      # If the review comment was edited or deleted, check if it was an OK retraction.
       - name: Handle OK retraction
         if: github.event.action == 'edited' || github.event.action == 'deleted'
         uses: ./actions/review-checklists
         with:
           action: dismiss_edit
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          pr-number: ${{ github.event.issue.number }}
+          pr-number: ${{ github.event.pull_request.number }}
 
       - name: Check acknowledgements
         uses: ./actions/review-checklists
         with:
           action: check
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          pr-number: ${{ github.event.issue.number }}
+          pr-number: ${{ github.event.pull_request.number }}
 
   check-on-review:
     if: github.event_name == 'pull_request_review'

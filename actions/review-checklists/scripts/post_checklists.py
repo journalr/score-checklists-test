@@ -15,10 +15,11 @@
 """Post or update review-checklist findings on a pull request.
 
 For every relevant checklist (determined by path-matching against changed
-files), a PR review finding is created on the PR.  If the review already
-exists it is updated in place so that the conversation thread (and any
-replies) is preserved.  Reviews are used instead of issue comments so that
-users can reply in threaded conversations.
+files), a file-level PR review comment (finding) is created on the PR,
+anchored to the first matched file.  If the finding already exists it is
+updated in place so that the conversation thread (and any replies) is
+preserved.  File-level review comments are used because they support
+threaded conversations where reviewers can reply directly with OK.
 """
 
 from __future__ import annotations
@@ -59,16 +60,33 @@ def main() -> None:
     for cl in relevant:
         body = make_checklist_comment_body(cl)
         if cl["id"] in existing:
-            review = existing[cl["id"]]
+            comment = existing[cl["id"]]
             # Only update if the body actually changed (avoids notification spam).
-            if (review.body or "").strip() != body.strip():
-                review.edit(body=body)
-                print(f"Updated checklist review for '{cl['id']}'")
+            if (comment.body or "").strip() != body.strip():
+                comment.edit(body=body)
+                print(f"Updated checklist finding for '{cl['id']}'")
             else:
-                print(f"Checklist review for '{cl['id']}' is already up to date")
+                print(
+                    f"Checklist finding for '{cl['id']}' is already up to date"
+                )
         else:
-            pr.create_review(body=body, event="COMMENT")
-            print(f"Created checklist review for '{cl['id']}'")
+            # Post as a review with an inline comment (finding) on the first
+            # matched file.  Using create_review with comments creates a
+            # PullRequestComment that supports threaded replies where
+            # reviewers can acknowledge with OK.
+            anchor_file = cl["matched_files"][0]
+            pr.create_review(
+                body="",
+                event="COMMENT",
+                comments=[
+                    {
+                        "path": anchor_file,
+                        "position": 1,
+                        "body": body,
+                    }
+                ],
+            )
+            print(f"Created checklist finding for '{cl['id']}'")
 
     # Set a pending status — actual pass/fail is determined by check_acknowledgements.
     set_commit_status(
@@ -78,7 +96,7 @@ def main() -> None:
         f"{len(relevant)} checklist(s) require reviewer acknowledgement",
     )
 
-    print(f"Posted/updated {len(relevant)} checklist review(s).")
+    print(f"Posted/updated {len(relevant)} checklist finding(s).")
 
 
 if __name__ == "__main__":
