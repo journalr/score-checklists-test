@@ -71,7 +71,7 @@ class TestFindOkCommentsForChecklist:
     def test_finds_marker_ok_reply(self):
         ok = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
@@ -105,20 +105,6 @@ class TestFindOkCommentsForChecklist:
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
         ok.in_reply_to_id = 999  # different checklist
-        pr = MagicMock()
-        pr.get_review_comments.return_value = [ok]
-
-        result = _find_ok_comments_for_checklist(pr, "api-review", 100)
-        assert len(result) == 0
-
-    def test_ignores_ok_for_different_checklist(self):
-        ok = _make_comment(
-            101,
-            "OK\n<!-- checklist-ok:other-review -->",
-            "alice",
-            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
-        )
-        ok.in_reply_to_id = 100
         pr = MagicMock()
         pr.get_review_comments.return_value = [ok]
 
@@ -178,7 +164,7 @@ class TestHandleSynchronize:
 
         ok_reply = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )

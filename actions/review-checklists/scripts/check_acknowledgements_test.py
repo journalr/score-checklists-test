@@ -63,12 +63,12 @@ SAMPLE_CHECKLISTS = [
 
 
 class TestCollectOkAcknowledgements:
-    def test_marker_based_ack(self):
-        """A reply with the OK marker is recognized."""
+    def test_ok_reply_recognized(self):
+        """A reply with OK is recognized."""
         cl_comment = MagicMock(id=100)
         ok_reply = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
@@ -80,8 +80,8 @@ class TestCollectOkAcknowledgements:
         acks = _collect_ok_acknowledgements(pr, existing, ["api-review"])
         assert "alice" in acks["api-review"]
 
-    def test_bare_ok_reply_tagged_with_marker(self):
-        """A bare 'OK' reply is recognized and tagged with marker."""
+    def test_bare_ok_reply_recognized(self):
+        """A bare 'OK' reply is recognized."""
         cl_comment = MagicMock(id=100)
         ok_reply = _make_comment(
             101,
@@ -96,8 +96,6 @@ class TestCollectOkAcknowledgements:
         existing = {"api-review": cl_comment}
         acks = _collect_ok_acknowledgements(pr, existing, ["api-review"])
         assert "bob" in acks["api-review"]
-        # The bare OK should be tagged with the marker.
-        ok_reply.edit.assert_called_once()
 
     def test_reply_to_different_comment_ignored(self):
         """A reply to a different comment is not counted."""
@@ -121,14 +119,14 @@ class TestCollectOkAcknowledgements:
         cl_comment = MagicMock(id=100)
         ok1 = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
         ok1.in_reply_to_id = 100
         ok2 = _make_comment(
             102,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "bob",
             datetime(2026, 1, 1, 0, 2, tzinfo=timezone.utc),
         )
@@ -270,7 +268,7 @@ class TestCheckAcknowledgementsMain:
 
         ok_reply = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
@@ -325,7 +323,7 @@ class TestCheckAcknowledgementsMain:
         # Only alice acked, bob did not.
         ok_reply = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
@@ -379,7 +377,7 @@ class TestCheckAcknowledgementsStrict:
         # Only alice acked, bob did not.
         ok_reply = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
@@ -453,7 +451,7 @@ class TestCheckAcknowledgementsStrict:
 
         ok_reply = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )

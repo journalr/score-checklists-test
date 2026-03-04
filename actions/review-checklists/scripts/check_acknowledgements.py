@@ -37,7 +37,6 @@ from typing import Any
 
 from helpers import (
     OK_KEYWORD,
-    OK_MARKER,
     find_existing_checklist_comments,
     get_approving_reviewers,
     get_changed_files,
@@ -57,11 +56,9 @@ def _collect_ok_acknowledgements(
     We inspect PR review comment replies (threaded conversations).  A reply
     counts as an OK for a checklist if:
       - Its ``in_reply_to_id`` matches the checklist finding comment id, AND
-      - It contains the ``OK_MARKER`` for that checklist, OR
-      - Its body is the bare ``OK`` keyword.
+      - Its body (stripped, case-insensitive) equals the ``OK`` keyword.
 
-    When a bare OK reply is found, the script **edits** the comment to append
-    the invisible marker for deterministic future identification.
+    The conversation thread itself associates the reply with the checklist.
     """
     acks: dict[str, set[str]] = {cid: set() for cid in relevant_ids}
 
@@ -81,26 +78,8 @@ def _collect_ok_acknowledgements(
         body = (comment.body or "").strip()
         user = comment.user.login
 
-        # Check for explicit OK marker.
-        ok_marker = OK_MARKER.format(checklist_id=cid)
-        if ok_marker in body:
-            acks[cid].add(user)
-            continue
-
-        # Check for bare OK keyword.
         if body.upper() == OK_KEYWORD:
             acks[cid].add(user)
-            # Tag the reply with the marker so future runs are deterministic.
-            try:
-                comment.edit(body=f"{body}\n{ok_marker}")
-                print(
-                    f"Tagged bare OK reply {comment.id} from {user} "
-                    f"with marker for checklist '{cid}'"
-                )
-            except Exception as exc:
-                print(
-                    f"Warning: could not tag comment {comment.id}: {exc}"
-                )
 
     return acks
 

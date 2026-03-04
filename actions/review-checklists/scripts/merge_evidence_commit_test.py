@@ -65,7 +65,7 @@ class TestCollectAcknowledgementDetails:
 
         ok = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
         )
@@ -94,8 +94,8 @@ class TestCollectAcknowledgementDetails:
         )
         assert details["api-review"] == []
 
-    def test_bare_ok_without_marker_not_collected(self):
-        """Bare OK without marker is not collected for evidence (must be tagged first)."""
+    def test_bare_ok_is_collected(self):
+        """Bare OK is collected for evidence."""
         cl_comment = MagicMock()
         cl_comment.id = 100
 
@@ -113,7 +113,8 @@ class TestCollectAcknowledgementDetails:
         details = _collect_acknowledgement_details(
             pr, existing, ["api-review"]
         )
-        assert details["api-review"] == []
+        assert len(details["api-review"]) == 1
+        assert details["api-review"][0]["reviewer"] == "bob"
 
     def test_reply_to_different_comment_ignored(self):
         """A reply to a different comment is not collected."""
@@ -122,7 +123,7 @@ class TestCollectAcknowledgementDetails:
 
         ok = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
         )
@@ -258,7 +259,7 @@ class TestMergeEvidenceMain:
 
         ok_reply = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
         )
@@ -397,7 +398,7 @@ class TestMergeEvidenceStrict:
         # Only alice acked.
         ok_reply = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
         )
@@ -438,7 +439,7 @@ class TestMergeEvidenceStrict:
 
         ok_reply = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
         )
@@ -491,7 +492,7 @@ class TestMergeEvidenceBranch:
 
         ok_reply = _make_comment(
             101,
-            "OK\n<!-- checklist-ok:api-review -->",
+            "OK",
             "alice",
             datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
         )

@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from helpers import (
-    OK_MARKER,
+    OK_KEYWORD,
     find_existing_checklist_comments,
     get_approving_reviewers,
     get_changed_files,
@@ -58,8 +58,9 @@ def _collect_acknowledgement_details(
         - acknowledged_at: ISO timestamp
 
     Checklist findings are posted as file-level PR review comments; OK
-    replies are threaded review comment replies tagged with the
-    checklist-ok marker.
+    replies are threaded review comment replies whose body equals the
+    OK keyword.  The conversation thread associates the reply with the
+    checklist.
     """
     details: dict[str, list[dict[str, str]]] = {
         cid: [] for cid in relevant_ids
@@ -80,8 +81,7 @@ def _collect_acknowledgement_details(
         body = (comment.body or "").strip()
         user = comment.user.login
 
-        marker = OK_MARKER.format(checklist_id=cid)
-        if marker in body:
+        if body.upper() == OK_KEYWORD:
             details[cid].append(
                 {
                     "reviewer": user,

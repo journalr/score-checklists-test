@@ -25,7 +25,6 @@ import yaml
 from helpers import (
     CHECKLIST_MARKER,
     OK_KEYWORD,
-    OK_MARKER,
     check_merge_queue_protection,
     find_existing_checklist_comments,
     find_ok_replies,
@@ -309,11 +308,10 @@ class TestFindExistingChecklistComments:
 
 
 class TestFindOkReplies:
-    def test_finds_marker_based_ok(self):
-        marker = OK_MARKER.format(checklist_id="api-review")
+    def test_finds_ok_reply(self):
         c1 = _make_comment(10, "checklist body", "bot")
         c1.in_reply_to_id = None
-        c2 = _make_comment(11, f"OK\n{marker}", "reviewer1")
+        c2 = _make_comment(11, "OK", "reviewer1")
         c2.in_reply_to_id = 10
         pr = MagicMock()
         pr.get_review_comments.return_value = [c1, c2]
@@ -322,7 +320,7 @@ class TestFindOkReplies:
         assert len(result) == 1
         assert result[0].id == 11
 
-    def test_finds_bare_ok(self):
+    def test_finds_case_insensitive_ok(self):
         c1 = _make_comment(10, "checklist body", "bot")
         c1.in_reply_to_id = None
         c2 = _make_comment(11, "OK", "reviewer1")
@@ -564,4 +562,6 @@ class TestCheckMergeQueueProtection:
         call_args = mock_get.call_args
         assert "myorg/myrepo" in call_args[0][0]
         assert "develop" in call_args[0][0]
+
+
 

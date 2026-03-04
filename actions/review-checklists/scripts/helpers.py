@@ -28,7 +28,6 @@ from github.PullRequest import PullRequest
 
 # Marker prefix used to identify bot-managed checklist reviews.
 CHECKLIST_MARKER = "<!-- review-checklist:{checklist_id} -->"
-OK_MARKER = "<!-- checklist-ok:{checklist_id} -->"
 
 # The keyword a reviewer must post to acknowledge a checklist.
 OK_KEYWORD = "OK"
@@ -166,18 +165,16 @@ def find_ok_replies(
 
     We look at PR review comment replies (threaded conversation) where
     ``in_reply_to_id`` matches the checklist comment id.  A reply counts
-    as an OK if it contains the OK marker or the bare OK keyword.
+    as an OK if its body (stripped, case-insensitive) equals the OK keyword.
+    The conversation thread itself associates the reply with the checklist.
     """
     ok_replies = []
-    ok_marker = OK_MARKER.format(checklist_id=checklist_id)
     for comment in pr.get_review_comments():
         reply_to = getattr(comment, "in_reply_to_id", None)
         if reply_to != checklist_comment_id:
             continue
         body = (comment.body or "").strip()
-        if ok_marker in body:
-            ok_replies.append(comment)
-        elif body.upper() == OK_KEYWORD:
+        if body.upper() == OK_KEYWORD:
             ok_replies.append(comment)
     return ok_replies
 

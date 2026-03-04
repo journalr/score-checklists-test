@@ -41,7 +41,6 @@ from typing import Any
 
 from helpers import (
     OK_KEYWORD,
-    OK_MARKER,
     find_existing_checklist_comments,
     get_changed_files,
     get_github_client,
@@ -81,10 +80,9 @@ def _find_ok_comments_for_checklist(
 
     Checklist findings are posted as file-level PR review comments; OK
     replies are threaded review comment replies whose ``in_reply_to_id``
-    matches the checklist comment id.
+    matches the checklist comment id and whose body equals the OK keyword.
     """
     ok_comments = []
-    marker = OK_MARKER.format(checklist_id=checklist_id)
 
     for comment in pr.get_review_comments():
         reply_to = getattr(comment, "in_reply_to_id", None)
@@ -92,12 +90,6 @@ def _find_ok_comments_for_checklist(
             continue
         body = (comment.body or "").strip()
 
-        # Explicit marker match.
-        if marker in body:
-            ok_comments.append(comment)
-            continue
-
-        # Bare OK keyword.
         if body.upper() == OK_KEYWORD:
             ok_comments.append(comment)
 
@@ -183,18 +175,14 @@ def handle_comment_changed(pr: Any) -> None:
     was_ok = False
     if action == "deleted":
         # For deleted comments the body is the content at time of deletion.
-        deleted_body = comment_body.strip()
-        was_ok = (
-            deleted_body.upper() == OK_KEYWORD
-            or "checklist-ok:" in deleted_body
-        )
+        was_ok = comment_body.strip().upper() == OK_KEYWORD
     elif action == "edited":
         old_body = (
             event.get("changes", {}).get("body", {}).get("from", "")
         )
-        # If old body was OK-like but new body is not, this is a retraction.
-        old_is_ok = old_body.strip().upper() == OK_KEYWORD or "checklist-ok:" in old_body
-        new_is_ok = comment_body.strip().upper() == OK_KEYWORD or "checklist-ok:" in comment_body
+        # If old body was OK but new body is not, this is a retraction.
+        old_is_ok = old_body.strip().upper() == OK_KEYWORD
+        new_is_ok = comment_body.strip().upper() == OK_KEYWORD
         was_ok = old_is_ok and not new_is_ok
 
     if was_ok:
