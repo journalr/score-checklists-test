@@ -1,0 +1,95 @@
+# *******************************************************************************
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+
+name: "Review Checklists"
+description: >
+  Manages review checklists on pull requests.  Posts checklist comments,
+  tracks reviewer acknowledgements, dismisses stale approvals, and records
+  evidence on merge.
+
+inputs:
+  action:
+    description: >
+      Which action to run.  One of:
+        post          – Post/update checklist comments
+        check         – Verify acknowledgements and set status
+        dismiss_sync  – Invalidate OKs after new push
+        dismiss_edit  – Dismiss approval after OK edit/delete
+        evidence      – Create merge evidence commit
+    required: true
+  github-token:
+    description: "GitHub token with repo permissions"
+    required: true
+  pr-number:
+    description: "Pull request number"
+    required: true
+  before-sha:
+    description: "SHA before the push (for synchronize events)"
+    required: false
+    default: ""
+  after-sha:
+    description: "SHA after the push (for synchronize events)"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Run post_checklists
+      if: inputs.action == 'post'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+      run: bazel run //actions/review-checklists/scripts:post_checklists
+
+    - name: Run check_acknowledgements
+      if: inputs.action == 'check'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+      run: bazel run //actions/review-checklists/scripts:check_acknowledgements
+
+    - name: Run dismiss_and_invalidate (synchronize)
+      if: inputs.action == 'dismiss_sync'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        BEFORE_SHA: ${{ inputs.before-sha }}
+        AFTER_SHA: ${{ inputs.after-sha }}
+      run: bazel run //actions/review-checklists/scripts:dismiss_and_invalidate -- --trigger synchronize
+
+    - name: Run dismiss_and_invalidate (comment changed)
+      if: inputs.action == 'dismiss_edit'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        GITHUB_EVENT_PATH: ${{ github.event_path }}
+      run: bazel run //actions/review-checklists/scripts:dismiss_and_invalidate -- --trigger comment_changed
+
+    - name: Run merge_evidence_commit
+      if: inputs.action == 'evidence'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+      run: bazel run //actions/review-checklists/scripts:merge_evidence_commit
+

@@ -1,0 +1,76 @@
+# *******************************************************************************
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+
+# Check review-checklist acknowledgements when:
+# - A new issue comment is created (reviewer posting OK)
+# - An issue comment is edited or deleted (reviewer retracting OK)
+# - A pull-request review is submitted or dismissed
+
+name: Review Checklists – Check Acknowledgements
+
+on:
+  issue_comment:
+    types: [created, edited, deleted]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+concurrency:
+  group: review-checklists-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+jobs:
+  check-on-comment:
+    # Only run on PR-related issue comments (not issue-only comments).
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      # If the comment was edited or deleted, check if it was an OK retraction.
+      - name: Handle OK retraction
+        if: github.event.action == 'edited' || github.event.action == 'deleted'
+        uses: ./actions/review-checklists
+        with:
+          action: dismiss_edit
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.issue.number }}
+
+      - name: Check acknowledgements
+        uses: ./actions/review-checklists
+        with:
+          action: check
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.issue.number }}
+
+  check-on-review:
+    if: github.event_name == 'pull_request_review'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Check acknowledgements
+        uses: ./actions/review-checklists
+        with:
+          action: check
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+

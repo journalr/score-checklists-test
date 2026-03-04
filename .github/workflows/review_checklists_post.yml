@@ -1,0 +1,72 @@
+# *******************************************************************************
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+
+# Post or update review-checklist comments on pull requests.
+# On "opened": post checklist comments for every relevant checklist.
+# On "synchronize": update checklists if needed, invalidate stale OKs,
+#                    and dismiss approvals for checklists whose covered
+#                    paths were touched by the new commits.
+
+name: Review Checklists – Post & Invalidate
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+concurrency:
+  group: review-checklists-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+jobs:
+  post-checklists:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Post / update checklist comments
+        uses: ./actions/review-checklists
+        with:
+          action: post
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+
+  invalidate-on-push:
+    runs-on: ubuntu-24.04
+    if: github.event.action == 'synchronize'
+    needs: post-checklists
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Invalidate stale acknowledgements
+        uses: ./actions/review-checklists
+        with:
+          action: dismiss_sync
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+          before-sha: ${{ github.event.before }}
+          after-sha: ${{ github.event.after }}
+
+      - name: Re-check acknowledgements
+        uses: ./actions/review-checklists
+        with:
+          action: check
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ github.event.pull_request.number }}
+

@@ -1,0 +1,89 @@
+# *******************************************************************************
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+
+# Review checklists configuration.
+# Each checklist has:
+#   id:        Unique identifier (used in markers and tracking)
+#   name:      Human-readable name shown in the PR conversation
+#   paths:     List of glob patterns; if any changed file matches, the checklist applies
+#   checklist: Markdown checklist body shown to reviewers
+
+checklists:
+  - id: com-api-review
+    name: "COM Module API Review"
+    paths:
+      - "score/mw/com/*.h"
+      - "score/mw/com/*.cpp"
+    checklist: |
+      - [ ] Public API changes are backward-compatible or properly versioned
+      - [ ] New/modified types are documented in header comments
+      - [ ] Error domains are updated if new error conditions are introduced
+      - [ ] Unit tests cover the changed API surface
+      - [ ] No unintended ABI breakage
+
+  - id: com-design-review
+    name: "COM Module Design Review"
+    paths:
+      - "score/mw/com/design/**"
+      - "score/mw/com/doc/**"
+    checklist: |
+      - [ ] Design documents are consistent with the implementation
+      - [ ] Architecture diagrams are updated if applicable
+      - [ ] Traceability to requirements is maintained
+
+  - id: com-impl-review
+    name: "COM Module Implementation Review"
+    paths:
+      - "score/mw/com/impl/**"
+    checklist: |
+      - [ ] No undefined behavior introduced
+      - [ ] Memory management is correct (no leaks, dangling pointers)
+      - [ ] Thread-safety is maintained
+      - [ ] Error handling follows project conventions
+      - [ ] Logging is appropriate and does not leak sensitive data
+
+  - id: message-passing-review
+    name: "Message Passing Review"
+    paths:
+      - "score/message_passing/**"
+    checklist: |
+      - [ ] Thread-safety of connection handling reviewed
+      - [ ] Client/server lifecycle is properly managed
+      - [ ] Resource cleanup verified (no resource leaks)
+      - [ ] Protocol compatibility is maintained
+      - [ ] Unit tests cover changed behavior
+
+  - id: build-config-review
+    name: "Build Configuration Review"
+    paths:
+      - "**/BUILD"
+      - "**/*.bzl"
+      - "MODULE.bazel"
+      - "WORKSPACE"
+    checklist: |
+      - [ ] Build targets are correctly defined
+      - [ ] Dependencies are properly declared
+      - [ ] No unnecessary dependencies added
+      - [ ] Build configurations work for all target platforms
+
+  - id: ci-workflow-review
+    name: "CI Workflow Review"
+    paths:
+      - ".github/workflows/**"
+      - "actions/**"
+    checklist: |
+      - [ ] Workflow triggers are correct
+      - [ ] Secrets and permissions are minimal and appropriate
+      - [ ] No sensitive data is exposed in logs
+      - [ ] Workflow runs on appropriate runner images
+
