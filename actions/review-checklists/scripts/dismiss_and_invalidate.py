@@ -12,17 +12,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-"""Dismiss approvals and invalidate OK acknowledgements.
+"""Invalidate OK acknowledgements.
 
 This script handles two scenarios:
 
 1. **New push (synchronize)**: When new commits are pushed to the PR, we
    determine which checklist paths are affected by the *new* changes.  For
-   each affected checklist, all existing OK replies are deleted and any
-   approvals from those reviewers are dismissed.
+   each affected checklist, all existing OK replies are deleted and the
+   commit status is set back to pending.  Approvals are **not** dismissed
+   here — branch rulesets handle dismissing stale reviews on new pushes.
 
 2. **OK modified or deleted**: When a reviewer edits or deletes their OK
-   comment, the corresponding reviewer's approval is dismissed.
+   comment, the commit status is set back to pending so the checklist
+   must be re-acknowledged.  The reviewer's approval is **not** dismissed.
 
 The script is invoked with a ``--trigger`` argument:
 
@@ -102,24 +104,12 @@ def _find_ok_comments_for_checklist(
     return ok_comments
 
 
-def _dismiss_approval(pr: Any, username: str) -> None:
-    """Dismiss the latest approval from the given user on the PR."""
-    for review in reversed(list(pr.get_reviews())):
-        if review.user.login == username and review.state == "APPROVED":
-            review.dismiss(
-                "Approval dismissed: review-checklist acknowledgement "
-                "was invalidated due to new changes or modified OK."
-            )
-            print(f"Dismissed approval from {username} (review {review.id})")
-            return
-    print(f"No active approval found for {username} to dismiss")
-
-
 def handle_synchronize(pr: Any) -> None:
     """Handle new commits pushed to the PR.
 
     For each checklist whose covered paths were touched by the new push,
-    delete all OK replies and dismiss approvals from those reviewers.
+    delete all OK replies and set the commit status back to pending.
+    Approvals are not dismissed — branch rulesets handle that.
     """
     checklists = load_checklists()
     new_files = _get_files_in_latest_push(pr)
@@ -131,7 +121,7 @@ def handle_synchronize(pr: Any) -> None:
 
     existing = find_existing_checklist_comments(pr)
 
-    invalidated_users: set[str] = set()
+    any_invalidated = False
 
     for cl in affected:
         cid = cl["id"]
@@ -143,7 +133,7 @@ def handle_synchronize(pr: Any) -> None:
 
         for ok_comment in ok_comments:
             user = ok_comment.user.login
-            invalidated_users.add(user)
+            any_invalidated = True
             try:
                 ok_comment.delete()
                 print(
@@ -155,11 +145,7 @@ def handle_synchronize(pr: Any) -> None:
                     f"Warning: could not delete comment {ok_comment.id}: {e}"
                 )
 
-    # Dismiss approvals from all invalidated users.
-    for user in invalidated_users:
-        _dismiss_approval(pr, user)
-
-    if invalidated_users:
+    if any_invalidated:
         repo_name = os.environ["GITHUB_REPOSITORY"]
         gh = get_github_client()
         repo = gh.get_repo(repo_name)
@@ -174,7 +160,8 @@ def handle_synchronize(pr: Any) -> None:
 def handle_comment_changed(pr: Any) -> None:
     """Handle an OK comment being edited or deleted.
 
-    When a reviewer modifies or removes their OK, dismiss their approval.
+    When a reviewer modifies or removes their OK, set the commit status
+    back to pending.  The reviewer's approval is preserved.
     """
     event_path = os.environ.get("GITHUB_EVENT_PATH", "")
     if not event_path:
@@ -211,8 +198,10 @@ def handle_comment_changed(pr: Any) -> None:
         was_ok = old_is_ok and not new_is_ok
 
     if was_ok:
-        _dismiss_approval(pr, comment_user)
-        print(f"Dismissed approval for {comment_user} due to modified/deleted OK")
+        print(
+            f"Checklist OK retracted by {comment_user} "
+            f"(approval preserved)"
+        )
 
         repo_name = os.environ["GITHUB_REPOSITORY"]
         gh = get_github_client()
@@ -227,7 +216,7 @@ def handle_comment_changed(pr: Any) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Dismiss approvals and invalidate OK acknowledgements."
+        description="Invalidate OK acknowledgements."
     )
     parser.add_argument(
         "--trigger",

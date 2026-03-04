@@ -23,7 +23,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from dismiss_and_invalidate import (
-    _dismiss_approval,
     _find_ok_comments_for_checklist,
     handle_comment_changed,
     handle_synchronize,
@@ -142,51 +141,6 @@ class TestFindOkCommentsForChecklist:
 
 
 # ---------------------------------------------------------------------------
-# _dismiss_approval
-# ---------------------------------------------------------------------------
-
-
-class TestDismissApproval:
-    def test_dismisses_approved_review(self):
-        review = _make_review("alice", "APPROVED", review_id=42)
-        pr = MagicMock()
-        pr.get_reviews.return_value = [review]
-
-        _dismiss_approval(pr, "alice")
-
-        review.dismiss.assert_called_once()
-
-    def test_no_approval_to_dismiss(self, capsys):
-        pr = MagicMock()
-        pr.get_reviews.return_value = []
-
-        _dismiss_approval(pr, "alice")
-
-        out = capsys.readouterr().out
-        assert "No active approval found" in out
-
-    def test_only_dismisses_latest_approval(self):
-        old = _make_review("alice", "APPROVED", review_id=1)
-        new = _make_review("alice", "APPROVED", review_id=2)
-        pr = MagicMock()
-        pr.get_reviews.return_value = [old, new]
-
-        _dismiss_approval(pr, "alice")
-
-        new.dismiss.assert_called_once()
-        old.dismiss.assert_not_called()
-
-    def test_skips_non_approved(self):
-        r = _make_review("alice", "CHANGES_REQUESTED", review_id=1)
-        pr = MagicMock()
-        pr.get_reviews.return_value = [r]
-
-        _dismiss_approval(pr, "alice")
-
-        r.dismiss.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
 # handle_synchronize
 # ---------------------------------------------------------------------------
 
@@ -209,7 +163,7 @@ class TestHandleSynchronize:
     @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
     @patch("dismiss_and_invalidate.load_checklists", return_value=SAMPLE_CHECKLISTS)
-    def test_deletes_ok_and_dismisses(self, mock_load, mock_gh, mock_status, monkeypatch):
+    def test_deletes_ok_without_dismissing(self, mock_load, mock_gh, mock_status, monkeypatch):
         monkeypatch.delenv("BEFORE_SHA", raising=False)
         monkeypatch.delenv("AFTER_SHA", raising=False)
         monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
@@ -241,7 +195,8 @@ class TestHandleSynchronize:
             handle_synchronize(pr)
 
         ok_reply.delete.assert_called_once()
-        review.dismiss.assert_called_once()
+        review.dismiss.assert_not_called()
+        mock_status.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +213,7 @@ class TestHandleCommentChanged:
 
     @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
-    def test_deleted_ok_dismisses_approval(
+    def test_deleted_ok_sets_pending_without_dismissing(
         self, mock_gh, mock_status, tmp_path, monkeypatch
     ):
         monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
@@ -283,11 +238,12 @@ class TestHandleCommentChanged:
         ):
             handle_comment_changed(pr)
 
-        review.dismiss.assert_called_once()
+        review.dismiss.assert_not_called()
+        mock_status.assert_called_once()
 
     @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
-    def test_edited_ok_retraction_dismisses(
+    def test_edited_ok_retraction_sets_pending_without_dismissing(
         self, mock_gh, mock_status, tmp_path, monkeypatch
     ):
         monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
@@ -315,7 +271,8 @@ class TestHandleCommentChanged:
         ):
             handle_comment_changed(pr)
 
-        review.dismiss.assert_called_once()
+        review.dismiss.assert_not_called()
+        mock_status.assert_called_once()
 
     @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
