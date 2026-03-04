@@ -45,6 +45,7 @@ from helpers import (
     get_repo_and_pr,
     load_checklists,
     match_checklists,
+    set_commit_status,
 )
 
 
@@ -176,6 +177,10 @@ def main(strict: bool = False, branch: str | None = None) -> None:
     if not relevant_ids:
         print("No checklist review findings found — skipping evidence commit.")
         if strict:
+            set_commit_status(
+                repo, pr.head.sha, "failure",
+                "Checklist findings not found",
+            )
             sys.exit(1)
         return
 
@@ -186,15 +191,25 @@ def main(strict: bool = False, branch: str | None = None) -> None:
         approvers = get_approving_reviewers(pr)
         if not approvers:
             print("ERROR: No approving reviewers — cannot create evidence.")
+            set_commit_status(
+                repo, pr.head.sha, "failure",
+                "No approving reviewers",
+            )
             sys.exit(1)
 
         missing = _verify_all_acknowledged(ack_details, approvers, relevant_ids)
         if missing:
+            parts = []
             for cid, users in missing.items():
                 print(f"ERROR: {cid}: awaiting {', '.join(users)}")
+                parts.append(f"{cid}: awaiting {', '.join(users)}")
             print(
                 "Acknowledgement verification failed "
                 "— aborting evidence commit."
+            )
+            set_commit_status(
+                repo, pr.head.sha, "failure",
+                "; ".join(parts),
             )
             sys.exit(1)
 
@@ -204,19 +219,28 @@ def main(strict: bool = False, branch: str | None = None) -> None:
 
     # Determine which branch to commit on.
     target_ref = branch if branch else f"heads/{pr.base.ref}"
-    ref = repo.get_git_ref(target_ref)
-    head_sha = ref.object.sha
-    head_commit = repo.get_git_commit(head_sha)
 
-    # Create an empty commit: same tree, parent = current HEAD.
-    new_commit = repo.create_git_commit(
-        message=message,
-        tree=head_commit.tree,
-        parents=[head_commit],
-    )
+    try:
+        ref = repo.get_git_ref(target_ref)
+        head_sha = ref.object.sha
+        head_commit = repo.get_git_commit(head_sha)
 
-    # Update the branch ref to point to the new commit.
-    ref.edit(sha=new_commit.sha)
+        # Create an empty commit: same tree, parent = current HEAD.
+        new_commit = repo.create_git_commit(
+            message=message,
+            tree=head_commit.tree,
+            parents=[head_commit],
+        )
+
+        # Update the branch ref to point to the new commit.
+        ref.edit(sha=new_commit.sha)
+    except Exception as exc:
+        print(f"ERROR: Evidence commit creation failed: {exc}")
+        set_commit_status(
+            repo, pr.head.sha, "failure",
+            "Evidence commit creation failed",
+        )
+        sys.exit(1)
 
     print(f"Created evidence commit {new_commit.sha} on {target_ref}")
     print(f"Commit message:\n{message}")
