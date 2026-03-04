@@ -23,6 +23,7 @@ import pytest
 from merge_evidence_commit import (
     _build_evidence_message,
     _collect_acknowledgement_details,
+    _verify_all_acknowledged,
     main,
 )
 
@@ -59,9 +60,8 @@ SAMPLE_CHECKLISTS = [
 
 class TestCollectAcknowledgementDetails:
     def test_collects_marker_ack(self):
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
+        cl_comment = MagicMock()
+        cl_comment.id = 100
 
         ok = _make_comment(
             101,
@@ -69,10 +69,11 @@ class TestCollectAcknowledgementDetails:
             "alice",
             datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
         )
+        ok.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [ok]
+        pr.get_review_comments.return_value = [ok]
 
-        existing = {"api-review": cl_review}
+        existing = {"api-review": cl_comment}
         details = _collect_acknowledgement_details(
             pr, existing, ["api-review"]
         )
@@ -81,14 +82,13 @@ class TestCollectAcknowledgementDetails:
         assert "2026-02-15" in details["api-review"][0]["acknowledged_at"]
 
     def test_no_acks(self):
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
+        cl_comment = MagicMock()
+        cl_comment.id = 100
 
         pr = MagicMock()
-        pr.get_issue_comments.return_value = []
+        pr.get_review_comments.return_value = []
 
-        existing = {"api-review": cl_review}
+        existing = {"api-review": cl_comment}
         details = _collect_acknowledgement_details(
             pr, existing, ["api-review"]
         )
@@ -96,9 +96,8 @@ class TestCollectAcknowledgementDetails:
 
     def test_bare_ok_without_marker_not_collected(self):
         """Bare OK without marker is not collected for evidence (must be tagged first)."""
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
+        cl_comment = MagicMock()
+        cl_comment.id = 100
 
         ok = _make_comment(
             101,
@@ -106,10 +105,32 @@ class TestCollectAcknowledgementDetails:
             "bob",
             datetime(2026, 3, 1, 10, 0, tzinfo=timezone.utc),
         )
+        ok.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [ok]
+        pr.get_review_comments.return_value = [ok]
 
-        existing = {"api-review": cl_review}
+        existing = {"api-review": cl_comment}
+        details = _collect_acknowledgement_details(
+            pr, existing, ["api-review"]
+        )
+        assert details["api-review"] == []
+
+    def test_reply_to_different_comment_ignored(self):
+        """A reply to a different comment is not collected."""
+        cl_comment = MagicMock()
+        cl_comment.id = 100
+
+        ok = _make_comment(
+            101,
+            "OK\n<!-- checklist-ok:api-review -->",
+            "alice",
+            datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
+        )
+        ok.in_reply_to_id = 999  # different comment
+        pr = MagicMock()
+        pr.get_review_comments.return_value = [ok]
+
+        existing = {"api-review": cl_comment}
         details = _collect_acknowledgement_details(
             pr, existing, ["api-review"]
         )
@@ -206,7 +227,7 @@ class TestMergeEvidenceMain:
         repo = MagicMock()
         pr = MagicMock()
         pr.get_files.return_value = [_make_file("src/api/foo.py")]
-        pr.get_issue_comments.return_value = []
+        pr.get_review_comments.return_value = []
         mock_repo_pr.return_value = (repo, pr)
 
         with patch(
@@ -232,17 +253,17 @@ class TestMergeEvidenceMain:
         pr.base.ref = "main"
         pr.get_files.return_value = [_make_file("src/api/foo.py")]
 
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
+        cl_comment = MagicMock()
+        cl_comment.id = 100
 
-        ok_comment = _make_comment(
+        ok_reply = _make_comment(
             101,
             "OK\n<!-- checklist-ok:api-review -->",
             "alice",
             datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
         )
-        pr.get_issue_comments.return_value = [ok_comment]
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
         mock_repo_pr.return_value = (repo, pr)
 
         # Set up git ref / commit mocks.
@@ -260,7 +281,7 @@ class TestMergeEvidenceMain:
 
         with patch(
             "merge_evidence_commit.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
+            return_value={"api-review": cl_comment},
         ):
             main()
 
@@ -277,4 +298,228 @@ class TestMergeEvidenceMain:
 
         # Verify the right branch was looked up.
         repo.get_git_ref.assert_called_once_with("heads/main")
+
+
+# ---------------------------------------------------------------------------
+# _verify_all_acknowledged
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyAllAcknowledged:
+    def test_all_acknowledged(self):
+        ack_details = {
+            "api-review": [
+                {"reviewer": "alice", "acknowledged_at": "2026-01-01T00:00:00"},
+                {"reviewer": "bob", "acknowledged_at": "2026-01-01T00:01:00"},
+            ],
+        }
+        missing = _verify_all_acknowledged(
+            ack_details, ["alice", "bob"], ["api-review"]
+        )
+        assert missing == {}
+
+    def test_missing_one_reviewer(self):
+        ack_details = {
+            "api-review": [
+                {"reviewer": "alice", "acknowledged_at": "2026-01-01T00:00:00"},
+            ],
+        }
+        missing = _verify_all_acknowledged(
+            ack_details, ["alice", "bob"], ["api-review"]
+        )
+        assert missing == {"api-review": ["bob"]}
+
+    def test_no_acks_at_all(self):
+        ack_details = {"api-review": []}
+        missing = _verify_all_acknowledged(
+            ack_details, ["alice"], ["api-review"]
+        )
+        assert missing == {"api-review": ["alice"]}
+
+    def test_empty_approvers_means_nothing_missing(self):
+        ack_details = {"api-review": []}
+        missing = _verify_all_acknowledged(
+            ack_details, [], ["api-review"]
+        )
+        assert missing == {}
+
+
+# ---------------------------------------------------------------------------
+# main(strict=True)
+# ---------------------------------------------------------------------------
+
+
+class TestMergeEvidenceStrict:
+    @patch("merge_evidence_commit.get_approving_reviewers", return_value=[])
+    @patch("merge_evidence_commit.load_checklists", return_value=SAMPLE_CHECKLISTS)
+    @patch("merge_evidence_commit.get_repo_and_pr")
+    @patch("merge_evidence_commit.get_github_client")
+    def test_strict_no_approvers_exits_nonzero(
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_comment = MagicMock()
+        cl_comment.id = 100
+        pr.get_review_comments.return_value = []
+        mock_repo_pr.return_value = (repo, pr)
+
+        with patch(
+            "merge_evidence_commit.find_existing_checklist_comments",
+            return_value={"api-review": cl_comment},
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main(strict=True)
+            assert exc_info.value.code == 1
+
+        # No commit should have been created.
+        repo.create_git_commit.assert_not_called()
+
+    @patch(
+        "merge_evidence_commit.get_approving_reviewers",
+        return_value=["alice", "bob"],
+    )
+    @patch("merge_evidence_commit.load_checklists", return_value=SAMPLE_CHECKLISTS)
+    @patch("merge_evidence_commit.get_repo_and_pr")
+    @patch("merge_evidence_commit.get_github_client")
+    def test_strict_missing_ack_exits_nonzero(
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_comment = MagicMock()
+        cl_comment.id = 100
+
+        # Only alice acked.
+        ok_reply = _make_comment(
+            101,
+            "OK\n<!-- checklist-ok:api-review -->",
+            "alice",
+            datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
+        )
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
+        mock_repo_pr.return_value = (repo, pr)
+
+        with patch(
+            "merge_evidence_commit.find_existing_checklist_comments",
+            return_value={"api-review": cl_comment},
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main(strict=True)
+            assert exc_info.value.code == 1
+
+        repo.create_git_commit.assert_not_called()
+
+    @patch(
+        "merge_evidence_commit.get_approving_reviewers",
+        return_value=["alice"],
+    )
+    @patch("merge_evidence_commit.load_checklists", return_value=SAMPLE_CHECKLISTS)
+    @patch("merge_evidence_commit.get_repo_and_pr")
+    @patch("merge_evidence_commit.get_github_client")
+    def test_strict_all_acked_creates_commit(
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.number = 42
+        pr.title = "My PR"
+        pr.html_url = "https://github.com/org/repo/pull/42"
+        pr.base.ref = "main"
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_comment = MagicMock()
+        cl_comment.id = 100
+
+        ok_reply = _make_comment(
+            101,
+            "OK\n<!-- checklist-ok:api-review -->",
+            "alice",
+            datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
+        )
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
+        mock_repo_pr.return_value = (repo, pr)
+
+        ref = MagicMock()
+        ref.object.sha = "headsha"
+        repo.get_git_ref.return_value = ref
+
+        head_commit = MagicMock()
+        head_commit.tree = MagicMock()
+        repo.get_git_commit.return_value = head_commit
+
+        new_commit = MagicMock()
+        new_commit.sha = "newcommitsha"
+        repo.create_git_commit.return_value = new_commit
+
+        with patch(
+            "merge_evidence_commit.find_existing_checklist_comments",
+            return_value={"api-review": cl_comment},
+        ):
+            # Should NOT raise SystemExit.
+            main(strict=True)
+
+        repo.create_git_commit.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# main(branch=...)
+# ---------------------------------------------------------------------------
+
+
+class TestMergeEvidenceBranch:
+    @patch("merge_evidence_commit.load_checklists", return_value=SAMPLE_CHECKLISTS)
+    @patch("merge_evidence_commit.get_repo_and_pr")
+    @patch("merge_evidence_commit.get_github_client")
+    def test_custom_branch_ref(self, mock_gh, mock_repo_pr, mock_load):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.number = 42
+        pr.title = "My PR"
+        pr.html_url = "https://github.com/org/repo/pull/42"
+        pr.base.ref = "main"
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_comment = MagicMock()
+        cl_comment.id = 100
+
+        ok_reply = _make_comment(
+            101,
+            "OK\n<!-- checklist-ok:api-review -->",
+            "alice",
+            datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
+        )
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
+        mock_repo_pr.return_value = (repo, pr)
+
+        ref = MagicMock()
+        ref.object.sha = "headsha"
+        repo.get_git_ref.return_value = ref
+
+        head_commit = MagicMock()
+        head_commit.tree = MagicMock()
+        repo.get_git_commit.return_value = head_commit
+
+        new_commit = MagicMock()
+        new_commit.sha = "newcommitsha"
+        repo.create_git_commit.return_value = new_commit
+
+        custom_branch = "heads/gh-readonly-queue/main/pr-42-abc123"
+
+        with patch(
+            "merge_evidence_commit.find_existing_checklist_comments",
+            return_value={"api-review": cl_comment},
+        ):
+            main(branch=custom_branch)
+
+        # Should use the custom branch, not heads/main.
+        repo.get_git_ref.assert_called_once_with(custom_branch)
+
 

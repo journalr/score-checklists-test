@@ -69,32 +69,48 @@ SAMPLE_CHECKLISTS = [
 
 
 class TestFindOkCommentsForChecklist:
-    def test_finds_marker_ok(self):
+    def test_finds_marker_ok_reply(self):
         ok = _make_comment(
             101,
             "OK\n<!-- checklist-ok:api-review -->",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
+        ok.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [ok]
+        pr.get_review_comments.return_value = [ok]
 
         result = _find_ok_comments_for_checklist(pr, "api-review", 100)
         assert len(result) == 1
         assert result[0].id == 101
 
-    def test_finds_bare_ok(self):
+    def test_finds_bare_ok_reply(self):
         ok = _make_comment(
             101,
             "OK",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
+        ok.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [ok]
+        pr.get_review_comments.return_value = [ok]
 
         result = _find_ok_comments_for_checklist(pr, "api-review", 100)
         assert len(result) == 1
+
+    def test_ignores_reply_to_different_comment(self):
+        ok = _make_comment(
+            101,
+            "OK",
+            "alice",
+            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
+        )
+        ok.in_reply_to_id = 999  # different checklist
+        pr = MagicMock()
+        pr.get_review_comments.return_value = [ok]
+
+        result = _find_ok_comments_for_checklist(pr, "api-review", 100)
+        assert len(result) == 0
 
     def test_ignores_ok_for_different_checklist(self):
         ok = _make_comment(
@@ -103,21 +119,23 @@ class TestFindOkCommentsForChecklist:
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
+        ok.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [ok]
+        pr.get_review_comments.return_value = [ok]
 
         result = _find_ok_comments_for_checklist(pr, "api-review", 100)
         assert len(result) == 0
 
-    def test_ignores_unrelated_comment(self):
+    def test_ignores_unrelated_reply(self):
         normal = _make_comment(
             101,
             "looks good",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
+        normal.in_reply_to_id = 100
         pr = MagicMock()
-        pr.get_issue_comments.return_value = [normal]
+        pr.get_review_comments.return_value = [normal]
 
         result = _find_ok_comments_for_checklist(pr, "api-review", 100)
         assert len(result) == 0
@@ -200,28 +218,29 @@ class TestHandleSynchronize:
         pr.head.sha = "newsha"
         pr.get_files.return_value = [_make_file("src/api/handler.py")]
 
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
+        cl_comment = MagicMock()
+        cl_comment.id = 100
+        cl_comment.body = "<!-- review-checklist:api-review -->"
 
-        ok_comment = _make_comment(
+        ok_reply = _make_comment(
             101,
             "OK\n<!-- checklist-ok:api-review -->",
             "alice",
             datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
         )
-        pr.get_issue_comments.return_value = [ok_comment]
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
 
         review = _make_review("alice", "APPROVED", 42)
         pr.get_reviews.return_value = [review]
 
         with patch(
             "dismiss_and_invalidate.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
+            return_value={"api-review": cl_comment},
         ):
             handle_synchronize(pr)
 
-        ok_comment.delete.assert_called_once()
+        ok_reply.delete.assert_called_once()
         review.dismiss.assert_called_once()
 
 

@@ -21,11 +21,13 @@ inputs:
   action:
     description: >
       Which action to run.  One of:
-        post          – Post/update checklist comments
-        check         – Verify acknowledgements and set status
-        dismiss_sync  – Invalidate OKs after new push
-        dismiss_edit  – Dismiss approval after OK edit/delete
-        evidence      – Create merge evidence commit
+        post            – Post/update checklist comments
+        check           – Verify acknowledgements and set status
+        check_strict    – Verify acknowledgements; fail if incomplete
+        dismiss_sync    – Invalidate OKs after new push
+        dismiss_edit    – Dismiss approval after OK edit/delete
+        evidence        – Create merge evidence commit
+        evidence_strict – Verify acknowledgements then create evidence; fail if incomplete
     required: true
   github-token:
     description: "GitHub token with repo permissions"
@@ -39,6 +41,14 @@ inputs:
     default: ""
   after-sha:
     description: "SHA after the push (for synchronize events)"
+    required: false
+    default: ""
+  branch:
+    description: >
+      Git ref to commit evidence on (e.g. 'heads/main' or
+      'heads/gh-readonly-queue/main/pr-42-abc123').
+      Only used by the evidence and evidence_strict actions.
+      Defaults to heads/{pr.base.ref} when empty.
     required: false
     default: ""
 
@@ -62,6 +72,15 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
       run: bazel run //actions/review-checklists/scripts:check_acknowledgements
+
+    - name: Run check_acknowledgements (strict)
+      if: inputs.action == 'check_strict'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+      run: bazel run //actions/review-checklists/scripts:check_acknowledgements -- --strict
 
     - name: Run dismiss_and_invalidate (synchronize)
       if: inputs.action == 'dismiss_sync'
@@ -91,5 +110,26 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
-      run: bazel run //actions/review-checklists/scripts:merge_evidence_commit
+        EVIDENCE_BRANCH: ${{ inputs.branch }}
+      run: |
+        ARGS=""
+        if [ -n "$EVIDENCE_BRANCH" ]; then
+          ARGS="-- --branch $EVIDENCE_BRANCH"
+        fi
+        bazel run //actions/review-checklists/scripts:merge_evidence_commit $ARGS
+
+    - name: Run merge_evidence_commit (strict)
+      if: inputs.action == 'evidence_strict'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        EVIDENCE_BRANCH: ${{ inputs.branch }}
+      run: |
+        ARGS="-- --strict"
+        if [ -n "$EVIDENCE_BRANCH" ]; then
+          ARGS="$ARGS --branch $EVIDENCE_BRANCH"
+        fi
+        bazel run //actions/review-checklists/scripts:merge_evidence_commit $ARGS
 

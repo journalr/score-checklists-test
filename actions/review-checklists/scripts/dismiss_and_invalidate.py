@@ -73,18 +73,21 @@ def _get_files_in_latest_push(pr: Any) -> list[str]:
 
 
 def _find_ok_comments_for_checklist(
-    pr: Any, checklist_id: str, checklist_review_id: int
+    pr: Any, checklist_id: str, checklist_comment_id: int
 ) -> list[Any]:
     """Find all OK reply comments for a given checklist.
 
-    Checklist findings are posted as PR reviews; OK replies are issue
-    comments tagged with the checklist-ok marker or bare OK keywords.
+    Checklist findings are posted as file-level PR review comments; OK
+    replies are threaded review comment replies whose ``in_reply_to_id``
+    matches the checklist comment id.
     """
     ok_comments = []
     marker = OK_MARKER.format(checklist_id=checklist_id)
-    all_comments = sorted(pr.get_issue_comments(), key=lambda c: c.created_at)
 
-    for comment in all_comments:
+    for comment in pr.get_review_comments():
+        reply_to = getattr(comment, "in_reply_to_id", None)
+        if reply_to != checklist_comment_id:
+            continue
         body = (comment.body or "").strip()
 
         # Explicit marker match.

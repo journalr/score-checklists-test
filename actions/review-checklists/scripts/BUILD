@@ -23,6 +23,7 @@ py_library(
         requirement("bazel-runfiles"),
         requirement("pygithub"),
         requirement("pyyaml"),
+        requirement("requests"),
     ],
 )
 
