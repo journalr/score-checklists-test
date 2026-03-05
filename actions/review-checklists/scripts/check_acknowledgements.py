@@ -148,11 +148,6 @@ def main(strict: bool = False) -> None:
 
     acks = _collect_ok_acknowledgements(pr, existing, relevant_ids)
 
-    # Refresh evidence block in PR description based on current acknowledgements.
-    ack_details = _collect_acknowledgement_details(pr, existing, relevant_ids)
-    evidence_block = build_evidence_block(relevant, ack_details)
-    update_pr_description_with_evidence(pr, evidence_block)
-
     approvers = get_approving_reviewers(pr)
 
     if not approvers:
