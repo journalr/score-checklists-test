@@ -51,6 +51,13 @@ inputs:
       Defaults to heads/{pr.base.ref} when empty.
     required: false
     default: ""
+  head-sha:
+    description: >
+      The commit SHA to set the commit status on.  When running inside a
+      merge_group event this should be github.event.merge_group.head_sha.
+      If empty, falls back to the PR head SHA.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -126,10 +133,10 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
         EVIDENCE_BRANCH: ${{ inputs.branch }}
+        HEAD_SHA: ${{ inputs.head-sha }}
       run: |
         ARGS="-- --strict"
         if [ -n "$EVIDENCE_BRANCH" ]; then
           ARGS="$ARGS --branch $EVIDENCE_BRANCH"
         fi
         bazel run //actions/review-checklists/scripts:merge_evidence_commit $ARGS
-

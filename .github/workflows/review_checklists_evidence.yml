@@ -60,4 +60,4 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-number: ${{ steps.pr-info.outputs.pr-number }}
           branch: ${{ steps.pr-info.outputs.branch }}
-
+          head-sha: ${{ github.event.merge_group.head_sha }}

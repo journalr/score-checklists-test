@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, PropertyMock, patch
 
@@ -357,8 +358,10 @@ class TestMergeEvidenceStrict:
     @patch("merge_evidence_commit.get_repo_and_pr")
     @patch("merge_evidence_commit.get_github_client")
     def test_strict_no_approvers_exits_nonzero(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status,
+        monkeypatch,
     ):
+        monkeypatch.delenv("HEAD_SHA", raising=False)
         repo = MagicMock()
         pr = MagicMock()
         pr.head.sha = "abc"
@@ -393,8 +396,10 @@ class TestMergeEvidenceStrict:
     @patch("merge_evidence_commit.get_repo_and_pr")
     @patch("merge_evidence_commit.get_github_client")
     def test_strict_missing_ack_exits_nonzero(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status,
+        monkeypatch,
     ):
+        monkeypatch.delenv("HEAD_SHA", raising=False)
         repo = MagicMock()
         pr = MagicMock()
         pr.head.sha = "abc"
@@ -436,8 +441,10 @@ class TestMergeEvidenceStrict:
     @patch("merge_evidence_commit.get_repo_and_pr")
     @patch("merge_evidence_commit.get_github_client")
     def test_strict_all_acked_creates_commit(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status,
+        monkeypatch,
     ):
+        monkeypatch.delenv("HEAD_SHA", raising=False)
         repo = MagicMock()
         pr = MagicMock()
         pr.number = 42
@@ -488,8 +495,10 @@ class TestMergeEvidenceStrict:
     @patch("merge_evidence_commit.get_repo_and_pr")
     @patch("merge_evidence_commit.get_github_client")
     def test_strict_no_existing_comments_exits_nonzero(
-        self, mock_gh, mock_repo_pr, mock_load, mock_status
+        self, mock_gh, mock_repo_pr, mock_load, mock_status,
+        monkeypatch,
     ):
+        monkeypatch.delenv("HEAD_SHA", raising=False)
         repo = MagicMock()
         pr = MagicMock()
         pr.head.sha = "abc"
@@ -513,8 +522,10 @@ class TestMergeEvidenceStrict:
     @patch("merge_evidence_commit.get_repo_and_pr")
     @patch("merge_evidence_commit.get_github_client")
     def test_evidence_commit_creation_failure_sets_status(
-        self, mock_gh, mock_repo_pr, mock_load, mock_status
+        self, mock_gh, mock_repo_pr, mock_load, mock_status,
+        monkeypatch,
     ):
+        monkeypatch.delenv("HEAD_SHA", raising=False)
         repo = MagicMock()
         pr = MagicMock()
         pr.number = 42
@@ -551,6 +562,51 @@ class TestMergeEvidenceStrict:
         repo.create_git_commit.assert_not_called()
         mock_status.assert_called_once_with(
             repo, "abc", "failure", "Evidence commit creation failed"
+        )
+
+    @patch("merge_evidence_commit.set_commit_status")
+    @patch(
+        "merge_evidence_commit.get_approving_reviewers",
+        return_value=["alice", "bob"],
+    )
+    @patch("merge_evidence_commit.load_checklists", return_value=SAMPLE_CHECKLISTS)
+    @patch("merge_evidence_commit.get_repo_and_pr")
+    @patch("merge_evidence_commit.get_github_client")
+    def test_head_sha_env_overrides_pr_head(
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status,
+        monkeypatch,
+    ):
+        """HEAD_SHA env var takes precedence over pr.head.sha for commit status."""
+        monkeypatch.setenv("HEAD_SHA", "merge-group-sha-999")
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.head.sha = "pr-head-sha"
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_comment = MagicMock()
+        cl_comment.id = 100
+
+        ok_reply = _make_comment(
+            101,
+            "OK",
+            "alice",
+            datetime(2026, 2, 15, 14, 30, tzinfo=timezone.utc),
+        )
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
+        mock_repo_pr.return_value = (repo, pr)
+
+        with patch(
+            "merge_evidence_commit.find_existing_checklist_comments",
+            return_value={"api-review": cl_comment},
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main(strict=True)
+            assert exc_info.value.code == 1
+
+        # Status should be set on HEAD_SHA, NOT pr.head.sha.
+        mock_status.assert_called_once_with(
+            repo, "merge-group-sha-999", "failure", "api-review: awaiting bob"
         )
 
 
@@ -607,5 +663,4 @@ class TestMergeEvidenceBranch:
 
         # Should use the custom branch, not heads/main.
         repo.get_git_ref.assert_called_once_with(custom_branch)
-
 

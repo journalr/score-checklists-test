@@ -198,11 +198,17 @@ def set_commit_status(
     context: str = "review-checklists",
 ) -> None:
     """Set a commit status on the given SHA."""
+    desc = description[:140]
+    print(
+        f"Setting commit status: context='{context}', state='{state}', "
+        f"sha='{sha}', description='{desc}'"
+    )
     repo.get_commit(sha).create_status(
         state=state,
-        description=description[:140],
+        description=desc,
         context=context,
     )
+    print("Commit status set successfully.")
 
 
 def check_merge_queue_protection(repo: Any, branch_name: str) -> None:

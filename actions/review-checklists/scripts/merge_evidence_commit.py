@@ -32,6 +32,7 @@ a single step — if verification fails the merge is blocked.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime, timezone
 from typing import Any
@@ -163,6 +164,11 @@ def main(strict: bool = False, branch: str | None = None) -> None:
     gh = get_github_client()
     repo, pr = get_repo_and_pr(gh)
 
+    # Use explicit HEAD_SHA from environment (e.g. merge_group.head_sha)
+    # if provided, otherwise fall back to the PR head SHA.
+    status_sha = os.environ.get("HEAD_SHA") or pr.head.sha
+    print(f"Commit status SHA: {status_sha}")
+
     checklists = load_checklists()
     changed_files = get_changed_files(pr)
     relevant = match_checklists(checklists, changed_files)
@@ -178,7 +184,7 @@ def main(strict: bool = False, branch: str | None = None) -> None:
         print("No checklist review findings found — skipping evidence commit.")
         if strict:
             set_commit_status(
-                repo, pr.head.sha, "failure",
+                repo, status_sha, "failure",
                 "Checklist findings not found",
             )
             sys.exit(1)
@@ -192,7 +198,7 @@ def main(strict: bool = False, branch: str | None = None) -> None:
         if not approvers:
             print("ERROR: No approving reviewers — cannot create evidence.")
             set_commit_status(
-                repo, pr.head.sha, "failure",
+                repo, status_sha, "failure",
                 "No approving reviewers",
             )
             sys.exit(1)
@@ -208,7 +214,7 @@ def main(strict: bool = False, branch: str | None = None) -> None:
                 "— aborting evidence commit."
             )
             set_commit_status(
-                repo, pr.head.sha, "failure",
+                repo, status_sha, "failure",
                 "; ".join(parts),
             )
             sys.exit(1)
@@ -237,7 +243,7 @@ def main(strict: bool = False, branch: str | None = None) -> None:
     except Exception as exc:
         print(f"ERROR: Evidence commit creation failed: {exc}")
         set_commit_status(
-            repo, pr.head.sha, "failure",
+            repo, status_sha, "failure",
             "Evidence commit creation failed",
         )
         sys.exit(1)
