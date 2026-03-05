@@ -21,7 +21,7 @@
 /// \requirement SWS_CM_11264, SWS_CM_10432, SWS_CM_11327, SWS_CM_11329
 namespace score::mw::com
 {
-
+// test
 /// \api
 /// \brief Error codes for COM API operations as defined by AUTOSAR SWS Communication Management
 using ComErrc = score::mw::com::impl::ComErrc;
