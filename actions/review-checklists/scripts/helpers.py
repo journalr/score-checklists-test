@@ -251,8 +251,10 @@ def build_evidence_block(
 
     lines = [
         EVIDENCE_BLOCK_START,
+        "<details>",
+        "<summary>Checklist Report (do not modify)</summary>",
         "",
-        "## 📋 Review Checklist Evidence",
+        "## Review Checklist Evidence",
         "",
         f"**Last updated:** {datetime.now(timezone.utc).isoformat()}",
         "",
@@ -271,10 +273,13 @@ def build_evidence_block(
                     f"- {ack['reviewer']} at {ack['acknowledged_at']}"
                 )
         else:
-            lines.append("**Acknowledged by:** (pending)")
+            lines.append("**Acknowledged by:** No acknowledgements yet")
         lines.append("")
 
-    lines.append(EVIDENCE_BLOCK_END)
+    lines += [
+        "</details>",
+        EVIDENCE_BLOCK_END
+    ]
     return "\n".join(lines)
 
 
