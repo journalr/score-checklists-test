@@ -13,10 +13,12 @@
 
 # Merge-queue gate for review checklists.
 #
-# Runs when a PR enters the merge queue.  Atomically verifies that all
-# checklist acknowledgements are in place and creates an evidence commit
-# on the merge queue's temporary branch.  If verification fails the
-# step exits non-zero and the PR is ejected from the queue.
+# Runs when a PR enters the merge queue.  Verifies that:
+# 1. All approving reviewers have acknowledged all checklists
+# 2. The evidence block in the PR description matches current acknowledgements
+#
+# If verification passes, the merge proceeds. If it fails, the PR is ejected
+# from the queue.
 
 name: Review Checklists Evidence
 
@@ -24,12 +26,11 @@ on:
   merge_group:
 
 permissions:
-  contents: write
   pull-requests: read
   statuses: write
 
 jobs:
-  review_checklists-evidence:
+  review_checklists_evidence:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
@@ -48,16 +49,14 @@ jobs:
             exit 1
           fi
           echo "pr-number=$PR_NUM" >> "$GITHUB_OUTPUT"
-          # Convert refs/heads/... to heads/... for the git ref API.
-          BRANCH_REF="${HEAD_REF#refs/}"
-          echo "branch=$BRANCH_REF" >> "$GITHUB_OUTPUT"
-          echo "Extracted PR #$PR_NUM, branch ref: $BRANCH_REF"
+          echo "Extracted PR #$PR_NUM"
 
-      - name: Verify acknowledgements and create evidence commit
+      - name: Verify evidence in PR description
         uses: ./actions/review-checklists
         with:
           action: evidence_strict
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-number: ${{ steps.pr-info.outputs.pr-number }}
-          branch: ${{ steps.pr-info.outputs.branch }}
           head-sha: ${{ github.event.merge_group.head_sha }}
+
+

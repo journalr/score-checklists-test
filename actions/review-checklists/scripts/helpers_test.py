@@ -440,7 +440,7 @@ class TestSetCommitStatus:
 
 
 class TestCheckMergeQueueProtection:
-    def test_passes_with_merge_queue_group_size_1(self, monkeypatch):
+    def test_passes_with_proper_merge_settings(self, monkeypatch):
         monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
         repo = MagicMock()
         repo.full_name = "org/repo"
@@ -448,7 +448,10 @@ class TestCheckMergeQueueProtection:
         rules = [
             {
                 "type": "merge_queue",
-                "parameters": {"max_entries_to_merge": 1},
+                "parameters": {
+                    "merge_method": "MERGE",
+                    "commit_message_header_only": False,
+                },
             }
         ]
         mock_resp = MagicMock()
@@ -473,7 +476,7 @@ class TestCheckMergeQueueProtection:
                 check_merge_queue_protection(repo, "main")
             assert exc_info.value.code == 1
 
-    def test_fails_when_group_size_greater_than_1(self, monkeypatch):
+    def test_fails_when_merge_method_is_squash(self, monkeypatch):
         monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
         repo = MagicMock()
         repo.full_name = "org/repo"
@@ -481,7 +484,56 @@ class TestCheckMergeQueueProtection:
         rules = [
             {
                 "type": "merge_queue",
-                "parameters": {"max_entries_to_merge": 5},
+                "parameters": {
+                    "merge_method": "squash",
+                    "commit_message_header_only": False,
+                },
+            }
+        ]
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = rules
+
+        with patch("helpers.requests.get", return_value=mock_resp):
+            with pytest.raises(SystemExit) as exc_info:
+                check_merge_queue_protection(repo, "main")
+            assert exc_info.value.code == 1
+
+    def test_fails_when_merge_method_is_rebase(self, monkeypatch):
+        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
+        repo = MagicMock()
+        repo.full_name = "org/repo"
+
+        rules = [
+            {
+                "type": "merge_queue",
+                "parameters": {
+                    "merge_method": "rebase",
+                    "commit_message_header_only": False,
+                },
+            }
+        ]
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = rules
+
+        with patch("helpers.requests.get", return_value=mock_resp):
+            with pytest.raises(SystemExit) as exc_info:
+                check_merge_queue_protection(repo, "main")
+            assert exc_info.value.code == 1
+
+    def test_fails_when_commit_message_header_only_is_true(self, monkeypatch):
+        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
+        repo = MagicMock()
+        repo.full_name = "org/repo"
+
+        rules = [
+            {
+                "type": "merge_queue",
+                "parameters": {
+                    "merge_method": "merge",
+                    "commit_message_header_only": True,
+                },
             }
         ]
         mock_resp = MagicMock()
@@ -507,39 +559,6 @@ class TestCheckMergeQueueProtection:
                 check_merge_queue_protection(repo, "main")
             assert exc_info.value.code == 1
 
-    def test_passes_with_no_parameters(self, monkeypatch):
-        """A merge_queue rule with no parameters should pass (default group size)."""
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        rules = [{"type": "merge_queue", "parameters": {}}]
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = rules
-
-        with patch("helpers.requests.get", return_value=mock_resp):
-            check_merge_queue_protection(repo, "main")
-
-    def test_passes_with_alternative_key_name(self, monkeypatch):
-        """Supports the alternative 'group_size_limit' parameter key."""
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        rules = [
-            {
-                "type": "merge_queue",
-                "parameters": {"group_size_limit": 1},
-            }
-        ]
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = rules
-
-        with patch("helpers.requests.get", return_value=mock_resp):
-            check_merge_queue_protection(repo, "main")
-
     def test_calls_correct_api_url(self, monkeypatch):
         monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
         repo = MagicMock()
@@ -548,7 +567,10 @@ class TestCheckMergeQueueProtection:
         rules = [
             {
                 "type": "merge_queue",
-                "parameters": {"max_entries_to_merge": 1},
+                "parameters": {
+                    "merge_method": "merge",
+                    "commit_message_header_only": False,
+                },
             }
         ]
         mock_resp = MagicMock()
@@ -562,6 +584,7 @@ class TestCheckMergeQueueProtection:
         call_args = mock_get.call_args
         assert "myorg/myrepo" in call_args[0][0]
         assert "develop" in call_args[0][0]
+
 
 
 
