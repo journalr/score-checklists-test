@@ -211,15 +211,105 @@ def set_commit_status(
     print("Commit status set successfully.")
 
 
+# Evidence block markers for PR description
+EVIDENCE_BLOCK_START = "<!-- review-checklist-evidence:start -->"
+EVIDENCE_BLOCK_END = "<!-- review-checklist-evidence:end -->"
+
+
+def extract_evidence_block(description: str) -> str | None:
+    """Extract the evidence block from PR description, or None if not present."""
+    if EVIDENCE_BLOCK_START not in description:
+        return None
+    try:
+        start = description.index(EVIDENCE_BLOCK_START)
+        end = description.index(EVIDENCE_BLOCK_END)
+        return description[start : end + len(EVIDENCE_BLOCK_END)]
+    except ValueError:
+        return None
+
+
+def remove_evidence_block(description: str) -> str:
+    """Remove the evidence block from PR description."""
+    if EVIDENCE_BLOCK_START not in description:
+        return description
+    try:
+        start = description.index(EVIDENCE_BLOCK_START)
+        end = description.index(EVIDENCE_BLOCK_END) + len(EVIDENCE_BLOCK_END)
+        # Remove the evidence block and any trailing whitespace
+        result = description[:start] + description[end:]
+        return result.rstrip() + "\n"
+    except ValueError:
+        return description
+
+
+def build_evidence_block(
+    relevant: list[dict],
+    ack_details: dict[str, list[dict[str, str]]],
+) -> str:
+    """Build the evidence block for the PR description."""
+    from datetime import datetime, timezone
+
+    lines = [
+        EVIDENCE_BLOCK_START,
+        "",
+        "## 📋 Review Checklist Evidence",
+        "",
+        f"**Last updated:** {datetime.now(timezone.utc).isoformat()}",
+        "",
+    ]
+
+    for cl in relevant:
+        cid = cl["id"]
+        lines.append(f"### {cl['name']} (`{cid}`)")
+        lines.append("")
+
+        acks = ack_details.get(cid, [])
+        if acks:
+            lines.append("**Acknowledged by:**")
+            for ack in acks:
+                lines.append(
+                    f"- {ack['reviewer']} at {ack['acknowledged_at']}"
+                )
+        else:
+            lines.append("**Acknowledged by:** (pending)")
+        lines.append("")
+
+    lines.append(EVIDENCE_BLOCK_END)
+    return "\n".join(lines)
+
+
+def update_pr_description_with_evidence(
+    pr: Any,
+    evidence_block: str,
+) -> None:
+    """Update PR description to include/replace evidence block."""
+    current_description = pr.body or ""
+
+    # Remove existing evidence block
+    new_description = remove_evidence_block(current_description)
+
+    # Append new evidence block
+    new_description = new_description + "\n" + evidence_block
+
+    # Only update if description changed
+    if new_description.strip() != current_description.strip():
+        pr.edit(body=new_description)
+        print("Updated PR description with evidence block")
+    else:
+        print("PR description evidence is already up to date")
+
+
 def check_merge_queue_protection(repo: Any, branch_name: str) -> None:
-    """Verify the target branch enforces a merge queue with max group size 1.
+    """Verify the target branch enforces a merge queue with proper settings.
 
     Uses the GitHub repository rulesets API to inspect the rules applied
     to *branch_name*.  Exits with ``sys.exit(1)`` if:
 
     - The API call fails.
     - No ``merge_queue`` rule is found for the branch.
-    - The merge queue allows a group size greater than 1.
+    - The merge queue is not set to use merge commits.
+    - The merge queue is not configured to include PR title and description
+      in commit messages.
 
     The GitHub REST API is used directly because PyGithub does not expose
     merge-queue ruleset parameters.
@@ -261,21 +351,32 @@ def check_merge_queue_protection(repo: Any, branch_name: str) -> None:
         sys.exit(1)
 
     params = merge_queue_rule.get("parameters", {})
-    max_group_size = params.get("max_entries_to_merge", None)
 
-    # Fall back to alternative key name used in some API versions.
-    if max_group_size is None:
-        max_group_size = params.get("group_size_limit", None)
-
-    if max_group_size is not None and int(max_group_size) != 1:
+    # Verify merge method is set to merge commits (not squash or rebase).
+    merge_method = params.get("merge_method", "")
+    if merge_method != "merge":
         print(
-            f"ERROR: Branch '{branch_name}' merge queue allows a group "
-            f"size of {max_group_size}.  The maximum group size must be 1 "
-            f"to ensure evidence commits are created correctly."
+            f"ERROR: Branch '{branch_name}' merge queue is configured with "
+            f"merge_method='{merge_method}', but must use merge commits "
+            f"(merge_method='merge') to preserve PR title and description."
+        )
+        sys.exit(1)
+
+    # Verify commit message includes PR title and description.
+    commit_message_header_only = params.get(
+        "commit_message_header_only", False
+    )
+    if commit_message_header_only:
+        print(
+            f"ERROR: Branch '{branch_name}' merge queue is configured to "
+            f"use only commit message header (no body).  The merge queue "
+            f"must include the PR title and description in the commit "
+            f"message for evidence audit trail."
         )
         sys.exit(1)
 
     print(
         f"Branch '{branch_name}' merge queue protection verified: "
-        f"merge queue enabled, max group size = {max_group_size or 1}."
+        f"merge commits enabled, PR title and description included in "
+        f"commit message."
     )

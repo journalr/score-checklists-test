@@ -26,6 +26,7 @@ from __future__ import annotations
 
 
 from helpers import (
+    build_evidence_block,
     check_merge_queue_protection,
     find_existing_checklist_comments,
     get_changed_files,
@@ -35,14 +36,51 @@ from helpers import (
     make_checklist_comment_body,
     match_checklists,
     set_commit_status,
+    update_pr_description_with_evidence,
 )
+
+
+def _collect_acknowledgement_details(
+    pr, existing_comments: dict, relevant_ids: list[str]
+) -> dict[str, list[dict[str, str]]]:
+    """Collect detailed acknowledgement information from review comments."""
+    from datetime import datetime, timezone
+    from helpers import OK_KEYWORD
+
+    details: dict[str, list[dict[str, str]]] = {
+        cid: [] for cid in relevant_ids
+    }
+
+    cl_comment_ids: dict[int, str] = {}
+    for cid, comment in existing_comments.items():
+        if cid in relevant_ids:
+            cl_comment_ids[comment.id] = cid
+
+    for comment in pr.get_review_comments():
+        reply_to = getattr(comment, "in_reply_to_id", None)
+        if reply_to is None or reply_to not in cl_comment_ids:
+            continue
+
+        cid = cl_comment_ids[reply_to]
+        body = (comment.body or "").strip()
+        user = comment.user.login
+
+        if body.upper() == OK_KEYWORD:
+            details[cid].append(
+                {
+                    "reviewer": user,
+                    "acknowledged_at": comment.created_at.isoformat(),
+                }
+            )
+
+    return details
 
 
 def main() -> None:
     gh = get_github_client()
     repo, pr = get_repo_and_pr(gh)
 
-    # Verify the target branch enforces a merge queue with max group size 1.
+    # Verify the target branch enforces a merge queue with proper settings.
     check_merge_queue_protection(repo, pr.base.ref)
 
     checklists = load_checklists()
@@ -91,6 +129,13 @@ def main() -> None:
                 ],
             )
             print(f"Created checklist finding for '{cl['id']}'")
+
+    # Collect current acknowledgements and update evidence in PR description
+    relevant_ids = [cl["id"] for cl in relevant if cl["id"] in existing]
+    if relevant_ids:
+        ack_details = _collect_acknowledgement_details(pr, existing, relevant_ids)
+        evidence_block = build_evidence_block(relevant, ack_details)
+        update_pr_description_with_evidence(pr, evidence_block)
 
     # Set a pending check — actual pass/fail is determined by check_acknowledgements.
     set_commit_status(

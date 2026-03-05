@@ -52,7 +52,10 @@ py_library(
     name = "merge_evidence_commit_lib",
     srcs = ["merge_evidence_commit.py"],
     imports = ["."],
-    deps = [":helpers"],
+    deps = [
+        ":helpers",
+        requirement("requests"),
+    ],
 )
 
 py_binary(
@@ -84,7 +87,10 @@ py_binary(
     srcs = ["merge_evidence_commit.py"],
     main = "merge_evidence_commit.py",
     visibility = ["//visibility:public"],
-    deps = [":helpers"],
+    deps = [
+        ":helpers",
+        requirement("requests"),
+    ],
 )
 
 py_test(
@@ -134,5 +140,6 @@ py_test(
     deps = [
         ":merge_evidence_commit_lib",
         requirement("pytest"),
+        requirement("requests"),
     ],
 )

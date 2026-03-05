@@ -12,21 +12,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-"""Create an empty evidence commit recording checklist acknowledgements.
+"""Verify that evidence in PR description matches current acknowledgements.
 
-This script creates an additional empty commit (same tree as HEAD) on
-the given branch.  The commit message records:
-- Each relevant checklist and its content
-- Which reviewers acknowledged each checklist
-- Timestamps of acknowledgements
+This script runs during merge queue validation. It:
 
-This provides an auditable trail of the review-checklist process.
+1. Collects current acknowledgements from threaded checklist comments
+2. Extracts the evidence block from the PR description
+3. Verifies that the evidence block in the description matches the current
+   acknowledgement state
+4. If verification passes, sets commit status to success, allowing the merge
+5. If verification fails, sets commit status to failure, blocking the merge
 
-When invoked with ``--strict``, the script first verifies that every
-approving reviewer has acknowledged every relevant checklist.  If not,
-it exits with a non-zero status **without** creating the evidence commit.
-This allows the merge queue to atomically verify and record evidence in
-a single step — if verification fails the merge is blocked.
+The evidence block in the PR description is the single source of truth
+during merge queue evaluation.
 """
 
 from __future__ import annotations
@@ -49,26 +47,19 @@ from helpers import (
     set_commit_status,
 )
 
+# Marker to identify the evidence block in PR description
+EVIDENCE_BLOCK_START = "<!-- review-checklist-evidence:start -->"
+EVIDENCE_BLOCK_END = "<!-- review-checklist-evidence:end -->"
+
 
 def _collect_acknowledgement_details(
     pr: Any, existing_comments: dict[str, Any], relevant_ids: list[str]
 ) -> dict[str, list[dict[str, str]]]:
-    """Collect detailed acknowledgement information.
-
-    Returns a mapping of checklist_id → list of dicts with keys:
-        - reviewer: username
-        - acknowledged_at: ISO timestamp
-
-    Checklist findings are posted as file-level PR review comments; OK
-    replies are threaded review comment replies whose body equals the
-    OK keyword.  The conversation thread associates the reply with the
-    checklist.
-    """
+    """Collect detailed acknowledgement information from review comments."""
     details: dict[str, list[dict[str, str]]] = {
         cid: [] for cid in relevant_ids
     }
 
-    # Build a mapping of checklist comment id → checklist id.
     cl_comment_ids: dict[int, str] = {}
     for cid, comment in existing_comments.items():
         if cid in relevant_ids:
@@ -79,7 +70,7 @@ def _collect_acknowledgement_details(
         if reply_to is None or reply_to not in cl_comment_ids:
             continue
 
-        cid = cl_comment_ids[reply_to]  # type: ignore[index]
+        cid = cl_comment_ids[reply_to]
         body = (comment.body or "").strip()
         user = comment.user.login
 
@@ -99,10 +90,7 @@ def _verify_all_acknowledged(
     approvers: list[str],
     relevant_ids: list[str],
 ) -> dict[str, list[str]]:
-    """Return a dict of checklist_id → list of approvers who have NOT acknowledged.
-
-    An empty dict means all approvers acknowledged all checklists.
-    """
+    """Return dict of checklist_id → list of approvers who have NOT acknowledged."""
     acked_users: dict[str, set[str]] = {
         cid: {a["reviewer"] for a in ack_details.get(cid, [])}
         for cid in relevant_ids
@@ -115,57 +103,79 @@ def _verify_all_acknowledged(
     return missing
 
 
-def _build_evidence_message(
-    pr: Any,
-    relevant: list[dict],
-    ack_details: dict[str, list[dict[str, str]]],
-) -> str:
-    """Build the evidence commit message."""
-    lines = [
-        f"chore: review-checklist evidence for PR #{pr.number}",
-        "",
-        f"PR: {pr.title}",
-        f"PR URL: {pr.html_url}",
-        f"Merged at: {datetime.now(timezone.utc).isoformat()}",
-        "",
-        "=" * 60,
-        "REVIEW CHECKLIST EVIDENCE",
-        "=" * 60,
-        "",
-    ]
-
-    for cl in relevant:
-        cid = cl["id"]
-        lines.append(f"## {cl['name']} ({cid})")
-        lines.append(f"Paths: {', '.join(cl['paths'])}")
-        lines.append("")
-        lines.append("Checklist:")
-        for checklist_line in cl["checklist"].strip().splitlines():
-            lines.append(f"  {checklist_line}")
-        lines.append("")
-
-        acks = ack_details.get(cid, [])
-        if acks:
-            lines.append("Acknowledged by:")
-            for ack in acks:
-                lines.append(
-                    f"  - {ack['reviewer']} at {ack['acknowledged_at']}"
-                )
-        else:
-            lines.append("Acknowledged by: (none)")
-        lines.append("")
-        lines.append("-" * 40)
-        lines.append("")
-
-    return "\n".join(lines)
+def _extract_evidence_block(description: str) -> str | None:
+    """Extract the evidence block from PR description, or None if not present."""
+    if EVIDENCE_BLOCK_START not in description:
+        return None
+    try:
+        start = description.index(EVIDENCE_BLOCK_START)
+        end = description.index(EVIDENCE_BLOCK_END)
+        return description[start : end + len(EVIDENCE_BLOCK_END)]
+    except ValueError:
+        return None
 
 
-def main(strict: bool = False, branch: str | None = None) -> None:
+def _extract_acks_from_evidence(evidence_block: str) -> dict[str, set[str]]:
+    """Extract acknowledged reviewers from the evidence block text.
+
+    Parses the evidence block to find lines like:
+    "- reviewer_name at timestamp"
+
+    Returns dict of checklist_id → set of reviewer names.
+    """
+    result: dict[str, set[str]] = {}
+    current_cid = None
+
+    for line in evidence_block.split("\n"):
+        # Detect checklist section: "### Checklist Name (`cid`)"
+        if line.startswith("### "):
+            # Extract checklist ID from backticks
+            if "`" in line:
+                start = line.index("`") + 1
+                end = line.index("`", start)
+                current_cid = line[start:end]
+                result[current_cid] = set()
+            continue
+
+        # Extract acknowledgement lines: "- reviewer_name at timestamp"
+        if current_cid and line.startswith("- "):
+            # Format: "- reviewer_name at timestamp"
+            parts = line[2:].split(" at ")
+            if len(parts) >= 1:
+                reviewer = parts[0].strip()
+                result[current_cid].add(reviewer)
+
+    return result
+
+
+def _evidence_matches_current(
+    evidence_block: str,
+    current_acks: dict[str, list[dict[str, str]]],
+    relevant_ids: list[str],
+) -> bool:
+    """Check if evidence block matches current acknowledgement state."""
+    stored_acks = _extract_acks_from_evidence(evidence_block)
+
+    # Convert current_acks to the same format for comparison
+    current_acks_sets: dict[str, set[str]] = {
+        cid: {ack["reviewer"] for ack in current_acks.get(cid, [])}
+        for cid in relevant_ids
+    }
+
+    # Evidence matches if every relevant checklist has the same acknowledged reviewers
+    for cid in relevant_ids:
+        stored = stored_acks.get(cid, set())
+        current = current_acks_sets.get(cid, set())
+        if stored != current:
+            return False
+
+    return True
+
+
+def main(strict: bool = False) -> None:
     gh = get_github_client()
     repo, pr = get_repo_and_pr(gh)
 
-    # Use explicit HEAD_SHA from environment (e.g. merge_group.head_sha)
-    # if provided, otherwise fall back to the PR head SHA.
     status_sha = os.environ.get("HEAD_SHA") or pr.head.sha
     print(f"Commit status SHA: {status_sha}")
 
@@ -174,14 +184,18 @@ def main(strict: bool = False, branch: str | None = None) -> None:
     relevant = match_checklists(checklists, changed_files)
 
     if not relevant:
-        print("No relevant checklists — skipping evidence commit.")
+        print("No relevant checklists — no evidence verification needed.")
+        set_commit_status(
+            repo, status_sha, "success",
+            "No checklists applicable",
+        )
         return
 
     existing = find_existing_checklist_comments(pr)
     relevant_ids = [cl["id"] for cl in relevant if cl["id"] in existing]
 
     if not relevant_ids:
-        print("No checklist review findings found — skipping evidence commit.")
+        print("No checklist review findings found.")
         if strict:
             set_commit_status(
                 repo, status_sha, "failure",
@@ -190,13 +204,28 @@ def main(strict: bool = False, branch: str | None = None) -> None:
             sys.exit(1)
         return
 
+    # Extract evidence block from PR description
+    pr_description = pr.body or ""
+    evidence_block = _extract_evidence_block(pr_description)
+
+    if not evidence_block:
+        print("No evidence block found in PR description.")
+        if strict:
+            set_commit_status(
+                repo, status_sha, "failure",
+                "Evidence block not found in PR description",
+            )
+            sys.exit(1)
+        return
+
+    # Collect current acknowledgements
     ack_details = _collect_acknowledgement_details(pr, existing, relevant_ids)
 
-    # When strict, verify all approvers acknowledged before creating evidence.
+    # When strict, verify all approvers acknowledged
     if strict:
         approvers = get_approving_reviewers(pr)
         if not approvers:
-            print("ERROR: No approving reviewers — cannot create evidence.")
+            print("ERROR: No approving reviewers.")
             set_commit_status(
                 repo, status_sha, "failure",
                 "No approving reviewers",
@@ -209,67 +238,41 @@ def main(strict: bool = False, branch: str | None = None) -> None:
             for cid, users in missing.items():
                 print(f"ERROR: {cid}: awaiting {', '.join(users)}")
                 parts.append(f"{cid}: awaiting {', '.join(users)}")
-            print(
-                "Acknowledgement verification failed "
-                "— aborting evidence commit."
-            )
+            print("Not all approvers have acknowledged all checklists.")
             set_commit_status(
                 repo, status_sha, "failure",
                 "; ".join(parts),
             )
             sys.exit(1)
 
-        print("All acknowledgements verified ✅")
+        print("All approvers acknowledged all checklists ✅")
 
-    message = _build_evidence_message(pr, relevant, ack_details)
-
-    # Determine which branch to commit on.
-    target_ref = branch if branch else f"heads/{pr.base.ref}"
-
-    try:
-        ref = repo.get_git_ref(target_ref)
-        head_sha = ref.object.sha
-        head_commit = repo.get_git_commit(head_sha)
-
-        # Create an empty commit: same tree, parent = current HEAD.
-        new_commit = repo.create_git_commit(
-            message=message,
-            tree=head_commit.tree,
-            parents=[head_commit],
+    # Verify evidence block matches current state
+    if _evidence_matches_current(evidence_block, ack_details, relevant_ids):
+        print("Evidence block matches current acknowledgements ✅")
+        set_commit_status(
+            repo, status_sha, "success",
+            "All checklists verified — evidence valid",
         )
-
-        # Update the branch ref to point to the new commit.
-        ref.edit(sha=new_commit.sha)
-    except Exception as exc:
-        print(f"ERROR: Evidence commit creation failed: {exc}")
+    else:
+        print("ERROR: Evidence block does not match current acknowledgements.")
+        print("The PR description has been modified or acknowledgements changed.")
         set_commit_status(
             repo, status_sha, "failure",
-            "Evidence commit creation failed",
+            "Evidence in PR description is stale",
         )
         sys.exit(1)
-
-    print(f"Created evidence commit {new_commit.sha} on {target_ref}")
-    print(f"Commit message:\n{message}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Create evidence commit recording checklist acknowledgements."
+        description="Verify evidence in PR description matches current state."
     )
     parser.add_argument(
         "--strict",
         action="store_true",
         default=False,
-        help="Verify all acknowledgements before creating the evidence commit. "
-             "Exit non-zero if incomplete.",
-    )
-    parser.add_argument(
-        "--branch",
-        default=None,
-        help="Git ref to commit on (e.g. 'heads/main' or "
-             "'heads/gh-readonly-queue/main/pr-42-abc123'). "
-             "Defaults to heads/{pr.base.ref}.",
+        help="Also verify all approvers have acknowledged. Exit non-zero if incomplete.",
     )
     args = parser.parse_args()
-    main(strict=args.strict, branch=args.branch)
-
+    main(strict=args.strict)
