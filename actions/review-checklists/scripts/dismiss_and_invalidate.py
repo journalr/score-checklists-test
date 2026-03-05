@@ -18,13 +18,15 @@ This script handles two scenarios:
 
 1. **New push (synchronize)**: When new commits are pushed to the PR, we
    determine which checklist paths are affected by the *new* changes.  For
-   each affected checklist, all existing OK replies are deleted and the
-   commit status is set back to pending.  Approvals are **not** dismissed
-   here — branch rulesets handle dismissing stale reviews on new pushes.
+   each affected checklist, all existing OK replies are deleted so that
+   the next check_acknowledgements run will require re-acknowledgement.
+   Approvals are **not** dismissed here — branch rulesets handle dismissing
+   stale reviews on new pushes.
 
 2. **OK modified or deleted**: When a reviewer edits or deletes their OK
-   comment, the commit status is set back to pending so the checklist
-   must be re-acknowledged.  The reviewer's approval is **not** dismissed.
+   comment, the retraction is logged.  The next check_acknowledgements run
+   will require the checklist to be re-acknowledged.  The reviewer's
+   approval is **not** dismissed.
 
 The script is invoked with a ``--trigger`` argument:
 
@@ -47,7 +49,6 @@ from helpers import (
     get_repo_and_pr,
     load_checklists,
     match_checklists,
-    set_commit_status,
 )
 
 
@@ -100,7 +101,8 @@ def handle_synchronize(pr: Any) -> None:
     """Handle new commits pushed to the PR.
 
     For each checklist whose covered paths were touched by the new push,
-    delete all OK replies and set the commit status back to pending.
+    delete all OK replies so that the next check_acknowledgements run
+    will require re-acknowledgement.
     Approvals are not dismissed — branch rulesets handle that.
     """
     checklists = load_checklists()
@@ -138,22 +140,18 @@ def handle_synchronize(pr: Any) -> None:
                 )
 
     if any_invalidated:
-        repo_name = os.environ["GITHUB_REPOSITORY"]
-        gh = get_github_client()
-        repo = gh.get_repo(repo_name)
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "pending",
-            "Checklist acknowledgements invalidated due to new changes",
+        print(
+            "Checklist acknowledgements invalidated due to new changes. "
+            "The check_acknowledgements workflow will enforce re-acknowledgement."
         )
 
 
 def handle_comment_changed(pr: Any) -> None:
     """Handle an OK comment being edited or deleted.
 
-    When a reviewer modifies or removes their OK, set the commit status
-    back to pending.  The reviewer's approval is preserved.
+    When a reviewer modifies or removes their OK, the retraction is logged.
+    The next check_acknowledgements run will require the checklist to be
+    re-acknowledged.  The reviewer's approval is preserved.
     """
     event_path = os.environ.get("GITHUB_EVENT_PATH", "")
     if not event_path:
@@ -188,17 +186,8 @@ def handle_comment_changed(pr: Any) -> None:
     if was_ok:
         print(
             f"Checklist OK retracted by {comment_user} "
-            f"(approval preserved)"
-        )
-
-        repo_name = os.environ["GITHUB_REPOSITORY"]
-        gh = get_github_client()
-        repo = gh.get_repo(repo_name)
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "pending",
-            f"Checklist OK retracted by {comment_user}",
+            f"(approval preserved). "
+            f"The check_acknowledgements workflow will enforce re-acknowledgement."
         )
 
 
