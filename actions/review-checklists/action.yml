@@ -21,34 +21,26 @@ inputs:
   action:
     description: >
       Which action to run.  One of:
-        post            – Post/update checklist comments
+        post            – Post/update checklist comments and evidence
         check           – Verify acknowledgements and set status
         check_strict    – Verify acknowledgements; fail if incomplete
         dismiss_sync    – Invalidate OKs after new push
         dismiss_edit    – Dismiss approval after OK edit/delete
-        evidence        – Create merge evidence commit
-        evidence_strict – Verify acknowledgements then create evidence; fail if incomplete
+        evidence_strict – Verify evidence in PR description matches current state; fail if stale
     required: true
   github-token:
     description: "GitHub token with repo permissions"
     required: true
   pr-number:
-    description: "Pull request number"
-    required: true
+    description: "Pull request number (not required for evidence_commit)"
+    required: false
+    default: ""
   before-sha:
     description: "SHA before the push (for synchronize events)"
     required: false
     default: ""
   after-sha:
     description: "SHA after the push (for synchronize events)"
-    required: false
-    default: ""
-  branch:
-    description: >
-      Git ref to commit evidence on (e.g. 'heads/main' or
-      'heads/gh-readonly-queue/main/pr-42-abc123').
-      Only used by the evidence and evidence_strict actions.
-      Defaults to heads/{pr.base.ref} when empty.
     required: false
     default: ""
   head-sha:
@@ -110,33 +102,12 @@ runs:
         GITHUB_EVENT_PATH: ${{ github.event_path }}
       run: bazel run //actions/review-checklists/scripts:dismiss_and_invalidate -- --trigger comment_changed
 
-    - name: Run merge_evidence_commit
-      if: inputs.action == 'evidence'
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        PR_NUMBER: ${{ inputs.pr-number }}
-        EVIDENCE_BRANCH: ${{ inputs.branch }}
-      run: |
-        ARGS=""
-        if [ -n "$EVIDENCE_BRANCH" ]; then
-          ARGS="-- --branch $EVIDENCE_BRANCH"
-        fi
-        bazel run //actions/review-checklists/scripts:merge_evidence_commit $ARGS
-
-    - name: Run merge_evidence_commit (strict)
+    - name: Verify evidence in PR description (strict)
       if: inputs.action == 'evidence_strict'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
-        EVIDENCE_BRANCH: ${{ inputs.branch }}
         HEAD_SHA: ${{ inputs.head-sha }}
-      run: |
-        ARGS="-- --strict"
-        if [ -n "$EVIDENCE_BRANCH" ]; then
-          ARGS="$ARGS --branch $EVIDENCE_BRANCH"
-        fi
-        bazel run //actions/review-checklists/scripts:merge_evidence_commit $ARGS
+      run: bazel run //actions/review-checklists/scripts:merge_evidence_commit -- --strict
