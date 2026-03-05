@@ -14,25 +14,23 @@
 name: "Review Checklists"
 description: >
   Manages review checklists on pull requests.  Posts checklist comments,
-  tracks reviewer acknowledgements, dismisses stale approvals, and records
-  evidence on merge.
+  tracks reviewer acknowledgements, dismisses stale approvals, and
+  maintains evidence in the PR description.
 
 inputs:
   action:
     description: >
       Which action to run.  One of:
         post            – Post/update checklist comments and evidence
-        check           – Verify acknowledgements and set status
-        check_strict    – Verify acknowledgements; fail if incomplete
+        check           – Verify acknowledgements; fail if incomplete
         dismiss_sync    – Invalidate OKs after new push
         dismiss_edit    – Dismiss approval after OK edit/delete
-        evidence_strict – Verify evidence in PR description matches current state; fail if stale
     required: true
   github-token:
     description: "GitHub token with repo permissions"
     required: true
   pr-number:
-    description: "Pull request number (not required for evidence_commit)"
+    description: "Pull request number"
     required: false
     default: ""
   before-sha:
@@ -41,13 +39,6 @@ inputs:
     default: ""
   after-sha:
     description: "SHA after the push (for synchronize events)"
-    required: false
-    default: ""
-  head-sha:
-    description: >
-      The commit SHA to set the commit status on.  When running inside a
-      merge_group event this should be github.event.merge_group.head_sha.
-      If empty, falls back to the PR head SHA.
     required: false
     default: ""
 
@@ -72,14 +63,6 @@ runs:
         PR_NUMBER: ${{ inputs.pr-number }}
       run: bazel run //actions/review-checklists/scripts:check_acknowledgements
 
-    - name: Run check_acknowledgements (strict)
-      if: inputs.action == 'check_strict'
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        PR_NUMBER: ${{ inputs.pr-number }}
-      run: bazel run //actions/review-checklists/scripts:check_acknowledgements -- --strict
 
     - name: Run dismiss_and_invalidate (synchronize)
       if: inputs.action == 'dismiss_sync'
@@ -102,12 +85,3 @@ runs:
         GITHUB_EVENT_PATH: ${{ github.event_path }}
       run: bazel run //actions/review-checklists/scripts:dismiss_and_invalidate -- --trigger comment_changed
 
-    - name: Verify evidence in PR description (strict)
-      if: inputs.action == 'evidence_strict'
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        PR_NUMBER: ${{ inputs.pr-number }}
-        HEAD_SHA: ${{ inputs.head-sha }}
-      run: bazel run //actions/review-checklists/scripts:merge_evidence_commit -- --strict

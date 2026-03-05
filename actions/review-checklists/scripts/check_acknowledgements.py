@@ -13,7 +13,8 @@
 # *******************************************************************************
 
 """Verify that all relevant checklists have been acknowledged by every approving
-reviewer, and set the commit status accordingly.
+reviewer.  Exits with a non-zero status when acknowledgements are incomplete,
+causing the calling workflow to fail.
 
 An acknowledgement is a reply in the threaded conversation of a checklist
 review comment (finding) that contains the ``OK`` keyword.  This script:
@@ -22,14 +23,12 @@ review comment (finding) that contains the ``OK`` keyword.  This script:
 2. For each checklist, finds the bot-posted review comment and its OK replies.
 3. Builds a mapping: checklist-id → set of reviewers who said OK.
 4. Compares against the set of approving reviewers.
-5. Sets commit status to *success* only when every approving reviewer has
-   acknowledged every relevant checklist.  Otherwise sets *pending* or
-   *failure*.
+5. Exits successfully only when every approving reviewer has acknowledged
+   every relevant checklist.  Otherwise exits with code 1.
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
@@ -45,7 +44,6 @@ from helpers import (
     get_repo_and_pr,
     load_checklists,
     match_checklists,
-    set_commit_status,
     update_pr_description_with_evidence,
 )
 
@@ -117,34 +115,25 @@ def _collect_acknowledgement_details(
     return details
 
 
-def main(strict: bool = False) -> None:
+def main() -> None:
     gh = get_github_client()
-    repo, pr = get_repo_and_pr(gh)
+    _, pr = get_repo_and_pr(gh)
 
     checklists = load_checklists()
     changed_files = get_changed_files(pr)
     relevant = match_checklists(checklists, changed_files)
 
     if not relevant:
-        set_commit_status(
-            repo, pr.head.sha, "success", "No checklists applicable"
-        )
+        print("No checklists applicable.")
         return
 
     existing = find_existing_checklist_comments(pr)
     relevant_ids = [cl["id"] for cl in relevant if cl["id"] in existing]
 
     if not relevant_ids:
-        # Checklists haven't been posted yet — keep pending.
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "pending",
-            "Checklist comments not yet posted",
-        )
-        if strict:
-            sys.exit(1)
-        return
+        # Checklists haven't been posted yet.
+        print("ERROR: Checklist comments not yet posted.")
+        sys.exit(1)
 
     acks = _collect_ok_acknowledgements(pr, existing, relevant_ids)
 
@@ -156,16 +145,8 @@ def main(strict: bool = False) -> None:
     approvers = get_approving_reviewers(pr)
 
     if not approvers:
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "pending",
-            "Awaiting at least one approving review",
-        )
-        print("No approving reviewers yet.")
-        if strict:
-            sys.exit(1)
-        return
+        print("ERROR: No approving reviewers yet.")
+        sys.exit(1)
 
     # Check: every approver must have acknowledged every relevant checklist.
     missing: dict[str, list[str]] = {}
@@ -179,23 +160,10 @@ def main(strict: bool = False) -> None:
         for cid, users in missing.items():
             summary_parts.append(f"{cid}: awaiting {', '.join(users)}")
         summary = "; ".join(summary_parts)
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "pending",
-            summary,
-        )
-        print(f"Missing acknowledgements: {summary}")
-        if strict:
-            sys.exit(1)
+        print(f"ERROR: Missing acknowledgements: {summary}")
+        sys.exit(1)
     else:
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "success",
-            "All checklists acknowledged by all approving reviewers",
-        )
-        print("All checklists acknowledged ✅")
+        print("All checklists acknowledged by all approving reviewers ✅")
 
     # Write acknowledgement data for downstream use (merge evidence).
     ack_data = {
@@ -208,15 +176,5 @@ def main(strict: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Check review-checklist acknowledgements."
-    )
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        default=False,
-        help="Exit with non-zero status if acknowledgements are incomplete.",
-    )
-    args = parser.parse_args()
-    main(strict=args.strict)
+    main()
 

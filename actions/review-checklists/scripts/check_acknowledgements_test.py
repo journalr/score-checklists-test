@@ -162,15 +162,14 @@ class TestCollectOkAcknowledgements:
 
 
 class TestCheckAcknowledgementsMain:
-    @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.load_checklists",
         return_value=SAMPLE_CHECKLISTS,
     )
     @patch("check_acknowledgements.get_repo_and_pr")
     @patch("check_acknowledgements.get_github_client")
-    def test_no_relevant_checklists_sets_success(
-        self, mock_gh, mock_repo_pr, mock_load, mock_status
+    def test_no_relevant_checklists_succeeds(
+        self, mock_gh, mock_repo_pr, mock_load
     ):
         repo = MagicMock()
         pr = MagicMock()
@@ -178,13 +177,9 @@ class TestCheckAcknowledgementsMain:
         pr.get_files.return_value = [_make_file("unrelated.txt")]
         mock_repo_pr.return_value = (repo, pr)
 
+        # Should not raise.
         main()
 
-        mock_status.assert_called_once_with(
-            repo, "abc", "success", "No checklists applicable"
-        )
-
-    @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.find_existing_checklist_comments",
         return_value={},
@@ -195,299 +190,8 @@ class TestCheckAcknowledgementsMain:
     )
     @patch("check_acknowledgements.get_repo_and_pr")
     @patch("check_acknowledgements.get_github_client")
-    def test_no_existing_comments_sets_pending(
-        self, mock_gh, mock_repo_pr, mock_load, mock_existing, mock_status
-    ):
-        repo = MagicMock()
-        pr = MagicMock()
-        pr.head.sha = "abc"
-        pr.get_files.return_value = [_make_file("src/api/foo.py")]
-        mock_repo_pr.return_value = (repo, pr)
-
-        main()
-
-        mock_status.assert_called_once_with(
-            repo, "abc", "pending", "Checklist comments not yet posted"
-        )
-
-    @patch("check_acknowledgements.set_commit_status")
-    @patch("check_acknowledgements.get_approving_reviewers", return_value=[])
-    @patch(
-        "check_acknowledgements.load_checklists",
-        return_value=SAMPLE_CHECKLISTS,
-    )
-    @patch("check_acknowledgements.get_repo_and_pr")
-    @patch("check_acknowledgements.get_github_client")
-    def test_no_approvers_sets_pending(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
-    ):
-        repo = MagicMock()
-        pr = MagicMock()
-        pr.head.sha = "abc"
-        pr.get_files.return_value = [_make_file("src/api/foo.py")]
-
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
-        pr.get_review_comments.return_value = []
-        mock_repo_pr.return_value = (repo, pr)
-
-        with patch(
-            "check_acknowledgements.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
-        ):
-            main()
-
-        mock_status.assert_called_with(
-            repo, "abc", "pending", "Awaiting at least one approving review"
-        )
-
-    @patch("check_acknowledgements.set_commit_status")
-    @patch(
-        "check_acknowledgements.get_approving_reviewers",
-        return_value=["alice"],
-    )
-    @patch(
-        "check_acknowledgements.load_checklists",
-        return_value=SAMPLE_CHECKLISTS,
-    )
-    @patch("check_acknowledgements.get_repo_and_pr")
-    @patch("check_acknowledgements.get_github_client")
-    def test_all_acked_sets_success(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status,
-        tmp_path,
-    ):
-        repo = MagicMock()
-        pr = MagicMock()
-        pr.head.sha = "abc"
-        pr.get_files.return_value = [_make_file("src/api/foo.py")]
-
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
-
-        ok_reply = _make_comment(
-            101,
-            "OK",
-            "alice",
-            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
-        )
-        ok_reply.in_reply_to_id = 100
-        pr.get_review_comments.return_value = [ok_reply]
-        mock_repo_pr.return_value = (repo, pr)
-
-        ack_path = str(tmp_path / "acks.json")
-
-        with patch(
-            "check_acknowledgements.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
-        ), patch.dict(os.environ, {"ACK_OUTPUT_PATH": ack_path}):
-            main()
-
-        # The last call should be success.
-        mock_status.assert_called_with(
-            repo,
-            "abc",
-            "success",
-            "All checklists acknowledged by all approving reviewers",
-        )
-        # Check that ack data was written.
-        with open(ack_path) as f:
-            data = json.load(f)
-        assert data["api-review"] == ["alice"]
-
-    @patch("check_acknowledgements.set_commit_status")
-    @patch(
-        "check_acknowledgements.get_approving_reviewers",
-        return_value=["alice", "bob"],
-    )
-    @patch(
-        "check_acknowledgements.load_checklists",
-        return_value=SAMPLE_CHECKLISTS,
-    )
-    @patch("check_acknowledgements.get_repo_and_pr")
-    @patch("check_acknowledgements.get_github_client")
-    def test_missing_ack_sets_pending(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status,
-        tmp_path,
-    ):
-        repo = MagicMock()
-        pr = MagicMock()
-        pr.head.sha = "abc"
-        pr.get_files.return_value = [_make_file("src/api/foo.py")]
-
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
-
-        # Only alice acked, bob did not.
-        ok_reply = _make_comment(
-            101,
-            "OK",
-            "alice",
-            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
-        )
-        ok_reply.in_reply_to_id = 100
-        pr.get_review_comments.return_value = [ok_reply]
-        mock_repo_pr.return_value = (repo, pr)
-
-        ack_path = str(tmp_path / "acks.json")
-
-        with patch(
-            "check_acknowledgements.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
-        ), patch.dict(os.environ, {"ACK_OUTPUT_PATH": ack_path}):
-            main()
-
-        mock_status.assert_called_with(
-            repo, "abc", "pending", "api-review: awaiting bob"
-        )
-
-
-# ---------------------------------------------------------------------------
-# main(strict=True)
-# ---------------------------------------------------------------------------
-
-
-class TestCheckAcknowledgementsStrict:
-    @patch("check_acknowledgements.set_commit_status")
-    @patch(
-        "check_acknowledgements.get_approving_reviewers",
-        return_value=["alice", "bob"],
-    )
-    @patch(
-        "check_acknowledgements.load_checklists",
-        return_value=SAMPLE_CHECKLISTS,
-    )
-    @patch("check_acknowledgements.get_repo_and_pr")
-    @patch("check_acknowledgements.get_github_client")
-    def test_strict_missing_ack_exits_nonzero(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status,
-        tmp_path,
-    ):
-        repo = MagicMock()
-        pr = MagicMock()
-        pr.head.sha = "abc"
-        pr.get_files.return_value = [_make_file("src/api/foo.py")]
-
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
-
-        # Only alice acked, bob did not.
-        ok_reply = _make_comment(
-            101,
-            "OK",
-            "alice",
-            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
-        )
-        ok_reply.in_reply_to_id = 100
-        pr.get_review_comments.return_value = [ok_reply]
-        mock_repo_pr.return_value = (repo, pr)
-
-        ack_path = str(tmp_path / "acks.json")
-
-        with patch(
-            "check_acknowledgements.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
-        ), patch.dict(os.environ, {"ACK_OUTPUT_PATH": ack_path}):
-            with pytest.raises(SystemExit) as exc_info:
-                main(strict=True)
-            assert exc_info.value.code == 1
-
-    @patch("check_acknowledgements.set_commit_status")
-    @patch("check_acknowledgements.get_approving_reviewers", return_value=[])
-    @patch(
-        "check_acknowledgements.load_checklists",
-        return_value=SAMPLE_CHECKLISTS,
-    )
-    @patch("check_acknowledgements.get_repo_and_pr")
-    @patch("check_acknowledgements.get_github_client")
-    def test_strict_no_approvers_exits_nonzero(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
-    ):
-        repo = MagicMock()
-        pr = MagicMock()
-        pr.head.sha = "abc"
-        pr.get_files.return_value = [_make_file("src/api/foo.py")]
-
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
-        pr.get_review_comments.return_value = []
-        mock_repo_pr.return_value = (repo, pr)
-
-        with patch(
-            "check_acknowledgements.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
-        ):
-            with pytest.raises(SystemExit) as exc_info:
-                main(strict=True)
-            assert exc_info.value.code == 1
-
-    @patch("check_acknowledgements.set_commit_status")
-    @patch(
-        "check_acknowledgements.get_approving_reviewers",
-        return_value=["alice"],
-    )
-    @patch(
-        "check_acknowledgements.load_checklists",
-        return_value=SAMPLE_CHECKLISTS,
-    )
-    @patch("check_acknowledgements.get_repo_and_pr")
-    @patch("check_acknowledgements.get_github_client")
-    def test_strict_all_acked_succeeds(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status,
-        tmp_path,
-    ):
-        repo = MagicMock()
-        pr = MagicMock()
-        pr.head.sha = "abc"
-        pr.get_files.return_value = [_make_file("src/api/foo.py")]
-
-        cl_review = MagicMock()
-        cl_review.id = 100
-        cl_review.body = "<!-- review-checklist:api-review -->"
-
-        ok_reply = _make_comment(
-            101,
-            "OK",
-            "alice",
-            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
-        )
-        ok_reply.in_reply_to_id = 100
-        pr.get_review_comments.return_value = [ok_reply]
-        mock_repo_pr.return_value = (repo, pr)
-
-        ack_path = str(tmp_path / "acks.json")
-
-        with patch(
-            "check_acknowledgements.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
-        ), patch.dict(os.environ, {"ACK_OUTPUT_PATH": ack_path}):
-            # Should NOT raise SystemExit.
-            main(strict=True)
-
-        mock_status.assert_called_with(
-            repo,
-            "abc",
-            "success",
-            "All checklists acknowledged by all approving reviewers",
-        )
-
-    @patch("check_acknowledgements.set_commit_status")
-    @patch(
-        "check_acknowledgements.find_existing_checklist_comments",
-        return_value={},
-    )
-    @patch(
-        "check_acknowledgements.load_checklists",
-        return_value=SAMPLE_CHECKLISTS,
-    )
-    @patch("check_acknowledgements.get_repo_and_pr")
-    @patch("check_acknowledgements.get_github_client")
-    def test_strict_no_existing_comments_exits_nonzero(
-        self, mock_gh, mock_repo_pr, mock_load, mock_existing, mock_status
+    def test_no_existing_comments_exits_nonzero(
+        self, mock_gh, mock_repo_pr, mock_load, mock_existing
     ):
         repo = MagicMock()
         pr = MagicMock()
@@ -496,7 +200,127 @@ class TestCheckAcknowledgementsStrict:
         mock_repo_pr.return_value = (repo, pr)
 
         with pytest.raises(SystemExit) as exc_info:
-            main(strict=True)
+            main()
         assert exc_info.value.code == 1
+
+    @patch("check_acknowledgements.get_approving_reviewers", return_value=[])
+    @patch(
+        "check_acknowledgements.load_checklists",
+        return_value=SAMPLE_CHECKLISTS,
+    )
+    @patch("check_acknowledgements.get_repo_and_pr")
+    @patch("check_acknowledgements.get_github_client")
+    def test_no_approvers_exits_nonzero(
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.head.sha = "abc"
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_review = MagicMock()
+        cl_review.id = 100
+        cl_review.body = "<!-- review-checklist:api-review -->"
+        pr.get_review_comments.return_value = []
+        mock_repo_pr.return_value = (repo, pr)
+
+        with patch(
+            "check_acknowledgements.find_existing_checklist_comments",
+            return_value={"api-review": cl_review},
+        ):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
+
+    @patch(
+        "check_acknowledgements.get_approving_reviewers",
+        return_value=["alice"],
+    )
+    @patch(
+        "check_acknowledgements.load_checklists",
+        return_value=SAMPLE_CHECKLISTS,
+    )
+    @patch("check_acknowledgements.get_repo_and_pr")
+    @patch("check_acknowledgements.get_github_client")
+    def test_all_acked_succeeds(
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers,
+        tmp_path,
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.head.sha = "abc"
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_review = MagicMock()
+        cl_review.id = 100
+        cl_review.body = "<!-- review-checklist:api-review -->"
+
+        ok_reply = _make_comment(
+            101,
+            "OK",
+            "alice",
+            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
+        )
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
+        mock_repo_pr.return_value = (repo, pr)
+
+        ack_path = str(tmp_path / "acks.json")
+
+        with patch(
+            "check_acknowledgements.find_existing_checklist_comments",
+            return_value={"api-review": cl_review},
+        ), patch.dict(os.environ, {"ACK_OUTPUT_PATH": ack_path}):
+            # Should not raise.
+            main()
+
+        # Check that ack data was written.
+        with open(ack_path) as f:
+            data = json.load(f)
+        assert data["api-review"] == ["alice"]
+
+    @patch(
+        "check_acknowledgements.get_approving_reviewers",
+        return_value=["alice", "bob"],
+    )
+    @patch(
+        "check_acknowledgements.load_checklists",
+        return_value=SAMPLE_CHECKLISTS,
+    )
+    @patch("check_acknowledgements.get_repo_and_pr")
+    @patch("check_acknowledgements.get_github_client")
+    def test_missing_ack_exits_nonzero(
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers,
+        tmp_path,
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.head.sha = "abc"
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_review = MagicMock()
+        cl_review.id = 100
+        cl_review.body = "<!-- review-checklist:api-review -->"
+
+        # Only alice acked, bob did not.
+        ok_reply = _make_comment(
+            101,
+            "OK",
+            "alice",
+            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
+        )
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
+        mock_repo_pr.return_value = (repo, pr)
+
+        ack_path = str(tmp_path / "acks.json")
+
+        with patch(
+            "check_acknowledgements.find_existing_checklist_comments",
+            return_value={"api-review": cl_review},
+        ), patch.dict(os.environ, {"ACK_OUTPUT_PATH": ack_path}):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 1
 
 

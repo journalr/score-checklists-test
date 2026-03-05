@@ -27,7 +27,6 @@ from __future__ import annotations
 
 from helpers import (
     build_evidence_block,
-    check_merge_queue_protection,
     find_existing_checklist_comments,
     get_changed_files,
     get_github_client,
@@ -35,7 +34,6 @@ from helpers import (
     load_checklists,
     make_checklist_comment_body,
     match_checklists,
-    set_commit_status,
     update_pr_description_with_evidence,
 )
 
@@ -44,7 +42,6 @@ def _collect_acknowledgement_details(
     pr, existing_comments: dict, relevant_ids: list[str]
 ) -> dict[str, list[dict[str, str]]]:
     """Collect detailed acknowledgement information from review comments."""
-    from datetime import datetime, timezone
     from helpers import OK_KEYWORD
 
     details: dict[str, list[dict[str, str]]] = {
@@ -78,10 +75,7 @@ def _collect_acknowledgement_details(
 
 def main() -> None:
     gh = get_github_client()
-    repo, pr = get_repo_and_pr(gh)
-
-    # Verify the target branch enforces a merge queue with proper settings.
-    check_merge_queue_protection(repo, pr.base.ref)
+    _, pr = get_repo_and_pr(gh)
 
     checklists = load_checklists()
     changed_files = get_changed_files(pr)
@@ -89,12 +83,6 @@ def main() -> None:
 
     if not relevant:
         print("No checklists are relevant for this PR.")
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "success",
-            "No checklists applicable",
-        )
         return
 
     existing = find_existing_checklist_comments(pr)
@@ -137,13 +125,6 @@ def main() -> None:
         evidence_block = build_evidence_block(relevant, ack_details)
         update_pr_description_with_evidence(pr, evidence_block)
 
-    # Set a pending check — actual pass/fail is determined by check_acknowledgements.
-    set_commit_status(
-        repo,
-        pr.head.sha,
-        "pending",
-        f"{len(relevant)} checklist(s) require reviewer acknowledgement",
-    )
 
     print(f"Posted/updated {len(relevant)} checklist finding(s).")
 

@@ -132,10 +132,9 @@ class TestFindOkCommentsForChecklist:
 
 
 class TestHandleSynchronize:
-    @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
     @patch("dismiss_and_invalidate.load_checklists", return_value=SAMPLE_CHECKLISTS)
-    def test_no_affected_checklists(self, mock_load, mock_gh, mock_status, monkeypatch):
+    def test_no_affected_checklists(self, mock_load, mock_gh, monkeypatch):
         monkeypatch.delenv("BEFORE_SHA", raising=False)
         monkeypatch.delenv("AFTER_SHA", raising=False)
 
@@ -144,12 +143,10 @@ class TestHandleSynchronize:
 
         handle_synchronize(pr)
 
-        mock_status.assert_not_called()
 
-    @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
     @patch("dismiss_and_invalidate.load_checklists", return_value=SAMPLE_CHECKLISTS)
-    def test_deletes_ok_without_dismissing(self, mock_load, mock_gh, mock_status, monkeypatch):
+    def test_deletes_ok_without_dismissing(self, mock_load, mock_gh, monkeypatch):
         monkeypatch.delenv("BEFORE_SHA", raising=False)
         monkeypatch.delenv("AFTER_SHA", raising=False)
         monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
@@ -182,7 +179,6 @@ class TestHandleSynchronize:
 
         ok_reply.delete.assert_called_once()
         review.dismiss.assert_not_called()
-        mock_status.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -197,10 +193,9 @@ class TestHandleCommentChanged:
             handle_comment_changed(pr)
         assert "No event payload" in capsys.readouterr().out
 
-    @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
     def test_deleted_ok_sets_pending_without_dismissing(
-        self, mock_gh, mock_status, tmp_path, monkeypatch
+        self, mock_gh, tmp_path, monkeypatch
     ):
         monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
 
@@ -225,12 +220,10 @@ class TestHandleCommentChanged:
             handle_comment_changed(pr)
 
         review.dismiss.assert_not_called()
-        mock_status.assert_called_once()
 
-    @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
     def test_edited_ok_retraction_sets_pending_without_dismissing(
-        self, mock_gh, mock_status, tmp_path, monkeypatch
+        self, mock_gh, tmp_path, monkeypatch
     ):
         monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
 
@@ -258,12 +251,10 @@ class TestHandleCommentChanged:
             handle_comment_changed(pr)
 
         review.dismiss.assert_not_called()
-        mock_status.assert_called_once()
 
-    @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
     def test_edited_non_ok_does_not_dismiss(
-        self, mock_gh, mock_status, tmp_path, monkeypatch
+        self, mock_gh, tmp_path, monkeypatch
     ):
         monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
 
@@ -289,7 +280,6 @@ class TestHandleCommentChanged:
         ):
             handle_comment_changed(pr)
 
-        mock_status.assert_not_called()
 
     def test_deleted_non_ok_does_not_dismiss(self, tmp_path):
         event = {

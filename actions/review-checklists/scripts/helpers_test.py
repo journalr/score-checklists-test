@@ -25,7 +25,6 @@ import yaml
 from helpers import (
     CHECKLIST_MARKER,
     OK_KEYWORD,
-    check_merge_queue_protection,
     find_existing_checklist_comments,
     find_ok_replies,
     get_approving_reviewers,
@@ -35,7 +34,6 @@ from helpers import (
     load_checklists,
     make_checklist_comment_body,
     match_checklists,
-    set_commit_status,
 )
 
 
@@ -400,190 +398,6 @@ class TestGetApprovingReviewers:
         assert get_approving_reviewers(pr) == []
 
 
-# ---------------------------------------------------------------------------
-# set_commit_status
-# ---------------------------------------------------------------------------
-
-
-class TestSetCommitStatus:
-    def test_creates_status(self):
-        repo = MagicMock()
-        set_commit_status(repo, "abc123", "success", "All good")
-        commit = repo.get_commit.return_value
-        commit.create_status.assert_called_once_with(
-            state="success",
-            description="All good",
-            context="review-checklists",
-        )
-
-    def test_truncates_long_description(self):
-        repo = MagicMock()
-        long_desc = "x" * 200
-        set_commit_status(repo, "abc123", "pending", long_desc)
-        commit = repo.get_commit.return_value
-        call_kwargs = commit.create_status.call_args[1]
-        assert len(call_kwargs["description"]) == 140
-
-    def test_custom_context(self):
-        repo = MagicMock()
-        set_commit_status(
-            repo, "abc123", "success", "ok", context="my-context"
-        )
-        commit = repo.get_commit.return_value
-        call_kwargs = commit.create_status.call_args[1]
-        assert call_kwargs["context"] == "my-context"
-
-
-# ---------------------------------------------------------------------------
-# check_merge_queue_protection
-# ---------------------------------------------------------------------------
-
-
-class TestCheckMergeQueueProtection:
-    def test_passes_with_proper_merge_settings(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        rules = [
-            {
-                "type": "merge_queue",
-                "parameters": {
-                    "merge_method": "MERGE",
-                    "commit_message_header_only": False,
-                },
-            }
-        ]
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = rules
-
-        with patch("helpers.requests.get", return_value=mock_resp):
-            check_merge_queue_protection(repo, "main")
-
-    def test_fails_when_no_merge_queue_rule(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        rules = [{"type": "pull_request", "parameters": {}}]
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = rules
-
-        with patch("helpers.requests.get", return_value=mock_resp):
-            with pytest.raises(SystemExit) as exc_info:
-                check_merge_queue_protection(repo, "main")
-            assert exc_info.value.code == 1
-
-    def test_fails_when_merge_method_is_squash(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        rules = [
-            {
-                "type": "merge_queue",
-                "parameters": {
-                    "merge_method": "squash",
-                    "commit_message_header_only": False,
-                },
-            }
-        ]
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = rules
-
-        with patch("helpers.requests.get", return_value=mock_resp):
-            with pytest.raises(SystemExit) as exc_info:
-                check_merge_queue_protection(repo, "main")
-            assert exc_info.value.code == 1
-
-    def test_fails_when_merge_method_is_rebase(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        rules = [
-            {
-                "type": "merge_queue",
-                "parameters": {
-                    "merge_method": "rebase",
-                    "commit_message_header_only": False,
-                },
-            }
-        ]
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = rules
-
-        with patch("helpers.requests.get", return_value=mock_resp):
-            with pytest.raises(SystemExit) as exc_info:
-                check_merge_queue_protection(repo, "main")
-            assert exc_info.value.code == 1
-
-    def test_fails_when_commit_message_header_only_is_true(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        rules = [
-            {
-                "type": "merge_queue",
-                "parameters": {
-                    "merge_method": "merge",
-                    "commit_message_header_only": True,
-                },
-            }
-        ]
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = rules
-
-        with patch("helpers.requests.get", return_value=mock_resp):
-            with pytest.raises(SystemExit) as exc_info:
-                check_merge_queue_protection(repo, "main")
-            assert exc_info.value.code == 1
-
-    def test_fails_on_api_error(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "org/repo"
-
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-        mock_resp.text = "Not Found"
-
-        with patch("helpers.requests.get", return_value=mock_resp):
-            with pytest.raises(SystemExit) as exc_info:
-                check_merge_queue_protection(repo, "main")
-            assert exc_info.value.code == 1
-
-    def test_calls_correct_api_url(self, monkeypatch):
-        monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
-        repo = MagicMock()
-        repo.full_name = "myorg/myrepo"
-
-        rules = [
-            {
-                "type": "merge_queue",
-                "parameters": {
-                    "merge_method": "merge",
-                    "commit_message_header_only": False,
-                },
-            }
-        ]
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = rules
-
-        with patch("helpers.requests.get", return_value=mock_resp) as mock_get:
-            check_merge_queue_protection(repo, "develop")
-
-        mock_get.assert_called_once()
-        call_args = mock_get.call_args
-        assert "myorg/myrepo" in call_args[0][0]
-        assert "develop" in call_args[0][0]
 
 
 

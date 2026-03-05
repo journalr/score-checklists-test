@@ -41,13 +41,11 @@ SAMPLE_CHECKLISTS = [
 class TestPostChecklistsMain:
     """Integration-level tests for the main() entry point."""
 
-    @patch("post_checklists.check_merge_queue_protection")
-    @patch("post_checklists.set_commit_status")
     @patch("post_checklists.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("post_checklists.get_repo_and_pr")
     @patch("post_checklists.get_github_client")
-    def test_no_relevant_checklists_sets_success(
-        self, mock_gh, mock_repo_pr, mock_load, mock_status, mock_mq_check
+    def test_no_relevant_checklists_succeeds(
+        self, mock_gh, mock_repo_pr, mock_load
     ):
         repo = MagicMock()
         pr = MagicMock()
@@ -55,22 +53,15 @@ class TestPostChecklistsMain:
         pr.get_files.return_value = [_make_file("unrelated/file.txt")]
         mock_repo_pr.return_value = (repo, pr)
 
+        # Should not raise.
         main()
 
-        mock_mq_check.assert_called_once_with(repo, pr.base.ref)
-        mock_status.assert_called_once_with(
-            repo, "abc123", "success", "No checklists applicable"
-        )
-
-    @patch("post_checklists.check_merge_queue_protection")
-    @patch("post_checklists.set_commit_status")
     @patch("post_checklists.find_existing_checklist_comments", return_value={})
     @patch("post_checklists.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("post_checklists.get_repo_and_pr")
     @patch("post_checklists.get_github_client")
     def test_creates_new_review_with_inline_comment(
-        self, mock_gh, mock_repo_pr, mock_load, mock_existing, mock_status,
-        mock_mq_check
+        self, mock_gh, mock_repo_pr, mock_load, mock_existing
     ):
         repo = MagicMock()
         pr = MagicMock()
@@ -80,7 +71,6 @@ class TestPostChecklistsMain:
 
         main()
 
-        mock_mq_check.assert_called_once_with(repo, pr.base.ref)
         pr.create_review.assert_called_once()
         call_kwargs = pr.create_review.call_args[1]
         assert call_kwargs["event"] == "COMMENT"
@@ -89,20 +79,12 @@ class TestPostChecklistsMain:
         assert comments[0]["path"] == "src/api/handler.py"
         assert comments[0]["position"] == 1
         assert "api-review" in comments[0]["body"]
-        mock_status.assert_called_with(
-            repo,
-            "abc123",
-            "pending",
-            "1 checklist(s) require reviewer acknowledgement",
-        )
 
-    @patch("post_checklists.check_merge_queue_protection")
-    @patch("post_checklists.set_commit_status")
     @patch("post_checklists.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("post_checklists.get_repo_and_pr")
     @patch("post_checklists.get_github_client")
     def test_updates_existing_review_when_body_changed(
-        self, mock_gh, mock_repo_pr, mock_load, mock_status, mock_mq_check
+        self, mock_gh, mock_repo_pr, mock_load
     ):
         repo = MagicMock()
         pr = MagicMock()
@@ -121,13 +103,11 @@ class TestPostChecklistsMain:
 
         existing_review.edit.assert_called_once()
 
-    @patch("post_checklists.check_merge_queue_protection")
-    @patch("post_checklists.set_commit_status")
     @patch("post_checklists.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("post_checklists.get_repo_and_pr")
     @patch("post_checklists.get_github_client")
     def test_skips_update_when_body_unchanged(
-        self, mock_gh, mock_repo_pr, mock_load, mock_status, mock_mq_check
+        self, mock_gh, mock_repo_pr, mock_load
     ):
         repo = MagicMock()
         pr = MagicMock()
