@@ -36,6 +36,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4.2.2
 
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: review_checklists
+          repository-cache: true
+
       # Extract the PR number from the merge group head ref.
       # The ref format is: refs/heads/gh-readonly-queue/<base>/pr-<number>-<sha>
       - name: Extract PR number from merge group
@@ -58,5 +65,3 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-number: ${{ steps.pr-info.outputs.pr-number }}
           head-sha: ${{ github.event.merge_group.head_sha }}
-
-

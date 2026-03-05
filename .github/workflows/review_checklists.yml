@@ -47,6 +47,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4.2.2
 
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: review_checklists
+          repository-cache: true
+
       # Step 1: Post or update checklist findings.
       # Runs on PR open/reopen/sync, and also on review comment events so
       # that tampered or deleted checklist findings are restored.
