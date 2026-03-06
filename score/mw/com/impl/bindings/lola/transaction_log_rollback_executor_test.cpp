@@ -19,6 +19,7 @@
 #include "score/mw/com/impl/bindings/lola/runtime_mock.h"
 #include "score/mw/com/impl/bindings/lola/service_data_control.h"
 #include "score/mw/com/impl/bindings/lola/skeleton_event_properties.h"
+#include "score/mw/com/impl/bindings/lola/skeleton_instance_identifier.h"
 #include "score/mw/com/impl/bindings/lola/test/transaction_log_test_resources.h"
 #include "score/mw/com/impl/runtime.h"
 #include "score/mw/com/impl/runtime_mock.h"
@@ -48,6 +49,8 @@ const pid_t kDummyOldConsumerPid{17U};
 const pid_t kDummyCurrentConsumerPid{155U};
 const QualityType kDummyQualityType{QualityType::kASIL_QM};
 const ElementFqId kDummyElementFqId{1U, 2U, 3U, ServiceElementType::EVENT};
+const SkeletonInstanceIdentifier kSkeletonInstanceIdentifier{kDummyElementFqId.service_id_,
+                                                             kDummyElementFqId.instance_id_};
 
 constexpr std::size_t kNumberOfSlots{20U};
 constexpr std::size_t kMaxSubscribers{20U};
@@ -68,8 +71,11 @@ class TransactionLogRollbackExecutorFixture : public ::testing::Test
     TransactionLogRollbackExecutorFixture& WithTransactionLogRollbackExecutor()
     {
         service_data_control_ = std::make_unique<ServiceDataControl>(memory_resource_mock_);
-        unit_ = std::make_unique<TransactionLogRollbackExecutor>(
-            *service_data_control_, kDummyQualityType, kDummyProviderPid, kDummyTransactionLogId);
+        unit_ = std::make_unique<TransactionLogRollbackExecutor>(*service_data_control_,
+                                                                 kSkeletonInstanceIdentifier,
+                                                                 kDummyQualityType,
+                                                                 kDummyProviderPid,
+                                                                 kDummyTransactionLogId);
 
         AddEvent(kDummyElementFqId, kDummySkeletonEventProperties);
         return *this;
@@ -103,7 +109,7 @@ class TransactionLogRollbackExecutorFixture : public ::testing::Test
 
     void InsertServiceDataControl() noexcept
     {
-        auto rollback_mutex = rollback_synchronization_.GetMutex(service_data_control_.get());
+        auto rollback_mutex = rollback_synchronization_.GetMutex(kSkeletonInstanceIdentifier);
         // we expect that the mutex did not yet exist, but has been created by our call.
         ASSERT_FALSE(rollback_mutex.second);
     }
@@ -171,7 +177,7 @@ TEST_F(TransactionLogRollbackExecutorRollbackLogsFixture,
     std::ignore = unit_->RollbackTransactionLogs();
 
     // expect, that the synchronization mutex for service_data_control_ exists afterward
-    auto [mutex, mutex_existed] = rollback_synchronization_.GetMutex(service_data_control_.get());
+    auto [mutex, mutex_existed] = rollback_synchronization_.GetMutex(kSkeletonInstanceIdentifier);
     EXPECT_EQ(mutex_existed, true);
 }
 

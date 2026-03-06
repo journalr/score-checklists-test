@@ -203,7 +203,8 @@ ServiceDataControl& GetServiceDataControlProxySide(const memory::shared::Managed
 // throwing std::bad_optional_access which leds to std::terminate(). This suppression should be removed after fixing
 // [Ticket-173043](broken_link_j/Ticket-173043)
 // coverity[autosar_cpp14_a15_5_3_violation : FALSE]
-score::ResultBlank ExecutePartialRestartLogic(QualityType quality_type,
+score::ResultBlank ExecutePartialRestartLogic(const QualityType quality_type,
+                                            const SkeletonInstanceIdentifier skeleton_instance_identifier,
                                             const memory::shared::ManagedMemoryResource& control,
                                             const memory::shared::ManagedMemoryResource& data) noexcept
 {
@@ -215,8 +216,11 @@ score::ResultBlank ExecutePartialRestartLogic(QualityType quality_type,
     // 'applicationID' or the process UID as a fallback.
     const TransactionLogId transaction_log_id{static_cast<TransactionLogId>(lola_runtime.GetApplicationId())};
     auto& service_data_control = GetServiceDataControlProxySide(control);
-    TransactionLogRollbackExecutor transaction_log_rollback_executor{
-        service_data_control, quality_type, service_data_storage.skeleton_pid_, transaction_log_id};
+    TransactionLogRollbackExecutor transaction_log_rollback_executor{service_data_control,
+                                                                     skeleton_instance_identifier,
+                                                                     quality_type,
+                                                                     service_data_storage.skeleton_pid_,
+                                                                     transaction_log_id};
     const auto rollback_result = transaction_log_rollback_executor.RollbackTransactionLogs();
     if (!rollback_result.has_value())
     {
@@ -349,7 +353,10 @@ std::unique_ptr<Proxy> Proxy::Create(const HandleType handle) noexcept
     const auto& control_ref = *shared_memory.first.get();
     const auto& data_ref = *shared_memory.second.get();
 
-    const auto partial_restart_result = ExecutePartialRestartLogic(quality_type, control_ref, data_ref);
+    const SkeletonInstanceIdentifier skeleton_instance_identifier{lola_service_deployment.service_id_,
+                                                                  lola_service_instance_id.GetId()};
+    const auto partial_restart_result =
+        ExecutePartialRestartLogic(quality_type, skeleton_instance_identifier, control_ref, data_ref);
 
     if (!partial_restart_result.has_value())
     {
@@ -565,8 +572,7 @@ const EventMetaInfo& Proxy::GetEventMetaInfo(const ElementFqId element_fq_id) co
 // coverity[autosar_cpp14_a15_5_3_violation : FALSE]
 bool Proxy::IsEventProvided(const std::string_view event_name) const noexcept
 {
-    SCORE_LANGUAGE_FUTURECPP_PRECONDITION_PRD_MESSAGE(control_ != nullptr,
-                                 "ExecutePartialRestartLogic: Managed memory control pointer is Null");
+    SCORE_LANGUAGE_FUTURECPP_PRECONDITION_PRD_MESSAGE(control_ != nullptr, "IsEventProvided: Managed memory control pointer is Null");
     auto& service_data_control = GetServiceDataControlProxySide(*control_);
     const auto element_fq_id = event_name_to_element_fq_id_converter_.Convert(event_name);
     const auto event_entry = service_data_control.event_controls_.find(element_fq_id);

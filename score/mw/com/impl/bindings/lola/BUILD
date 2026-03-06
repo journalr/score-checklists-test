@@ -146,6 +146,7 @@ cc_library(
     tags = ["FFI"],
     visibility = ["//score/mw/com/impl:__subpackages__"],
     deps = [
+        ":skeleton_instance_identifier",
         "@score_baselibs//score/language/futurecpp",
     ],
 )

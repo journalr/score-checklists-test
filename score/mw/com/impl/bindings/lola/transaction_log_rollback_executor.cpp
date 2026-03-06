@@ -48,13 +48,15 @@ void MarkTransactionLogsNeedRollback(ServiceDataControl& service_data_control,
 }  // namespace
 
 TransactionLogRollbackExecutor::TransactionLogRollbackExecutor(ServiceDataControl& service_data_control,
+                                                               SkeletonInstanceIdentifier skeleton_instance_identifier,
                                                                const QualityType asil_level,
-                                                               pid_t provider_pid,
+                                                               const pid_t provider_pid,
                                                                const TransactionLogId transaction_log_id) noexcept
     : service_data_control_{service_data_control},
       asil_level_{asil_level},
       provider_pid_{provider_pid},
-      transaction_log_id_{transaction_log_id}
+      transaction_log_id_{transaction_log_id},
+      skeleton_instance_identifier_{skeleton_instance_identifier}
 {
 }
 
@@ -97,7 +99,7 @@ ResultBlank TransactionLogRollbackExecutor::RollbackTransactionLogs() noexcept
     auto& lola_runtime = GetBindingRuntime<lola::IRuntime>(BindingType::kLoLa);
     auto& rollback_synchronization = lola_runtime.GetRollbackSynchronization();
 
-    auto [lock, mutex_existed] = rollback_synchronization.GetMutex(&service_data_control_);
+    auto [lock, mutex_existed] = rollback_synchronization.GetMutex(skeleton_instance_identifier_);
     // Suppress Autosar C++14 A8-5-3 states that auto variables shall not be initialized using braced initialization.
     // This is a false positive, we don't use auto here
     // coverity[autosar_cpp14_a8_5_3_violation : FALSE]
