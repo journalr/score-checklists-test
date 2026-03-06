@@ -23,7 +23,6 @@ py_library(
         requirement("bazel-runfiles"),
         requirement("pygithub"),
         requirement("pyyaml"),
-        requirement("requests"),
     ],
 )
 
@@ -48,16 +47,6 @@ py_library(
     deps = [":helpers"],
 )
 
-py_library(
-    name = "merge_evidence_commit_lib",
-    srcs = ["merge_evidence_commit.py"],
-    imports = ["."],
-    deps = [
-        ":helpers",
-        requirement("requests"),
-    ],
-)
-
 py_binary(
     name = "post_checklists",
     srcs = ["post_checklists.py"],
@@ -80,17 +69,6 @@ py_binary(
     main = "dismiss_and_invalidate.py",
     visibility = ["//visibility:public"],
     deps = [":helpers"],
-)
-
-py_binary(
-    name = "merge_evidence_commit",
-    srcs = ["merge_evidence_commit.py"],
-    main = "merge_evidence_commit.py",
-    visibility = ["//visibility:public"],
-    deps = [
-        ":helpers",
-        requirement("requests"),
-    ],
 )
 
 py_test(
@@ -130,16 +108,5 @@ py_test(
     deps = [
         ":dismiss_and_invalidate_lib",
         requirement("pytest"),
-    ],
-)
-
-py_test(
-    name = "merge_evidence_commit_test",
-    srcs = ["merge_evidence_commit_test.py"],
-    imports = ["."],
-    deps = [
-        ":merge_evidence_commit_lib",
-        requirement("pytest"),
-        requirement("requests"),
     ],
 )

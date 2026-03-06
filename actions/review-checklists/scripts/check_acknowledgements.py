@@ -29,7 +29,6 @@ review comment (finding) that contains the ``OK`` keyword.  This script:
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import sys
@@ -117,7 +116,7 @@ def _collect_acknowledgement_details(
     return details
 
 
-def main(strict: bool = False) -> None:
+def main() -> None:
     gh = get_github_client()
     repo, pr = get_repo_and_pr(gh)
 
@@ -142,8 +141,6 @@ def main(strict: bool = False) -> None:
             "pending",
             "Checklist comments not yet posted",
         )
-        if strict:
-            sys.exit(1)
         return
 
     acks = _collect_ok_acknowledgements(pr, existing, relevant_ids)
@@ -163,8 +160,6 @@ def main(strict: bool = False) -> None:
             "Awaiting at least one approving review",
         )
         print("No approving reviewers yet.")
-        if strict:
-            sys.exit(1)
         return
 
     # Check: every approver must have acknowledged every relevant checklist.
@@ -186,8 +181,6 @@ def main(strict: bool = False) -> None:
             summary,
         )
         print(f"Missing acknowledgements: {summary}")
-        if strict:
-            sys.exit(1)
     else:
         set_commit_status(
             repo,
@@ -208,15 +201,5 @@ def main(strict: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Check review-checklist acknowledgements."
-    )
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        default=False,
-        help="Exit with non-zero status if acknowledgements are incomplete.",
-    )
-    args = parser.parse_args()
-    main(strict=args.strict)
+    main()
 
