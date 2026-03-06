@@ -20,7 +20,6 @@ import os
 import sys
 from typing import Any
 
-import requests
 import yaml
 from github import Github
 from github.PullRequest import PullRequest
@@ -304,84 +303,3 @@ def update_pr_description_with_evidence(
         print("PR description evidence is already up to date")
 
 
-def check_merge_queue_protection(repo: Any, branch_name: str) -> None:
-    """Verify the target branch enforces a merge queue with proper settings.
-
-    Uses the GitHub repository rulesets API to inspect the rules applied
-    to *branch_name*.  Exits with ``sys.exit(1)`` if:
-
-    - The API call fails.
-    - No ``merge_queue`` rule is found for the branch.
-    - The merge queue is not set to use merge commits.
-    - The merge queue is not configured to include PR title and description
-      in commit messages.
-
-    The GitHub REST API is used directly because PyGithub does not expose
-    merge-queue ruleset parameters.
-    """
-    token = os.environ["GITHUB_TOKEN"]
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-
-    url = (
-        f"https://api.github.com/repos/{repo.full_name}"
-        f"/rules/branches/{branch_name}"
-    )
-    resp = requests.get(url, headers=headers, timeout=30)
-
-    if resp.status_code != 200:
-        print(
-            f"ERROR: Could not fetch branch rules for '{branch_name}': "
-            f"HTTP {resp.status_code} — {resp.text}"
-        )
-        sys.exit(1)
-
-    rules = resp.json()
-
-    merge_queue_rule = None
-    for rule in rules:
-        if rule.get("type") == "merge_queue":
-            merge_queue_rule = rule
-            break
-
-    if merge_queue_rule is None:
-        print(
-            f"ERROR: Branch '{branch_name}' does not have a merge queue "
-            f"rule.  A merge queue is required for review-checklist "
-            f"enforcement."
-        )
-        sys.exit(1)
-
-    params = merge_queue_rule.get("parameters", {})
-
-    # Verify merge method is set to merge commits (not squash or rebase).
-    merge_method = params.get("merge_method", "")
-    if merge_method.lower() != "merge":
-        print(
-            f"ERROR: Branch '{branch_name}' merge queue is configured with "
-            f"merge_method='{merge_method}', but must use merge commits "
-            f"(merge_method='merge') to preserve PR title and description."
-        )
-        sys.exit(1)
-
-    # Verify commit message includes PR title and description.
-    commit_message_header_only = params.get(
-        "commit_message_header_only", False
-    )
-    if commit_message_header_only:
-        print(
-            f"ERROR: Branch '{branch_name}' merge queue is configured to "
-            f"use only commit message header (no body).  The merge queue "
-            f"must include the PR title and description in the commit "
-            f"message for evidence audit trail."
-        )
-        sys.exit(1)
-
-    print(
-        f"Branch '{branch_name}' merge queue protection verified: "
-        f"merge commits enabled, PR title and description included in "
-        f"commit message."
-    )

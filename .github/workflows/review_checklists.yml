@@ -31,12 +31,12 @@ name: Review Checklists
 on:
   pull_request:
     types: [opened, reopened, synchronize, edited]
+    branches:
+      - main
   pull_request_review_comment:
     types: [created, edited, deleted]
   pull_request_review:
     types: [submitted, dismissed]
-  merge_group:
-    types: [checks_requested]
 
 permissions:
   pull-requests: write
