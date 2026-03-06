@@ -11,31 +11,22 @@
 '
 ' SPDX-License-Identifier: Apache-2.0
 
-interface Reloc {
-    Relocatable data type
-}
+interface Deref<Target>
 
-interface Deref<Target> {
-    fn deref(&self) -> &Target
-}
+interface DerefMut<Target>
 
-interface DerefMut<Target> {
-    fn deref_mut(&mut self) -> &mut Target
-}
-
-interface Builder<Output> {
-    fn build(self) : Result<Output>
+interface Builder<Output>{
+    + build()
 }
 
 interface CommData {
     const ID: &'static str
+    ---
+    extend Reloc + Send + Debug + 'static
 }
 
-class InstanceSpecifier {
-    specifier: String
-    ---
-    + new(name: impl AsRef<str>) : Result<Self>
-    + check_str(name: &str) : bool
+class InstanceSpecifier{
+    + new()
 }
 
 enum FindServiceSpecifier {
@@ -48,71 +39,61 @@ interface Runtime {
     type Subscriber<T: CommData>
     type ProducerBuilder<I: Interface>
     type Publisher<T: CommData>
+    type ProviderInfo
+    type ConsumerInfo
     ---
-    fn find_service<I>(spec: FindServiceSpecifier)
-        -> ServiceDiscovery<I>
-    fn producer_builder<I>(spec: InstanceSpecifier)
-        -> ProducerBuilder<I>
+    + find_service()
+    + producer_builder()
 }
 
 interface RuntimeBuilder<B: Runtime> {
-    ---
-    fn load_config(&mut self, path: &Path) : &mut Self
+    + load_config()
 }
 
 interface ProviderInfo {
-    fn offer_service(&self) : Result<()>
-    fn stop_offer_service(&self) : Result<()>
+    + offer_service()
+    + stop_offer_service()
 }
 
-interface Sample<T: CommData> {
-    ---
-    Immutable, ordered by reception
-}
+interface ConsumerInfo
+
+interface Sample<T: CommData>
 
 interface SampleMut<T: CommData> {
-    fn send(self) : Result<()>
+    + send()
 }
 
 interface SampleMaybeUninit<T: CommData> {
-    type SampleMut: SampleMut<T>
-    ---
-    unsafe fn assume_init(self) : SampleMut<T>
-    fn write(self, value: T) : SampleMut<T>
-    fn write_default(self) : SampleMut<T>
+    + assume_init()
+    + write()
+    + write_default()
 }
 
 interface PlacementDefault {
-    ---
-    unsafe fn placement_default(ptr: *mut Self)
+    + placement_default()
 }
 
 interface Producer<R: Runtime + ?Sized> {
     type Interface: Interface
     type OfferedProducer: OfferedProducer<R>
     ---
-    fn offer(self) : Result<OfferedProducer>
-    fn new(info: R::ProviderInfo) : Result<Self>
+    + offer()
+    + new()
 }
 
 interface OfferedProducer<R: Runtime + ?Sized> {
     type Interface: Interface
     type Producer: Producer<R>
     ---
-    fn unoffer(self) : Result<Producer>
-    ---
-    #[must_use] attribute
+    + unoffer()
 }
 
-interface ProducerBuilder<I: Interface, R: Runtime + ?Sized> {
-}
+interface ProducerBuilder<I: Interface, R: Runtime + ?Sized>
 
 interface Publisher<T: CommData, R: Runtime + ?Sized> {
-    type SampleMaybeUninit<'a>: SampleMaybeUninit<T> + 'a
-    ---
-    fn allocate(&self) : Result<SampleMaybeUninit<'_>>
-    fn send(&self, value: T) : Result<()>
-    fn new(id: &str, info: R::ProviderInfo) : Result<Self>
+    + allocate()
+    + send()
+    + new()
 }
 
 interface Interface {
@@ -123,132 +104,91 @@ interface Interface {
 }
 
 interface Consumer<R: Runtime + ?Sized> {
-    fn new(info: R::ConsumerInfo) : Self
+    + new()
 }
 
 interface ServiceDiscovery<I: Interface, R: Runtime + ?Sized> {
     type ConsumerBuilder: ConsumerBuilder<I, R>
     type ServiceEnumerator: IntoIterator<Item=ConsumerBuilder>
     ---
-    fn get_available_instances(&self)
-        -> Result<ServiceEnumerator>
-    fn get_available_instances_async(&self)
-        -> impl Future<Output=Result<ServiceEnumerator>> + Send
+    + get_available_instances()
+    + get_available_instances_async()
 }
 
 interface ConsumerDescriptor<R: Runtime + ?Sized> {
-    fn get_instance_identifier(&self) : &InstanceSpecifier
+    + get_instance_identifier()
 }
 
-interface ConsumerBuilder<I: Interface, R: Runtime + ?Sized> {
-}
+interface ConsumerBuilder<I: Interface, R: Runtime + ?Sized>
 
 interface Subscriber<T: CommData, R: Runtime + ?Sized> {
     type Subscription: Subscription<T, R>
     ---
-    fn new(id: &'static str, info: R::ConsumerInfo)
-        -> Result<Self>
-    fn subscribe(&self, max_num_samples: usize)
-        -> Result<Subscription>
+    + new()
+    + subscribe()
 }
 
 interface Subscription<T: CommData, R: Runtime + ?Sized> {
     type Subscriber: Subscriber<T, R>
     type Sample<'a>: Sample<T> where Self: 'a
     ---
-    fn unsubscribe(self) : Subscriber
-    fn try_receive<'a>(
-        &'a self,
-        scratch: &'_ mut SampleContainer<Sample<'a>>,
-        max_samples: usize
-    ) -> Result<usize>
-    fn receive<'a>(
-        &'a self,
-        scratch: &'_ mut SampleContainer<Sample<'a>>,
-        new_samples: usize,
-        max_samples: usize
-    ) -> impl Future<Output=Result<usize>> + Send
+    + unsubscribe()
+    + try_receive()
+    + receive()
 }
 
 class SampleContainer<S> {
-    inner: FixedCapacityQueue<S>
-    ---
-    + new(capacity: usize) : Self
-    + iter<T>() : Iterator<&T>
-    + pop_front() : Option<S>
-    + push_back(new: S) : Result<()>
-    + sample_count() : usize
-    + front<T: CommData>() : Option<&T>
+    + new()
+    + iter()
+    + pop_front()
+    + push_back()
+    + sample_count()
+    + front()
 }
 
-Reloc <|-- CommData
-CommData <|-- Sample
-CommData <|-- SampleMut
-CommData <|-- Publisher
-CommData <|-- Subscriber
-
-Deref <|-- Sample
-DerefMut <|-- SampleMut
-
-SampleMaybeUninit --> SampleMut : builds
-SampleMut --> Sample : into_sample()
-
-Runtime --> ServiceDiscovery
-Runtime --> Subscriber
-Runtime --> ProducerBuilder
-Runtime --> Publisher
-Runtime --> ProviderInfo
+Runtime --> ServiceDiscovery : provides
+Runtime --> Subscriber : provides
+Runtime --> ProducerBuilder : provides
+Runtime --> Publisher : provides
+Runtime --> ProviderInfo : defines
+Runtime --> ConsumerInfo : defines
+Runtime --> FindServiceSpecifier : uses
 
 RuntimeBuilder --|> Builder
 
-ProviderInfo --> OfferedProducer
-ProviderInfo --> Producer
+InstanceSpecifier <.. FindServiceSpecifier : component
 
+Producer --> Interface : implements
 Producer --> OfferedProducer : offer()
 OfferedProducer --> Producer : unoffer()
 
 ProducerBuilder --|> Builder
+ProducerBuilder --> Producer : builds
 
 Publisher --> SampleMaybeUninit : allocate()
 
 Interface --> Producer : defines
 Interface --> Consumer : defines
 
-ServiceDiscovery --> ConsumerBuilder
-ServiceDiscovery --> InstanceSpecifier
-ServiceDiscovery --> FindServiceSpecifier
+ServiceDiscovery --> ConsumerBuilder : provides
+ServiceDiscovery --> InstanceSpecifier : uses
+ServiceDiscovery --> FindServiceSpecifier : uses
 
 ConsumerBuilder --|> ConsumerDescriptor
 ConsumerBuilder --|> Builder
+ConsumerBuilder --> Consumer : builds
 
 ConsumerDescriptor --> InstanceSpecifier : provides
 
 Subscriber --> Subscription : subscribe()
 Subscription --> Subscriber : unsubscribe()
+Subscription --> SampleContainer : uses
+SampleContainer --> Sample : stores
 
-Subscription --> SampleContainer : populates
-SampleContainer --> Sample : contains
+Deref <|-- Sample
+DerefMut <|-- SampleMut
 
-Publisher --> Subscriber : event bridge
-Runtime --> FindServiceSpecifier : uses
-InstanceSpecifier <.. FindServiceSpecifier : component
-
-SampleMaybeUninit --|> PlacementDefault
-
-PlacementDefault --|> Default
-Sample --|> Send
-Sample --|> PartialOrd
-Sample --|> Ord
-Sample --|> Debug
-SampleMut --|> Debug
-SampleMaybeUninit --|> Debug
-
-CommData --|> Send
-CommData --|> Debug
-
-InstanceSpecifier --|> Clone
-InstanceSpecifier --|> Debug
-
-FindServiceSpecifier --|> From
+SampleMaybeUninit --> SampleMut : builds
+SampleMaybeUninit --> PlacementDefault : write_default()
 
 @enduml
