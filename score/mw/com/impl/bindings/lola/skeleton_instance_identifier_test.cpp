@@ -10,7 +10,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
-#include "score/mw/com/impl/bindings/lola/methods/skeleton_instance_identifier.h"
+#include "score/mw/com/impl/bindings/lola/skeleton_instance_identifier.h"
 
 #include "score/mw/com/impl/configuration/global_configuration.h"
 

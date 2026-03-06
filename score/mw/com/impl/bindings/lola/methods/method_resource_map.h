@@ -13,7 +13,7 @@
 #ifndef SCORE_MW_COM_IMPL_BINDINGS_LOLA_METHODS_METHOD_RESOURCE_MAP_H
 #define SCORE_MW_COM_IMPL_BINDINGS_LOLA_METHODS_METHOD_RESOURCE_MAP_H
 
-#include "score/mw/com/impl/bindings/lola/methods/proxy_instance_identifier.h"
+#include "score/mw/com/impl/bindings/lola/proxy_instance_identifier.h"
 #include "score/mw/com/impl/configuration/global_configuration.h"
 
 #include "score/memory/shared/i_shared_memory_resource.h"

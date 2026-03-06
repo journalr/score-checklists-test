@@ -20,9 +20,9 @@
 #include "score/mw/com/impl/bindings/lola/messaging/i_message_passing_service.h"
 #include "score/mw/com/impl/bindings/lola/messaging/method_call_registration_guard.h"
 #include "score/mw/com/impl/bindings/lola/messaging/method_subscription_registration_guard.h"
-#include "score/mw/com/impl/bindings/lola/methods/proxy_instance_identifier.h"
-#include "score/mw/com/impl/bindings/lola/methods/skeleton_instance_identifier.h"
 #include "score/mw/com/impl/bindings/lola/methods/type_erased_call_queue.h"
+#include "score/mw/com/impl/bindings/lola/proxy_instance_identifier.h"
+#include "score/mw/com/impl/bindings/lola/skeleton_instance_identifier.h"
 #include "score/mw/com/impl/bindings/lola/test/skeleton_test_resources.h"
 
 #include "score/mw/com/impl/com_error.h"

@@ -97,7 +97,7 @@ cc_library(
         "//score/mw/com/impl:__subpackages__",
     ],
     deps = [
-        "//score/mw/com/impl/bindings/lola/methods:proxy_instance_identifier",
+        ":proxy_instance_identifier",
         "//score/mw/com/impl/configuration",
         "@score_baselibs//score/language/futurecpp",
     ],
@@ -266,8 +266,10 @@ cc_library(
         ":i_partial_restart_path_builder",
         ":i_shm_path_builder",
         ":partial_restart_path_builder",
+        ":proxy_instance_identifier",
         ":shared_data_structures",
         ":shm_path_builder",
+        ":skeleton_instance_identifier",
         ":transaction_log_registration_guard",
         ":type_erased_sample_ptrs_guard",
         "//score/mw/com/impl:instance_identifier",
@@ -276,8 +278,6 @@ cc_library(
         "//score/mw/com/impl:skeleton_event_binding",
         "//score/mw/com/impl/bindings/lola/methods:method_data",
         "//score/mw/com/impl/bindings/lola/methods:method_resource_map",
-        "//score/mw/com/impl/bindings/lola/methods:proxy_instance_identifier",
-        "//score/mw/com/impl/bindings/lola/methods:skeleton_instance_identifier",
         "//score/mw/com/impl/bindings/lola/methods:type_erased_call_queue",
         "//score/mw/com/impl/configuration",
         "//score/mw/com/impl/methods:skeleton_method_binding",
@@ -338,6 +338,7 @@ cc_library(
         ":event",
         ":event_control",
         ":event_subscription_control",
+        ":proxy_instance_identifier",
         ":shared_data_structures",
         ":shm_path_builder",
         ":transaction_log_id",
@@ -354,7 +355,6 @@ cc_library(
         "//score/mw/com/impl/bindings/lola:partial_restart_path_builder",
         "//score/mw/com/impl/bindings/lola/methods:method_data",
         "//score/mw/com/impl/bindings/lola/methods:offered_state_machine",
-        "//score/mw/com/impl/bindings/lola/methods:proxy_instance_identifier",
         "//score/mw/com/impl/bindings/lola/methods:type_erased_call_queue",
         "//score/mw/com/impl/configuration",
         "//score/mw/com/impl/methods:proxy_method_binding",
@@ -739,6 +739,36 @@ cc_library(
         "//score/mw/com/impl:binding_type",
         "//score/mw/com/impl:runtime",
         "//score/mw/com/impl/tracing:i_binding_tracing_runtime",
+    ],
+)
+
+cc_library(
+    name = "proxy_instance_identifier",
+    srcs = ["proxy_instance_identifier.cpp"],
+    hdrs = ["proxy_instance_identifier.h"],
+    features = COMPILER_WARNING_FEATURES,
+    tags = ["FFI"],
+    visibility = [
+        "//score/mw/com/impl/bindings/lola:__subpackages__",
+    ],
+    deps = [
+        "//score/mw/com/impl/configuration",
+        "@score_logging//score/mw/log",
+    ],
+)
+
+cc_library(
+    name = "skeleton_instance_identifier",
+    srcs = ["skeleton_instance_identifier.cpp"],
+    hdrs = ["skeleton_instance_identifier.h"],
+    features = COMPILER_WARNING_FEATURES,
+    tags = ["FFI"],
+    visibility = [
+        "//score/mw/com/impl/bindings/lola:__subpackages__",
+    ],
+    deps = [
+        "//score/mw/com/impl/configuration",
+        "@score_logging//score/mw/log",
     ],
 )
 
@@ -1282,6 +1312,22 @@ cc_gtest_unit_test(
     ],
 )
 
+cc_gtest_unit_test(
+    name = "proxy_instance_identifier_test",
+    srcs = ["proxy_instance_identifier_test.cpp"],
+    deps = [
+        ":proxy_instance_identifier",
+    ],
+)
+
+cc_gtest_unit_test(
+    name = "skeleton_instance_identifier_test",
+    srcs = ["skeleton_instance_identifier_test.cpp"],
+    deps = [
+        ":skeleton_instance_identifier",
+    ],
+)
+
 cc_unit_test(
     name = "proxy_method_test",
     srcs = [
@@ -1338,6 +1384,8 @@ cc_unit_test_suites_for_host_and_qnx(
         ":event_data_control_composite_unit_test",
         ":generic_proxy_event_test",
         ":partial_restart_path_builder_test",
+        ":proxy_instance_identifier_test",
+        ":skeleton_instance_identifier_test",
         ":proxy_event_test",
         ":proxy_method_handling_test",
         ":proxy_test",

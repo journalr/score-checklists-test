@@ -13,7 +13,7 @@
 #ifndef SCORE_MW_COM_IMPL_BINDINGS_LOLA_METHODS_PROXY_METHOD_INSTANCE_IDENTIFIER_H
 #define SCORE_MW_COM_IMPL_BINDINGS_LOLA_METHODS_PROXY_METHOD_INSTANCE_IDENTIFIER_H
 
-#include "score/mw/com/impl/bindings/lola/methods/proxy_instance_identifier.h"
+#include "score/mw/com/impl/bindings/lola/proxy_instance_identifier.h"
 #include "score/mw/com/impl/configuration/lola_method_id.h"
 
 #include "score/mw/log/logging.h"

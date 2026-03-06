@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2025 Contributors to the Eclipse Foundation
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -10,8 +10,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
-#ifndef SCORE_MW_COM_IMPL_BINDINGS_LOLA_METHODS_PROXY_INSTANCE_IDENTIFIER_H
-#define SCORE_MW_COM_IMPL_BINDINGS_LOLA_METHODS_PROXY_INSTANCE_IDENTIFIER_H
+#ifndef SCORE_MW_COM_IMPL_BINDINGS_LOLA_PROXY_INSTANCE_IDENTIFIER_H
+#define SCORE_MW_COM_IMPL_BINDINGS_LOLA_PROXY_INSTANCE_IDENTIFIER_H
 
 #include "score/mw/com/impl/configuration/global_configuration.h"
 
@@ -74,4 +74,4 @@ class hash<score::mw::com::impl::lola::ProxyInstanceIdentifier>
 
 }  // namespace std
 
-#endif  // SCORE_MW_COM_IMPL_BINDINGS_LOLA_METHODS_PROXY_INSTANCE_IDENTIFIER_H
+#endif  // SCORE_MW_COM_IMPL_BINDINGS_LOLA_PROXY_INSTANCE_IDENTIFIER_H
