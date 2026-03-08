@@ -641,7 +641,7 @@ pub trait Subscriber<T: CommData, R: Runtime + ?Sized> {
     ///
     /// # Errors
     /// Returns 'Error' if the subscription cannot be established.
-    fn subscribe(&self, max_num_samples: usize) -> Result<Self::Subscription>;
+    fn subscribe(self, max_num_samples: usize) -> Result<Self::Subscription>;
 }
 /// A container for samples received from a subscription.
 /// Provides methods to manipulate and access the samples.

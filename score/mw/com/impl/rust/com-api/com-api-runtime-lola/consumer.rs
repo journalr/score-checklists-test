@@ -230,7 +230,7 @@ impl NativeProxyBase {
 /// Drop is not required as the proxy event lifetime is managed by proxy instance
 /// It does not provide any mutable access to the underlying proxy event pointer
 /// And the proxy event lifetime is managed safely through Drop of the parent proxy instance
-/// user can get the raw pointer using 'get_proxy_event_ptr' method
+/// user can get the raw pointer using 'get_proxy_event_base' method
 pub struct NativeProxyEventBase {
     proxy_event_ptr: *mut ProxyEventBase,
 }
@@ -251,9 +251,15 @@ impl NativeProxyEventBase {
         Self { proxy_event_ptr }
     }
 
-    /// user can get the raw pointer using this method
-    pub fn get_proxy_event_ptr(&self) -> *mut ProxyEventBase {
-        self.proxy_event_ptr
+    /// Provides access to the underlying proxy event base.
+    pub fn get_proxy_event_base(&self) -> &ProxyEventBase {
+        // SAFETY: proxy_event_ptr is valid for the entire lifetime of NativeProxyEventBase
+        // and was created by FFI during get_event_from_proxy()
+        unsafe {
+            self.proxy_event_ptr
+                .as_ref()
+                .expect("Event pointer is null")
+        }
     }
 }
 
@@ -284,7 +290,7 @@ impl<T: CommData> Subscriber<T, LolaRuntimeImpl> for SubscribableImpl<T> {
             data: PhantomData,
         })
     }
-    fn subscribe(&self, max_num_samples: usize) -> Result<Self::Subscription> {
+    fn subscribe(self, max_num_samples: usize) -> Result<Self::Subscription> {
         let instance_info = self.instance_info.clone();
         let event_instance = NativeProxyEventBase::new(
             self.proxy_instance.0.proxy,
@@ -296,7 +302,7 @@ impl<T: CommData> Subscriber<T, LolaRuntimeImpl> for SubscribableImpl<T> {
         // which was obtained from valid proxy instance
         let status = unsafe {
             bridge_ffi_rs::subscribe_to_event(
-                event_instance.get_proxy_event_ptr(),
+                std::ptr::from_ref(event_instance.get_proxy_event_base()) as *mut ProxyEventBase,
                 max_num_samples.try_into().unwrap(),
             )
         };
@@ -305,7 +311,9 @@ impl<T: CommData> Subscriber<T, LolaRuntimeImpl> for SubscribableImpl<T> {
         }
         // Store in SubscriberImpl with event, max_num_samples
         Ok(SubscriberImpl {
-            event: ProxyEventManager::new(event_instance.get_proxy_event_ptr()),
+            event: ProxyEventManager::new(
+                std::ptr::from_ref(event_instance.get_proxy_event_base()) as *mut ProxyEventBase,
+            ),
             event_id: self.identifier,
             max_num_samples,
             instance_info,
@@ -431,7 +439,7 @@ impl<T: CommData> Drop for SubscriberImpl<T> {
 }
 
 impl<T: CommData> SubscriberImpl<T> {
-    fn init_async_receive(&self) -> Result<()> {
+    fn init_async_receive(&self, event_guard: &mut ProxyEventManagerGuard) -> Result<()> {
         let callback_waker = Arc::clone(&self.waker_storage);
         let waker_callback = move || {
             callback_waker.wake();
@@ -444,11 +452,7 @@ impl<T: CommData> SubscriberImpl<T> {
         // The callback is a simple waker that wakes the future when new samples arrive,
         // and the lifetime of the callback is managed by Rust, it will not outlive the scope of this function call.
         unsafe {
-            bridge_ffi_rs::set_event_receive_handler(
-                self.event.get_proxy_event().deref_mut(),
-                &fat_ptr,
-                T::ID,
-            );
+            bridge_ffi_rs::set_event_receive_handler(event_guard.deref_mut(), &fat_ptr, T::ID);
         }
         Ok(())
     }
@@ -490,23 +494,24 @@ where
         max_samples: usize,
     ) -> impl Future<Output = Result<SampleContainer<Self::Sample<'a>>>> + 'a {
         async move {
+            if max_samples > self.max_num_samples || new_samples > self.max_num_samples {
+                return Err(Error::Fail);
+            }
+            // Get the event guard to ensure no concurrent receive calls on the same subscriber instance.
+            let mut event_guard = self.event.get_proxy_event();
+            // Initialize the async receive callback only once when the first receive call is made
             if !self
                 .async_init_status
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                if let Err(_e) = self.init_async_receive() {
+                if let Err(_e) = self.init_async_receive(&mut event_guard) {
                     return Err(Error::Fail);
                 }
                 self.async_init_status
                     .store(true, std::sync::atomic::Ordering::Relaxed);
             }
-
-            if max_samples > self.max_num_samples || new_samples > self.max_num_samples {
-                return Err(Error::Fail);
-            }
-
             ReceiveFuture {
-                event_guard: Some(self.event.get_proxy_event()),
+                event_guard: Some(event_guard),
                 waker_storage: Arc::clone(&self.waker_storage),
                 max_num_samples: self.max_num_samples,
                 scratch: Some(scratch),
@@ -669,7 +674,7 @@ impl<I: Interface> ConsumerDescriptor<LolaRuntimeImpl> for SampleConsumerBuilder
 /// * `scratch` - Mutable reference to the sample container
 /// * `max_num_samples` - Maximum allowed samples for this subscription
 /// * `max_samples` - How many samples to fetch in this call
-pub fn try_receive_samples<T: CommData>(
+fn try_receive_samples<T: CommData>(
     event: &mut ProxyEventBase,
     scratch: &mut SampleContainer<Sample<T>>,
     max_num_samples: usize,

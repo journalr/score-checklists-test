@@ -275,7 +275,7 @@ impl<T: CommData> Subscriber<T, MockRuntimeImpl> for SubscribableImpl<T> {
             data: PhantomData,
         })
     }
-    fn subscribe(&self, _max_num_samples: usize) -> com_api_concept::Result<Self::Subscription> {
+    fn subscribe(self, _max_num_samples: usize) -> com_api_concept::Result<Self::Subscription> {
         Ok(SubscriberImpl {
             identifier: self.identifier,
             instance_info: self.instance_info.clone(),

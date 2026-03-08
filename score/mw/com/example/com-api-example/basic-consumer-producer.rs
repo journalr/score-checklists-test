@@ -17,13 +17,14 @@ use com_api::{
     SampleMaybeUninit, SampleMut, ServiceDiscovery, Subscriber, Subscription,
 };
 
-use com_api_gen::{Tire, VehicleConsumer, VehicleInterface, VehicleOfferedProducer};
+use com_api_gen::{Exhaust, Tire, VehicleConsumer, VehicleInterface, VehicleOfferedProducer};
 
 // Example struct demonstrating composition with VehicleConsumer
 pub struct VehicleMonitor<R: Runtime> {
-    _consumer: VehicleConsumer<R>,
     producer: VehicleOfferedProducer<R>,
     tire_subscriber: <<R as Runtime>::Subscriber<Tire> as Subscriber<Tire, R>>::Subscription,
+    _exhaust_subscriber:
+        <<R as Runtime>::Subscriber<Exhaust> as Subscriber<Exhaust, R>>::Subscription,
 }
 
 impl<R: Runtime> VehicleMonitor<R> {
@@ -42,10 +43,11 @@ impl<R: Runtime> VehicleMonitor<R> {
     /// Panics if unwrapping the subscription fails.
     pub fn new(consumer: VehicleConsumer<R>, producer: VehicleOfferedProducer<R>) -> Result<Self> {
         let tire_subscriber = consumer.left_tire.subscribe(3).unwrap();
+        let exhaust_subscriber = consumer.exhaust.subscribe(3).unwrap();
         Ok(Self {
-            _consumer: consumer,
             producer,
             tire_subscriber,
+            _exhaust_subscriber: exhaust_subscriber,
         })
     }
 
