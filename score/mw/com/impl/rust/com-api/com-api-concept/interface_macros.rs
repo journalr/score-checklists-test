@@ -54,13 +54,15 @@
 /// mod abc {
 ///     use com_api_concept::interface;
 ///     interface!(
-///         interface Vehicle, "AbcInterface", {
+///         interface Vehicle, {
+///             Id = "AbcInterface",
 ///             left_tire: Event<Tire>,
 ///             exhaust: Event<Exhaust>,
 ///         }
 ///     );
 /// }
 /// ```
+/// Here Id is explicitly set to "AbcInterface" instead of the default "abc::Vehicle".
 /// The generated code will include:
 /// - `VehicleInterface` struct with `INTERFACE_ID = "AbcInterface"`
 /// - `VehicleConsumer<R>` struct that implements `Consumer` trait for subscribing to "left_tire" and "exhaust" events.
@@ -76,8 +78,8 @@ macro_rules! interface {
         $crate::interface_producer!($id, $($event_name, Event<$event_type>),+);
     };
 
-    // Custom unique ID provided by the user
-    (interface $id:ident, $uid:expr, { $($event_name:ident : Event<$event_type:ty>),+ $(,)? }) => {
+    // Custom unique Id provided by the user
+    (interface $id:ident, { Id = $uid:expr, $($event_name:ident : Event<$event_type:ty>),+ $(,)? }) => {
         $crate::interface_common!($id, $uid);
         $crate::interface_consumer!($id, $($event_name, Event<$event_type>),+);
         $crate::interface_producer!($id, $($event_name, Event<$event_type>),+);
@@ -266,7 +268,8 @@ mod tests {
     ///     }
     ///
     ///     interface!(
-    ///         interface Vehicle, "VehicleInterface", {
+    ///         interface Vehicle,{
+    ///            Id = "CustomVehicleInterface",
     ///             left_tire: Event<Tire>,
     ///             exhaust: Event<Exhaust>,
     ///         }
@@ -274,7 +277,7 @@ mod tests {
     /// }
     /// ```
     /// This will generate the following types and trait implementations:
-    /// - `VehicleInterface` struct with `INTERFACE_ID = "VehicleInterface"`
+    /// - `VehicleInterface` struct with `INTERFACE_ID = "CustomVehicleInterface"`
     /// - `VehicleConsumer<R>`, `VehicleProducer<R>`, `VehicleOfferedProducer<R>` with appropriate trait implementations for the Vehicle interface.
     #[cfg(doctest)]
     fn interface_macro_with_custom_id() {}
@@ -298,7 +301,8 @@ mod tests {
     ///     }
     ///
     ///     interface!(
-    ///         interface Vehicle, "VehicleInterface", {
+    ///         interface Vehicle,{
+    ///            Id = "CustomVehicleInterface",
     ///             left_tire: Method<Tire>,
     ///             exhaust: Method<Exhaust>,
     ///         }
@@ -790,7 +794,8 @@ mod validation_tests {
             }
 
             crate::interface!(
-                interface Battery, "com.example.Battery", {
+                interface Battery, {
+                    Id = "com.example.Battery",
                     voltage: Event<Tire>,
                 }
             );
