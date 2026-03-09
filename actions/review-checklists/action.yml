@@ -41,6 +41,11 @@ inputs:
     description: "SHA after the push (for synchronize events)"
     required: false
     default: ""
+  head-sha:
+    description: >
+      Commit SHA to set the status on (used for merge_group events).
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -61,6 +66,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
+        HEAD_SHA: ${{ inputs.head-sha }}
       run: bazel run //actions/review-checklists/scripts:check_acknowledgements
 
 
@@ -84,4 +90,3 @@ runs:
         PR_NUMBER: ${{ inputs.pr-number }}
         GITHUB_EVENT_PATH: ${{ github.event_path }}
       run: bazel run //actions/review-checklists/scripts:dismiss_and_invalidate -- --trigger comment_changed
-

@@ -367,3 +367,33 @@ class TestCheckAcknowledgementsMain:
         with pytest.raises(SystemExit) as exc_info:
             main(strict=True)
         assert exc_info.value.code == 1
+
+    @patch("check_acknowledgements.set_commit_status")
+    @patch("check_acknowledgements.get_repo_and_pr")
+    @patch("check_acknowledgements.get_github_client")
+    def test_merge_group_sets_success_without_pr_lookup(
+        self, mock_gh, mock_repo_pr, mock_status
+    ):
+        repo = MagicMock()
+        gh = MagicMock()
+        gh.get_repo.return_value = repo
+        mock_gh.return_value = gh
+
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_EVENT_NAME": "merge_group",
+                "HEAD_SHA": "merge123",
+                "GITHUB_REPOSITORY": "acme/widgets",
+            },
+        ):
+            main()
+
+        mock_repo_pr.assert_not_called()
+        mock_status.assert_called_once_with(
+            repo,
+            "merge123",
+            "success",
+            "Merge queue: checklists assumed OK",
+        )
+

@@ -37,6 +37,8 @@ on:
     types: [created, edited, deleted]
   pull_request_review:
     types: [submitted, dismissed]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   pull-requests: write
@@ -105,4 +107,5 @@ jobs:
         with:
           action: check
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          pr-number: ${{ github.event.pull_request.number }}
+          pr-number: ${{ github.event.pull_request.number || '' }}
+          head-sha: ${{ github.event.merge_group.head_sha || '' }}

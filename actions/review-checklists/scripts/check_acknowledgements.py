@@ -118,6 +118,22 @@ def _collect_acknowledgement_details(
 
 def main() -> None:
     gh = get_github_client()
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    if event_name == "merge_group":
+        head_sha = os.environ.get("HEAD_SHA")
+        if not head_sha:
+            print("HEAD_SHA is required for merge_group events.")
+            sys.exit(1)
+        repo_name = os.environ["GITHUB_REPOSITORY"]
+        repo = gh.get_repo(repo_name)
+        set_commit_status(
+            repo,
+            head_sha,
+            "success",
+            "Merge queue: checklists assumed OK",
+        )
+        return
+
     repo, pr = get_repo_and_pr(gh)
 
     checklists = load_checklists()
