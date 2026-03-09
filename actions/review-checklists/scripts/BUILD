@@ -10,8 +10,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@review_checklists_pip//:requirements.bzl", "requirement")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load("@score_communication_pip//:requirements.bzl", "requirement")
 
 py_library(
     name = "helpers",

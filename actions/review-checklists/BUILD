@@ -10,12 +10,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-load("@rules_python//python:pip.bzl", "compile_pip_requirements")
-
-compile_pip_requirements(
+filegroup(
     name = "pip_requirements",
-    src = ":requirements.in",
-    requirements_txt = "requirements_lock.txt",
+    srcs = ["requirements.txt"],
+    visibility = ["//:__pkg__"],
 )
 
 filegroup(
@@ -23,4 +21,3 @@ filegroup(
     srcs = ["checklists.yml"],
     visibility = ["//visibility:public"],
 )
-

@@ -245,13 +245,6 @@ pip.parse(
 )
 use_repo(pip, "codeql_coding_standards_pip_hub")
 
-pip.parse(
-    hub_name = "review_checklists_pip",
-    python_version = "3.12",
-    requirements_lock = "//actions/review-checklists:requirements_lock.txt",
-)
-use_repo(pip, "review_checklists_pip")
-
 # TRLC dependency for requirements traceability
 bazel_dep(name = "trlc", version = "0.0.0", dev_dependency = True)
 git_override(
