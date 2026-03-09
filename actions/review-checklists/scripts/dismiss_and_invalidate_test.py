@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+import sys
 
 from dismiss_and_invalidate import (
     _find_ok_comments_for_checklist,
@@ -313,3 +314,6 @@ class TestHandleCommentChanged:
         # No dismiss should have been called (no reviews to dismiss anyway).
         # The key assertion is that no exception was raised.
 
+
+if __name__ == "__main__":
+    sys.exit(pytest.main(sys.argv[1:]))

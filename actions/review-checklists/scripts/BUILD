@@ -77,6 +77,7 @@ py_test(
     imports = ["."],
     deps = [
         ":helpers",
+        requirement("bazel-runfiles"),
         requirement("pytest"),
     ],
 )
@@ -87,6 +88,7 @@ py_test(
     imports = ["."],
     deps = [
         ":post_checklists_lib",
+        requirement("bazel-runfiles"),
         requirement("pytest"),
     ],
 )
@@ -97,6 +99,7 @@ py_test(
     imports = ["."],
     deps = [
         ":check_acknowledgements_lib",
+        requirement("bazel-runfiles"),
         requirement("pytest"),
     ],
 )
@@ -107,6 +110,7 @@ py_test(
     imports = ["."],
     deps = [
         ":dismiss_and_invalidate_lib",
+        requirement("bazel-runfiles"),
         requirement("pytest"),
     ],
 )

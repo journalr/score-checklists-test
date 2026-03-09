@@ -24,7 +24,6 @@ threaded conversations where reviewers can reply directly with OK.
 
 from __future__ import annotations
 
-
 from helpers import (
     build_evidence_block,
     find_existing_checklist_comments,
@@ -145,4 +144,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

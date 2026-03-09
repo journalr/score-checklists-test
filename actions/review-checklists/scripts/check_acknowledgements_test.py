@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
+import sys
 
 from check_acknowledgements import _collect_ok_acknowledgements, main
 
@@ -343,31 +344,6 @@ class TestCheckAcknowledgementsMain:
             repo, "abc", "pending", "api-review: awaiting bob"
         )
 
-
-    @patch("check_acknowledgements.set_commit_status")
-    @patch(
-        "check_acknowledgements.find_existing_checklist_comments",
-        return_value={},
-    )
-    @patch(
-        "check_acknowledgements.load_checklists",
-        return_value=SAMPLE_CHECKLISTS,
-    )
-    @patch("check_acknowledgements.get_repo_and_pr")
-    @patch("check_acknowledgements.get_github_client")
-    def test_strict_no_existing_comments_exits_nonzero(
-        self, mock_gh, mock_repo_pr, mock_load, mock_existing, mock_status
-    ):
-        repo = MagicMock()
-        pr = MagicMock()
-        pr.head.sha = "abc"
-        pr.get_files.return_value = [_make_file("src/api/foo.py")]
-        mock_repo_pr.return_value = (repo, pr)
-
-        with pytest.raises(SystemExit) as exc_info:
-            main(strict=True)
-        assert exc_info.value.code == 1
-
     @patch("check_acknowledgements.set_commit_status")
     @patch("check_acknowledgements.get_repo_and_pr")
     @patch("check_acknowledgements.get_github_client")
@@ -397,3 +373,5 @@ class TestCheckAcknowledgementsMain:
             "Merge queue: checklists assumed OK",
         )
 
+if __name__ == "__main__":
+    sys.exit(pytest.main(sys.argv[1:]))

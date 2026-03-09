@@ -130,7 +130,8 @@ class TestGetRepoAndPr:
 
 class TestLoadChecklists:
     def test_load_from_explicit_path(self, sample_config):
-        result = load_checklists(config_path=sample_config)
+        with patch("helpers._find_checklists_config", return_value=sample_config):
+            result = load_checklists()
         assert len(result) == 3
         assert result[0]["id"] == "api-review"
 
@@ -427,3 +428,49 @@ class TestSetCommitStatus:
         commit = repo.get_commit.return_value
         call_kwargs = commit.create_status.call_args[1]
         assert call_kwargs["context"] == "my-context"
+
+
+# ---------------------------------------------------------------------------
+# _find_checklists_config
+# ---------------------------------------------------------------------------
+
+
+class TestFindChecklistsConfig:
+    def test_find_via_runfiles(self, tmp_path, monkeypatch):
+        cfg = tmp_path / "checklists.yml"
+        cfg.write_text(yaml.dump({"checklists": SAMPLE_CHECKLISTS}))
+
+        class DummyRunfiles:
+            def __init__(self, path):
+                self._path = path
+
+            def Rlocation(self, _):
+                return self._path
+
+            @staticmethod
+            def Create():
+                return DummyRunfiles(str(cfg))
+
+        runfiles_mod = types.ModuleType("runfiles")
+        runfiles_mod.Runfiles = DummyRunfiles
+
+        monkeypatch.setitem(sys.modules, "runfiles", runfiles_mod)
+        assert _find_checklists_config() == str(cfg)
+
+    def test_find_via_relative_fallback(self, monkeypatch):
+        class DummyRunfiles:
+            @staticmethod
+            def Create():
+                return None
+
+        runfiles_mod = types.ModuleType("runfiles")
+        runfiles_mod.Runfiles = DummyRunfiles
+
+        monkeypatch.setitem(sys.modules, "runfiles", runfiles_mod)
+        expected = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "checklists.yml"
+        )
+        assert _find_checklists_config() == expected
+
+if __name__ == "__main__":
+    sys.exit(pytest.main(sys.argv[1:]))

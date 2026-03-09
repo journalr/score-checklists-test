@@ -295,5 +295,3 @@ def update_pr_description_with_evidence(
         print("Updated PR description with evidence block")
     else:
         print("PR description evidence is already up to date")
-
-

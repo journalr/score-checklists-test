@@ -18,6 +18,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, call, patch
 
 import pytest
+import sys
 
 from post_checklists import main
 
@@ -60,15 +61,13 @@ class TestPostChecklistsMain:
             repo, "abc123", "success", "No checklists applicable"
         )
 
-    @patch("post_checklists.check_merge_queue_protection")
     @patch("post_checklists.set_commit_status")
     @patch("post_checklists.find_existing_checklist_comments", return_value={})
     @patch("post_checklists.load_checklists", return_value=SAMPLE_CHECKLISTS)
     @patch("post_checklists.get_repo_and_pr")
     @patch("post_checklists.get_github_client")
     def test_creates_new_review_with_inline_comment(
-        self, mock_gh, mock_repo_pr, mock_load, mock_existing, mock_status,
-        mock_mq_check
+        self, mock_gh, mock_repo_pr, mock_load, mock_existing, mock_status
     ):
         repo = MagicMock()
         pr = MagicMock()
@@ -146,3 +145,5 @@ class TestPostChecklistsMain:
 
         existing_review.edit.assert_not_called()
 
+if __name__ == "__main__":
+    sys.exit(pytest.main(sys.argv[1:]))
