@@ -16,7 +16,8 @@
 from __future__ import annotations
 
 import os
-import textwrap
+import sys
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,6 +26,7 @@ import yaml
 from helpers import (
     CHECKLIST_MARKER,
     OK_KEYWORD,
+    _find_checklists_config,
     find_existing_checklist_comments,
     find_ok_replies,
     get_approving_reviewers,
@@ -132,13 +134,7 @@ class TestLoadChecklists:
         assert len(result) == 3
         assert result[0]["id"] == "api-review"
 
-    def test_load_via_env_override(self, sample_config, monkeypatch):
-        monkeypatch.setenv("CHECKLISTS_CONFIG", sample_config)
-        result = load_checklists()
-        assert len(result) == 3
-
     def test_file_not_found_raises(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("CHECKLISTS_CONFIG", "")
         monkeypatch.delenv("RUNFILES_DIR", raising=False)
         monkeypatch.delenv("RUNFILES_MANIFEST_FILE", raising=False)
         with patch(

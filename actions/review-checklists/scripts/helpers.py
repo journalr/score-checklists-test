@@ -49,12 +49,7 @@ def get_repo_and_pr(gh: Github) -> tuple[Any, PullRequest]:
 
 def _find_checklists_config() -> str:
     """Locate checklists.yml using Bazel runfiles, env var, or path heuristics."""
-    # 1. Explicit override via environment variable.
-    env_path = os.environ.get("CHECKLISTS_CONFIG")
-    if env_path and os.path.isfile(env_path):
-        return env_path
-
-    # 2. Bazel runfiles via the bazel-runfiles library (Rlocation API).
+    # 1. Bazel runfiles via the bazel-runfiles library (Rlocation API).
     try:
         from runfiles import Runfiles  # type: ignore[import-untyped]
 
@@ -68,7 +63,7 @@ def _find_checklists_config() -> str:
     except (ImportError, Exception):
         pass
 
-    # 3. Fallback: relative to this source file (works outside Bazel).
+    # 2. Fallback: relative to this source file (works outside Bazel).
     candidate = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "checklists.yml"
     )
@@ -78,10 +73,9 @@ def _find_checklists_config() -> str:
     raise FileNotFoundError("Cannot locate checklists.yml")
 
 
-def load_checklists(config_path: str | None = None) -> list[dict]:
+def load_checklists() -> list[dict]:
     """Load checklist definitions from the YAML configuration file."""
-    if config_path is None:
-        config_path = _find_checklists_config()
+    config_path = _find_checklists_config()
     with open(config_path, "r") as f:
         data = yaml.safe_load(f)
     return data["checklists"]
