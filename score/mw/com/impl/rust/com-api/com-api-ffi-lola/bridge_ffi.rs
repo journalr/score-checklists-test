@@ -99,9 +99,12 @@ impl NativeFindServiceHandle {
     pub fn new(handle: *mut FindServiceHandle) -> Self {
         Self { handle }
     }
-    /// Get the raw pointer to the FindServiceHandle
-    pub fn as_ptr(&self) -> *mut FindServiceHandle {
-        self.handle
+}
+
+impl AsMut<FindServiceHandle> for NativeFindServiceHandle {
+    fn as_mut(&mut self) -> &mut FindServiceHandle {
+        // SAFETY: self.handle is guaranteed to be a valid pointer to FindServiceHandle as per the contract of NativeFindServiceHandle.
+        unsafe { &mut *self.handle }
     }
 }
 

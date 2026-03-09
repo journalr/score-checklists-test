@@ -757,7 +757,9 @@ impl<I: Interface> Drop for ServiceDiscoveryFuture<I> {
         // This unconditional call ensures the C++ discovery operation is always
         // cleaned up, even when the future is dropped before the callback fires.
         unsafe {
-            bridge_ffi_rs::stop_find_service(self.find_handle.as_ptr());
+            bridge_ffi_rs::stop_find_service(
+                self.find_handle.as_mut() as *mut bridge_ffi_rs::FindServiceHandle
+            );
         }
     }
 }
@@ -780,27 +782,29 @@ impl<I: Interface> Future for ServiceDiscoveryFuture<I> {
         // The lock duration is minimal - just reading two Option fields, not blocking operations.
         // In practice, contention is zero: callback runs once asynchronously, poll spins until done.
         // The Mutex is necessary for memory safety, not just performance.
-        if let Ok(mut state_guard) = self.discovery_state.lock() {
-            if let Some(service_handle) = state_guard.handles.take() {
-                //create Arc for service handle to share between instances
-                let service_handle_arc = Arc::new(service_handle);
-                // Build the response from discovered handles
-                let available_instances = (0..service_handle_arc.len())
-                    .map(|handle_index| {
-                        let instance_info = LolaConsumerInfo {
-                            instance_specifier: self.instance_specifier.clone(),
-                            handle_container: Arc::clone(&service_handle_arc),
-                            handle_index,
-                            interface_id: I::INTERFACE_ID,
-                        };
-                        SampleConsumerBuilder {
-                            instance_info,
-                            _interface: PhantomData,
-                        }
-                    })
-                    .collect();
-                return std::task::Poll::Ready(Ok(available_instances));
-            }
+        let mut state_guard = self
+            .discovery_state
+            .lock()
+            .expect("failed to acquire discovery_state lock");
+        if let Some(service_handle) = state_guard.handles.take() {
+            //create Arc for service handle to share between instances
+            let service_handle_arc = Arc::new(service_handle);
+            // Build the response from discovered handles
+            let available_instances = (0..service_handle_arc.len())
+                .map(|handle_index| {
+                    let instance_info = LolaConsumerInfo {
+                        instance_specifier: self.instance_specifier.clone(),
+                        handle_container: Arc::clone(&service_handle_arc),
+                        handle_index,
+                        interface_id: I::INTERFACE_ID,
+                    };
+                    SampleConsumerBuilder {
+                        instance_info,
+                        _interface: PhantomData,
+                    }
+                })
+                .collect();
+            return std::task::Poll::Ready(Ok(available_instances));
         }
 
         // Wait for discovery to complete - C++ callback will wake us
