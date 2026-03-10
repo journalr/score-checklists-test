@@ -46,6 +46,12 @@ inputs:
       Commit SHA to set the status on (used for merge_group events).
     required: false
     default: ""
+  config-path:
+    description: >
+      Relative path to the checklist configuration file.
+      Defaults to '.github/review-checklists.yml'.
+    required: false
+    default: ".github/review-checklists.yml"
 
 runs:
   using: composite
@@ -61,7 +67,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
-      run: python3 "$GITHUB_ACTION_PATH/scripts/post_checklists.py"
+      run: python3 "$GITHUB_ACTION_PATH/scripts/post_checklists.py" --config-path "${{ inputs.config-path }}"
 
     - name: Run check_acknowledgements
       if: inputs.action == 'check'
@@ -71,7 +77,7 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
         HEAD_SHA: ${{ inputs.head-sha }}
-      run: python3 "$GITHUB_ACTION_PATH/scripts/check_acknowledgements.py"
+      run: python3 "$GITHUB_ACTION_PATH/scripts/check_acknowledgements.py" --config-path "${{ inputs.config-path }}"
 
 
     - name: Run dismiss_and_invalidate (synchronize)
@@ -83,7 +89,7 @@ runs:
         PR_NUMBER: ${{ inputs.pr-number }}
         BEFORE_SHA: ${{ inputs.before-sha }}
         AFTER_SHA: ${{ inputs.after-sha }}
-      run: python3 "$GITHUB_ACTION_PATH/scripts/dismiss_and_invalidate.py" --trigger synchronize
+      run: python3 "$GITHUB_ACTION_PATH/scripts/dismiss_and_invalidate.py" --trigger synchronize --config-path "${{ inputs.config-path }}"
 
     - name: Run dismiss_and_invalidate (comment changed)
       if: inputs.action == 'dismiss_edit'
@@ -93,4 +99,4 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
         GITHUB_EVENT_PATH: ${{ github.event_path }}
-      run: python3 "$GITHUB_ACTION_PATH/scripts/dismiss_and_invalidate.py" --trigger comment_changed
+      run: python3 "$GITHUB_ACTION_PATH/scripts/dismiss_and_invalidate.py" --trigger comment_changed --config-path "${{ inputs.config-path }}"

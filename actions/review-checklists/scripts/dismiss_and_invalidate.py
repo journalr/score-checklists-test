@@ -99,14 +99,14 @@ def _find_ok_comments_for_checklist(
     return ok_comments
 
 
-def handle_synchronize(pr: Any) -> None:
+def handle_synchronize(pr: Any, config_path: str) -> None:
     """Handle new commits pushed to the PR.
 
     For each checklist whose covered paths were touched by the new push,
     delete all OK replies and set the commit status back to pending.
     Approvals are not dismissed — branch rulesets handle that.
     """
-    checklists = load_checklists()
+    checklists = load_checklists(config_path)
     new_files = _get_files_in_latest_push(pr)
     affected = match_checklists(checklists, new_files)
 
@@ -223,13 +223,18 @@ def main() -> None:
         choices=["synchronize", "comment_changed"],
         help="The event trigger type.",
     )
+    parser.add_argument(
+        "--config-path",
+        default=".github/review-checklists.yml",
+        help="Path to checklist configuration file (default: .github/review-checklists.yml)",
+    )
     args = parser.parse_args()
 
     gh = get_github_client()
     _, pr = get_repo_and_pr(gh)
 
     if args.trigger == "synchronize":
-        handle_synchronize(pr)
+        handle_synchronize(pr, args.config_path)
     elif args.trigger == "comment_changed":
         handle_comment_changed(pr)
 

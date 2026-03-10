@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2026 Contributors to the Eclipse Foundation
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -10,8 +10,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+
 filegroup(
-    name = "pip_requirements",
-    srcs = ["requirements.txt"],
-    visibility = ["//:__pkg__"],
+    name = "review_checklists_config",
+    srcs = ["review-checklists.yml"],
+    visibility = ["//visibility:public"],
 )
+

@@ -16,7 +16,7 @@ load("@score_communication_pip//:requirements.bzl", "requirement")
 py_library(
     name = "helpers",
     srcs = ["helpers.py"],
-    data = ["//actions/review-checklists:checklists_config"],
+    data = ["//.github:review_checklists_config"],
     imports = ["."],
     visibility = ["//actions/review-checklists:__subpackages__"],
     deps = [
