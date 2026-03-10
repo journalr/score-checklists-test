@@ -5,7 +5,7 @@ This and the following documents shall act as software architecture for `mw::com
 [AUTOSAR 20.11 Standard](https://www.autosar.org/fileadmin/standards/R20-11/AP/AUTOSAR_SWS_CommunicationManagement.pdf).
 
 ## How to Start
-
+a
 In order to start contributing or following this architecture description, one should be familiar with the basic
 adaptive AUTOSAR concepts and more specifically with the basic usage of `ara::com` API. Therefore, it makes sense to
 start reading
