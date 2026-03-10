@@ -14,6 +14,7 @@
 #define SCORE_MW_COM_IMPL_TRAITS_H
 
 #include "score/mw/com/impl/com_error.h"
+#include "score/mw/com/impl/flag_owner.h"
 #include "score/mw/com/impl/handle_type.h"
 #include "score/mw/com/impl/instance_identifier.h"
 #include "score/mw/com/impl/instance_specifier.h"
@@ -163,6 +164,10 @@ template <template <class> class Interface, class Trait>
 // NOLINTNEXTLINE(score-struct-usage-compliance): Tolerated.
 class SkeletonWrapperClass : public Interface<Trait>
 {
+    // Suppress "AUTOSAR C++14 A11-3-1", The rule states: "Friend declarations shall not be used".
+    // Design decision. This class provides a read only view to the private members of this class inside the impl
+    // module.
+    // coverity[autosar_cpp14_a11_3_1_violation]
     friend class SkeletonWrapperClassTestView<SkeletonWrapperClass>;
 
   public:
@@ -218,6 +223,38 @@ class SkeletonWrapperClass : public Interface<Trait>
         return skeleton_wrapper;
     }
 
+    ~SkeletonWrapperClass()
+    {
+        if (is_service_owner_.IsSet())
+        {
+            this->StopOfferService();
+        }
+    }
+
+    SkeletonWrapperClass(const SkeletonWrapperClass&) = delete;
+    SkeletonWrapperClass& operator=(const SkeletonWrapperClass&) = delete;
+
+    SkeletonWrapperClass(SkeletonWrapperClass&& other) noexcept
+        : Interface<Trait>{std::move(static_cast<Interface<Trait>&&>(other))},
+          is_service_owner_{std::move(other.is_service_owner_)}
+    {
+    }
+
+    SkeletonWrapperClass& operator=(SkeletonWrapperClass&& other) noexcept
+    {
+        if (&other != this)
+        {
+            if (is_service_owner_.IsSet())
+            {
+                this->StopOfferService();
+            }
+
+            Interface<Trait>::operator=(std::move(static_cast<Interface<Trait>&&>(other)));
+            is_service_owner_ = std::move(other.is_service_owner_);
+        }
+        return *this;
+    }
+
   private:
     explicit SkeletonWrapperClass(const InstanceIdentifier& instance_id,
                                   std::unique_ptr<SkeletonBinding> skeleton_binding)
@@ -244,6 +281,12 @@ class SkeletonWrapperClass : public Interface<Trait>
         instance_specifier_creation_results_;
     static std::optional<std::unordered_map<InstanceIdentifier, std::queue<Result<SkeletonWrapperClass>>>>
         instance_identifier_creation_results_;
+
+    /// \brief Flag which is checked before calling StopFindService in the destructor of this class
+    ///
+    /// This flag is always set for a Skeleton except when a Skeleton is moved. In this case, this flag will be cleared
+    /// in the moved-from class so that that object doesn't call StopFindService on destruction.
+    FlagOwner is_service_owner_{true};
 };
 template <template <class> class Interface, class Trait>
 std::optional<std::unordered_map<InstanceSpecifier, std::queue<Result<SkeletonWrapperClass<Interface, Trait>>>>>
@@ -255,6 +298,10 @@ std::optional<std::unordered_map<InstanceIdentifier, std::queue<Result<SkeletonW
 template <template <class> class Interface, class Trait>
 class ProxyWrapperClass : public Interface<Trait>
 {
+    // Suppress "AUTOSAR C++14 A11-3-1", The rule states: "Friend declarations shall not be used".
+    // Design decision. This class provides a read only view to the private members of this class inside the impl
+    // module.
+    // coverity[autosar_cpp14_a11_3_1_violation]
     friend class ProxyWrapperClassTestView<ProxyWrapperClass>;
 
   public:

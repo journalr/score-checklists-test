@@ -41,7 +41,7 @@ struct SomeStruct
                const std::uint16_t& bar_param,
                const ::our::name_space::SomeArray& access_array_param,
                const ::our::name_space::MultiDimArray& multi_dim_array_param,
-#ifndef __QNX__
+#if !defined(__QNX__) && !defined(__clang__)
                ::score::memory::shared::String const& access_string_param,
 #endif
                ::our::name_space::SomeVector const& access_vector_param,
@@ -53,7 +53,9 @@ struct SomeStruct
           bar{bar_param},
           access_array{access_array_param},
           multi_dim_array{multi_dim_array_param},
+#if !defined(__QNX__) && !defined(__clang__)
           access_string{access_string_param},
+#endif
           access_vector{access_vector_param, allocator},
           multi_dim_vector{multi_dim_vector_param, allocator},
           my_type{my_type_param},
@@ -66,7 +68,9 @@ struct SomeStruct
           bar{other.bar},
           access_array{other.access_array},
           multi_dim_array{other.multi_dim_array},
+#if !defined(__QNX__) && !defined(__clang__)
           access_string{other.access_string},
+#endif
           access_vector{other.access_vector, allocator},
           multi_dim_vector{other.multi_dim_vector, allocator},
           my_type{other.my_type},
@@ -79,7 +83,9 @@ struct SomeStruct
           bar{std::move(other.bar)},
           access_array{std::move(other.access_array)},
           multi_dim_array{std::move(other.multi_dim_array)},
+#if !defined(__QNX__) && !defined(__clang__)
           access_string{std::move(other.access_string)},
+#endif
           access_vector{std::move(other.access_vector), allocator},
           multi_dim_vector{std::move(other.multi_dim_vector), allocator},
           my_type{std::move(other.my_type)},
@@ -91,7 +97,7 @@ struct SomeStruct
     std::uint16_t bar;
     ::our::name_space::SomeArray access_array;
     ::our::name_space::MultiDimArray multi_dim_array;
-#ifndef __QNX__
+#if !defined(__QNX__) && !defined(__clang__)
     ::score::memory::shared::String access_string;
 #endif
     ::our::name_space::SomeVector access_vector;
@@ -107,7 +113,9 @@ struct SomeStruct
         fun(bar);
         fun(access_array);
         fun(multi_dim_array);
+#if !defined(__QNX__) && !defined(__clang__)
         fun(access_string);
+#endif
         fun(access_vector);
         fun(multi_dim_vector);
         fun(my_type);
@@ -121,7 +129,9 @@ struct SomeStruct
         fun.template Visit<decltype(bar)>();
         fun.template Visit<decltype(access_array)>();
         fun.template Visit<decltype(multi_dim_array)>();
+#if !defined(__QNX__) && !defined(__clang__)
         fun.template Visit<decltype(access_string)>();
+#endif
         fun.template Visit<decltype(access_vector)>();
         fun.template Visit<decltype(multi_dim_vector)>();
         fun.template Visit<decltype(my_type)>();

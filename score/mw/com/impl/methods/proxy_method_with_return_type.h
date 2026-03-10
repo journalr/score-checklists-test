@@ -136,15 +136,28 @@ score::Result<MethodReturnTypePtr<ReturnType>> ProxyMethod<ReturnType()>::operat
 
     const auto queue_position = queue_position_result.value();
     auto allocated_return_type_storage = binding_->AllocateReturnType(queue_position);
-    SCORE_LANGUAGE_FUTURECPP_ASSERT_PRD_MESSAGE(allocated_return_type_storage.has_value(),
-                           "ProxyMethod::operator(): AllocateReturnType failed unexpectedly.");
+    if (!allocated_return_type_storage.has_value())
+    {
+        return Unexpected(allocated_return_type_storage.error());
+    }
     auto call_result = binding_->DoCall(queue_position);
     if (!call_result.has_value())
     {
         return Unexpected(call_result.error());
     }
 
+    // reinterpret_cast is fine because we are casting back to the original type of this type-erased buffer.
+    // This object might be created by a different process but we require both processes to be compiled by the same
+    // compiler and compiler options, thus we are sure that the data can be interpreted correctly.
+    //  See AoU:
+    //  21206172
+    //  ScoreReq.AoU SameCompilerSettingsForProviderAndConsumerSide
+    //
+    // Additionally, we require the types to be trivially copyable.
+    // 5835098
+    // ScoreReq.AoU OnlyLoLaSupportedTypes
     return MethodReturnTypePtr<ReturnType>{
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast]) see above
         *(reinterpret_cast<ReturnType*>(allocated_return_type_storage.value().data())),
         is_return_type_ptr_active_[queue_position],
         queue_position};

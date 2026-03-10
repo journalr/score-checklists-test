@@ -10,6 +10,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@score_baselibs//:bazel/unit_tests.bzl", "cc_gtest_unit_test", "cc_unit_test_suites_for_host_and_qnx")
 load("//score/mw:common_features.bzl", "COMPILER_WARNING_FEATURES")
 
@@ -87,5 +89,5 @@ cc_unit_test_suites_for_host_and_qnx(
     ],
     test_suites_from_sub_packages = [
     ],
-    visibility = ["//score/mw/com:__subpackages__"],
+    visibility = ["//score/mw/com/impl:__pkg__"],
 )

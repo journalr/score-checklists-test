@@ -49,6 +49,32 @@ TEST_F(MethodErrorMessageForFixture, MessageForUnexpectedMessageSize)
     TestErrorMessage(MethodErrc::kUnexpectedMessageSize, "Message with an unexpected size was received.");
 }
 
+TEST_F(MethodErrorMessageForFixture, MessageForMessagePassingError)
+{
+    TestErrorMessage(MethodErrc::kMessagePassingError, "Message passing failed with an error.");
+}
+
+TEST_F(MethodErrorMessageForFixture, MessageForNotSubscribed)
+{
+    TestErrorMessage(MethodErrc::kNotSubscribed, "Method has not been successfully subscribed.");
+}
+
+TEST_F(MethodErrorMessageForFixture, MessageForNotOffered)
+{
+    TestErrorMessage(MethodErrc::kNotOffered, "Method has not been fully offered.");
+}
+
+TEST_F(MethodErrorMessageForFixture, MessageForUnknownProxy)
+{
+    TestErrorMessage(MethodErrc::kUnknownProxy, "Proxy is not allowed to access method.");
+}
+
+TEST_F(MethodErrorMessageForFixture, MessageForDefaultClause)
+{
+    auto one_past_the_last_lable = static_cast<std::uint32_t>(MethodErrc::kNumEnumElements) + 1;
+    TestErrorMessage(static_cast<MethodErrc>(one_past_the_last_lable), "unknown future error");
+}
+
 using MethodErrorMessageForDeathTest = MethodErrorMessageForFixture;
 TEST_F(MethodErrorMessageForDeathTest, MessageForkInvalidTerminates)
 {

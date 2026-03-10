@@ -11,6 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
+load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@score_baselibs//:bazel/unit_tests.bzl", "cc_gtest_unit_test", "cc_unit_test", "cc_unit_test_suites_for_host_and_qnx")
 load("//score/mw:common_features.bzl", "COMPILER_WARNING_FEATURES")
 
@@ -26,6 +27,7 @@ cc_library(
     ],
     deps = [
         "//score/mw/com/impl/configuration",
+        "@score_logging//score/mw/log",
     ],
 )
 
@@ -42,6 +44,7 @@ cc_library(
     deps = [
         ":proxy_instance_identifier",
         "//score/mw/com/impl/configuration",
+        "@score_logging//score/mw/log",
     ],
 )
 
@@ -57,6 +60,7 @@ cc_library(
     ],
     deps = [
         "//score/mw/com/impl/configuration",
+        "@score_logging//score/mw/log",
     ],
 )
 
@@ -78,6 +82,28 @@ cc_library(
         "@score_baselibs//score/language/futurecpp",
         "@score_baselibs//score/memory/shared:managed_memory_resource",
         "@score_baselibs//score/memory/shared:polymorphic_offset_ptr_allocator",
+    ],
+)
+
+cc_library(
+    name = "method_resource_map",
+    srcs = [
+        "method_resource_map.cpp",
+    ],
+    hdrs = [
+        "method_resource_map.h",
+    ],
+    features = COMPILER_WARNING_FEATURES,
+    implementation_deps = [
+        "@score_baselibs//score/language/futurecpp",
+        "@score_logging//score/mw/log",
+    ],
+    tags = ["FFI"],
+    visibility = ["//score/mw/com/impl/bindings/lola:__pkg__"],
+    deps = [
+        ":proxy_instance_identifier",
+        "//score/mw/com/impl/configuration",
+        "@score_baselibs//score/memory/shared",
     ],
 )
 
@@ -113,6 +139,16 @@ cc_library(
         "//score/mw/com/impl:__subpackages__",
     ],
     deps = ["@score_baselibs//score/result"],
+)
+
+cc_library(
+    name = "offered_state_machine",
+    srcs = ["offered_state_machine.cpp"],
+    hdrs = ["offered_state_machine.h"],
+    features = COMPILER_WARNING_FEATURES,
+    implementation_deps = ["@score_baselibs//score/language/futurecpp"],
+    tags = ["FFI"],
+    visibility = ["//score/mw/com/impl/bindings/lola:__pkg__"],
 )
 
 cc_unit_test(
@@ -188,6 +224,37 @@ cc_gtest_unit_test(
     ],
 )
 
+cc_gtest_unit_test(
+    name = "method_resource_map_test",
+    srcs = [
+        "method_resource_map_test.cpp",
+    ],
+    features = COMPILER_WARNING_FEATURES + [
+        # These tests catch exceptions instead of using gtest EXPECT_DEATH so we disable aborts_upon_exception.
+        "-aborts_upon_exception",
+    ],
+    deps = [
+        ":method_resource_map",
+        "@score_baselibs//score/language/futurecpp:futurecpp_test_support",
+        "@score_baselibs//score/memory/shared:shared_memory_resource_mock",
+    ],
+)
+
+cc_unit_test(
+    name = "offered_state_machine_test",
+    srcs = ["offered_state_machine_test.cpp"],
+    features = COMPILER_WARNING_FEATURES + [
+        # These tests catch exceptions instead of using gtest EXPECT_DEATH so we disable aborts_upon_exception.
+        "-aborts_upon_exception",
+    ],
+    deps = [
+        ":offered_state_machine",
+        "@googletest//:gtest",
+        "@googletest//:gtest_main",
+        "@score_baselibs//score/language/futurecpp:futurecpp_test_support",
+    ],
+)
+
 cc_unit_test_suites_for_host_and_qnx(
     name = "unit_test_suite",
     cc_unit_tests = [
@@ -197,6 +264,8 @@ cc_unit_test_suites_for_host_and_qnx(
         ":type_erased_call_queue_test",
         ":method_data_test",
         ":method_error_test",
+        ":method_resource_map_test",
+        ":offered_state_machine_test",
     ],
     visibility = [
         "//score/mw/com/impl/bindings/lola:__pkg__",

@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2025 Contributors to the Eclipse Foundation
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -88,7 +88,7 @@ class LolaGetNumNewSamplesAvailableBenchmarkFixture : public benchmark::Fixture
                 }
                 auto sample = std::move(sample_alloc_result.value());
                 std::fill(sample->begin(), sample->end(), 1U);
-                skeleton_->test_event.Send(std::move(sample));
+                std::ignore = skeleton_->test_event.Send(std::move(sample));
                 std::this_thread::sleep_for(std::chrono::milliseconds{1});
             }
         });

@@ -68,12 +68,11 @@ class TypeErasedCallQueueFixture : public ::testing::Test
 
     TypeErasedCallQueueFixture& GivenATypeErasedCallQueue()
     {
-        unit_ = std::make_unique<TypeErasedCallQueue>(*memory_resource_proxy_, type_erased_element_info_);
+        unit_ = std::make_unique<TypeErasedCallQueue>(fake_memory_resource_, type_erased_element_info_);
         return *this;
     }
 
     memory::shared::test::MyBoundedMemoryResource fake_memory_resource_{2000U};
-    const memory::shared::MemoryResourceProxy* memory_resource_proxy_{fake_memory_resource_.getMemoryResourceProxy()};
 
     TypeErasedCallQueue::TypeErasedElementInfo type_erased_element_info_{{}, {}, kQueueSize};
 
@@ -186,6 +185,36 @@ TEST_F(TypeErasedCallQueueFixture, GetInArgValuesQueueStoragePointsToCorrectPosi
         EXPECT_EQ(in_args_queue_position_storage.data(), expected_element_address);
         EXPECT_EQ(in_args_queue_position_storage.size(), kValidInArgTypeErasedInfo.Size());
     }
+}
+
+TEST_F(TypeErasedCallQueueFixture, GetInArgValuesQueueStorageUsesInArgsSizeTimesQueueSize)
+{
+    // Given a TypeErasedElementInfo extracted from a TypeErasedCallQueue with a queue size larger than 1
+    WithAnInArgTypeInfo().GivenATypeErasedCallQueue();
+
+    // When calling GetInArgValuesQueueStorage()
+    const auto in_args_queue_storage = unit_->GetInArgValuesQueueStorage();
+    ASSERT_TRUE(in_args_queue_storage.has_value());
+
+    const auto in_args_type_erased_info = unit_->GetTypeErasedElementInfo();
+
+    // Then its size fits the InArgs kQueueSize-times
+    ASSERT_EQ(in_args_queue_storage->size(), in_args_type_erased_info.in_arg_type_info->Size() * kQueueSize);
+}
+
+TEST_F(TypeErasedCallQueueFixture, GetReturnValueQueueStorageUsesReturnSizeTimesQueueSize)
+{
+    // Given a TypeErasedElementInfo extracted from a TypeErasedCallQueue with a queue size larger than 1
+    WithAReturnTypeInfo().GivenATypeErasedCallQueue();
+
+    // When calling GetReturnValueQueueStorage()
+    const auto return_queue_storage = unit_->GetReturnValueQueueStorage();
+    ASSERT_TRUE(return_queue_storage.has_value());
+
+    const auto in_args_type_erased_info = unit_->GetTypeErasedElementInfo();
+
+    // Then its size fits the Return values kQueueSize-times
+    ASSERT_EQ(return_queue_storage->size(), in_args_type_erased_info.return_type_info->Size() * kQueueSize);
 }
 
 TEST_F(TypeErasedCallQueueFixture, GetInArgValuesQueueStoragePointsToCorrectPositionInQueueWithInArgsAndReturnTypeInfos)

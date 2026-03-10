@@ -11,6 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 load("@score_baselibs//:bazel/unit_tests.bzl", "cc_gtest_unit_test", "cc_unit_test", "cc_unit_test_suites_for_host_and_qnx")
 load("//score/mw:common_features.bzl", "COMPILER_WARNING_FEATURES")
 
@@ -274,6 +275,7 @@ cc_library(
         "//score/mw/com/impl:skeleton_binding",
         "//score/mw/com/impl:skeleton_event_binding",
         "//score/mw/com/impl/bindings/lola/methods:method_data",
+        "//score/mw/com/impl/bindings/lola/methods:method_resource_map",
         "//score/mw/com/impl/bindings/lola/methods:proxy_instance_identifier",
         "//score/mw/com/impl/bindings/lola/methods:skeleton_instance_identifier",
         "//score/mw/com/impl/bindings/lola/methods:type_erased_call_queue",
@@ -288,6 +290,7 @@ cc_library(
         "@score_baselibs//score/language/safecpp/scoped_function:scope",
         "@score_baselibs//score/memory:data_type_size_info",
         "@score_baselibs//score/memory/shared",
+        "@score_baselibs//score/memory/shared:i_shared_memory_resource",
         "@score_baselibs//score/memory/shared:lock_file",
         "@score_baselibs//score/memory/shared:new_delete_delegate_resource",
         "@score_baselibs//score/memory/shared/flock:exclusive_flock_mutex",
@@ -350,6 +353,7 @@ cc_library(
         "//score/mw/com/impl:scoped_event_receive_handler",
         "//score/mw/com/impl/bindings/lola:partial_restart_path_builder",
         "//score/mw/com/impl/bindings/lola/methods:method_data",
+        "//score/mw/com/impl/bindings/lola/methods:offered_state_machine",
         "//score/mw/com/impl/bindings/lola/methods:proxy_instance_identifier",
         "//score/mw/com/impl/bindings/lola/methods:type_erased_call_queue",
         "//score/mw/com/impl/configuration",
@@ -358,6 +362,7 @@ cc_library(
         "//score/mw/com/impl/tracing:i_tracing_runtime",
         "//score/mw/com/impl/util:type_erased_storage",
         "@score_baselibs//score/filesystem",
+        "@score_baselibs//score/language/safecpp/safe_atomics:try_atomic_add",
         "@score_baselibs//score/language/safecpp/safe_math",
         "@score_baselibs//score/memory/shared",
         "@score_baselibs//score/memory/shared:lock_file",
@@ -905,8 +910,10 @@ cc_test(
     ],
 )
 
-cc_unit_test(
+cc_test(
     name = "skeleton_method_handling_test",
+    # TODO: Investigate why this unit tests takes more than 1 minute under memcheck (Ticket-141169)
+    timeout = "moderate",
     srcs = [
         "skeleton_method_handling_test.cpp",
     ],
@@ -914,6 +921,7 @@ cc_unit_test(
         # These tests catch exceptions instead of using gtest EXPECT_DEATH so we disable aborts_upon_exception.
         "-aborts_upon_exception",
     ],
+    tags = ["unit"],
     deps = [
         ":skeleton",
         "//score/mw/com/impl:binding_type",
@@ -1135,6 +1143,7 @@ cc_gtest_unit_test(
         "//score/mw/com/impl:binding_type",
         "//score/mw/com/impl/test:runtime_mock_guard",
         "@score_baselibs//score/memory/shared:map",
+        "@score_baselibs//score/memory/shared:new_delete_delegate_resource",
         "@score_baselibs//score/os:object_seam",
         "@score_baselibs//score/os/mocklib:unistd_mock",
     ],
@@ -1256,6 +1265,7 @@ cc_gtest_unit_test(
     features = COMPILER_WARNING_FEATURES,
     deps = [
         ":transaction_log",
+        "//score/mw/com/impl/bindings/lola/test:transaction_log_test_resources",
         "@score_baselibs//score/memory/shared:shared_memory_resource_heap_allocator_mock",
     ],
 )

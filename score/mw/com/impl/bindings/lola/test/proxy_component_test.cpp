@@ -94,7 +94,7 @@ class ProxyWithRealMemFixture : public ::testing::Test
     {
         for (const auto& file : shm_files_)
         {
-            score::filesystem::IStandardFilesystem::instance().Remove(std::string{"/dev/shm"} + file);
+            std::ignore = score::filesystem::IStandardFilesystem::instance().Remove(std::string{"/dev/shm"} + file);
         }
         shm_files_.clear();
     }

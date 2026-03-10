@@ -59,7 +59,7 @@ bool StartFindServiceAndWait(const std::string& tag,
         handle_notification_data.condition_variable.notify_all();
         std::cerr << tag << ": FindServiceHandler handler done - found one service instance." << std::endl;
 
-        TestServiceProxy::StopFindService(find_service_handle);
+        std::ignore = TestServiceProxy::StopFindService(find_service_handle);
     };
 
     auto find_service_handle_result =

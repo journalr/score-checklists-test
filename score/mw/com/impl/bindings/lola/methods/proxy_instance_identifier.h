@@ -15,6 +15,8 @@
 
 #include "score/mw/com/impl/configuration/global_configuration.h"
 
+#include "score/mw/log/logging.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -43,6 +45,8 @@ struct ProxyInstanceIdentifier
 
 bool operator==(const ProxyInstanceIdentifier& lhs, const ProxyInstanceIdentifier& rhs) noexcept;
 
+mw::log::LogStream& operator<<(score::mw::log::LogStream& stream, const ProxyInstanceIdentifier& value) noexcept;
+
 }  // namespace score::mw::com::impl::lola
 
 namespace std
@@ -63,7 +67,7 @@ class hash<score::mw::com::impl::lola::ProxyInstanceIdentifier>
         constexpr auto proxy_instance_counter_bit_width =
             std::numeric_limits<decltype(proxy_instance_identifier.proxy_instance_counter)>::digits;
         return std::hash<std::uint64_t>{}((static_cast<std::uint64_t>(proxy_instance_identifier.process_identifier)
-                                           << proxy_instance_counter_bit_width) |
+                                           << static_cast<std::uint64_t>(proxy_instance_counter_bit_width)) |
                                           static_cast<std::uint64_t>(proxy_instance_identifier.proxy_instance_counter));
     }
 };

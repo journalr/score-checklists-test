@@ -83,7 +83,7 @@ TEST_F(SkeletonEventAllocateFixture, AllocateErrorLeadsToNullptr)
     InitialiseSkeletonEvent(fake_element_fq_id_, fake_event_name_, max_samples_, max_subscribers_, enforce_max_samples);
 
     // Given an offered event in an offered service
-    skeleton_event_->PrepareOffer();
+    std::ignore = skeleton_event_->PrepareOffer();
     std::vector<impl::SampleAllocateePtr<test::TestSampleType>> pointer_collection{max_samples_};
     for (std::size_t counter = 0; counter < max_samples_; ++counter)
     {
@@ -112,7 +112,7 @@ TEST_F(SkeletonEventAllocateFixture, SkeletonEventWithNotMaxSamplesEnforcementAl
     InitialiseSkeletonEvent(fake_element_fq_id_, fake_event_name_, max_samples_, max_subscribers_, enforce_max_samples);
 
     // When offering the event
-    skeleton_event_->PrepareOffer();
+    std::ignore = skeleton_event_->PrepareOffer();
     std::vector<impl::SampleAllocateePtr<test::TestSampleType>> pointer_collection{max_samples_};
     for (std::size_t counter = 0; counter < max_samples_; ++counter)
     {
@@ -152,7 +152,7 @@ TEST_F(SkeletonEventPrepareOfferFixture, SubscriptionsAcceptedIfMaxSamplesCanBeP
     InitialiseSkeletonEvent(fake_element_fq_id_, fake_event_name_, max_samples, max_subscribers_, enforce_max_samples);
 
     // When offering a skeleton event
-    skeleton_event_->PrepareOffer();
+    std::ignore = skeleton_event_->PrepareOffer();
 
     auto* const event_control = GetEventControl(fake_element_fq_id_, QualityType::kASIL_QM);
     ASSERT_NE(event_control, nullptr);
@@ -184,7 +184,7 @@ TEST_F(SkeletonEventPrepareOfferFixture, SubscriptionRejectedIfMaxSubscriptionCo
     InitialiseSkeletonEvent(fake_element_fq_id_, fake_event_name_, max_samples, max_subscribers_, enforce_max_samples);
 
     // When offering a skeleton event
-    skeleton_event_->PrepareOffer();
+    std::ignore = skeleton_event_->PrepareOffer();
 
     auto* const event_control = GetEventControl(fake_element_fq_id_, QualityType::kASIL_QM);
     ASSERT_NE(event_control, nullptr);
@@ -215,7 +215,7 @@ TEST_F(SkeletonEventPrepareOfferFixture, SubscriptionAcceptedIfOversubscriptionA
     InitialiseSkeletonEvent(fake_element_fq_id_, fake_event_name_, max_samples, max_subscribers_, enforce_max_samples);
 
     // When offering a skeleton event
-    skeleton_event_->PrepareOffer();
+    std::ignore = skeleton_event_->PrepareOffer();
 
     auto* const event_control = GetEventControl(fake_element_fq_id_, QualityType::kASIL_QM);
     ASSERT_NE(event_control, nullptr);
@@ -248,7 +248,7 @@ TEST_F(SkeletonEventPrepareOfferFixture, SubscriptionRejectedIfNumberOfSubscribe
     InitialiseSkeletonEvent(fake_element_fq_id_, fake_event_name_, max_samples, max_subscribers_, enforce_max_samples);
 
     // When offering a skeleton event
-    skeleton_event_->PrepareOffer();
+    std::ignore = skeleton_event_->PrepareOffer();
 
     auto* const event_control = GetEventControl(fake_element_fq_id_, QualityType::kASIL_QM);
     ASSERT_NE(event_control, nullptr);
@@ -287,7 +287,7 @@ TEST_F(SkeletonEventPrepareOfferFixture, UnsubscribeIncreasesAvailableSampleSlot
     InitialiseSkeletonEvent(fake_element_fq_id_, fake_event_name_, max_samples, max_subscribers_, enforce_max_samples);
 
     // When offering a skeleton event
-    skeleton_event_->PrepareOffer();
+    std::ignore = skeleton_event_->PrepareOffer();
 
     auto* const event_control = GetEventControl(fake_element_fq_id_, QualityType::kASIL_QM);
     ASSERT_NE(event_control, nullptr);
@@ -327,7 +327,7 @@ TEST_F(SkeletonEventTimestampFixture, SendUpdatesTimestampInControlData)
     InitialiseSkeletonEvent(
         fake_element_fq_id_, fake_event_name_, max_samples_, max_subscribers_, enforce_max_samples, tracing_data);
 
-    skeleton_event_->PrepareOffer();
+    std::ignore = skeleton_event_->PrepareOffer();
 
     // WHEN we allocate and send a first sample
     auto first_allocated_slot_result = skeleton_event_->Allocate();

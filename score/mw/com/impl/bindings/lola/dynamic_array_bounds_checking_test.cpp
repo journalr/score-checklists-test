@@ -95,9 +95,8 @@ class DynamicArrayBoundsCheckingFixture : public ::testing::Test
     std::remove_const_t<DynamicArrayType>* CreateValidDynamicArrayInMemoryPool() noexcept
     {
         static_assert(sizeof(DynamicArrayType) <= RegisteredMemoryPool::kValidRangeInBytes);
-        auto* const ptr_to_dynamic_array = memory_resource_.construct<std::remove_const_t<DynamicArrayType>>(
-            kArraySize,
-            memory::shared::PolymorphicOffsetPtrAllocator<PointedType>{memory_resource_.getMemoryResourceProxy()});
+        auto* const ptr_to_dynamic_array =
+            memory_resource_.construct<std::remove_const_t<DynamicArrayType>>(kArraySize, memory_resource_);
 
         std::uint64_t value{1U};
         for (auto& element : *ptr_to_dynamic_array)

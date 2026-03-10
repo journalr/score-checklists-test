@@ -31,6 +31,11 @@ enum class MethodErrc : score::result::ErrorCode
     kSkeletonAlreadyDestroyed,
     kUnexpectedMessage,
     kUnexpectedMessageSize,
+    kMessagePassingError,
+    kNotSubscribed,
+    kNotOffered,
+    kUnknownProxy,
+    // Note. kNumEnumElements must ALWAYS be the last enum entry
     kNumEnumElements
 };
 
@@ -62,6 +67,18 @@ class MethodErrorDomain final : public score::result::ErrorDomain
             // coverity[autosar_cpp14_m6_4_5_violation]
             case static_cast<score::result::ErrorCode>(MethodErrc::kUnexpectedMessageSize):
                 return "Message with an unexpected size was received.";
+            // coverity[autosar_cpp14_m6_4_5_violation]
+            case static_cast<score::result::ErrorCode>(MethodErrc::kMessagePassingError):
+                return "Message passing failed with an error.";
+                // coverity[autosar_cpp14_m6_4_5_violation]
+            case static_cast<score::result::ErrorCode>(MethodErrc::kNotSubscribed):
+                return "Method has not been successfully subscribed.";
+                // coverity[autosar_cpp14_m6_4_5_violation]
+            case static_cast<score::result::ErrorCode>(MethodErrc::kNotOffered):
+                return "Method has not been fully offered.";
+                // coverity[autosar_cpp14_m6_4_5_violation]
+            case static_cast<score::result::ErrorCode>(MethodErrc::kUnknownProxy):
+                return "Proxy is not allowed to access method.";
                 // coverity[autosar_cpp14_m6_4_5_violation]
             case static_cast<score::result::ErrorCode>(MethodErrc::kInvalid):
             case static_cast<score::result::ErrorCode>(MethodErrc::kNumEnumElements):

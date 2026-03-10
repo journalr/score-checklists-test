@@ -345,7 +345,7 @@ TEST_F(ServiceDiscoveryStartFindServiceInstanceSpecifierFixture,
     EXPECT_CALL(service_discovery_client_, StartFindService(_, _, config_stores_[0].GetEnrichedInstanceIdentifier()));
     EXPECT_CALL(service_discovery_client_, StartFindService(_, _, config_stores_[1].GetEnrichedInstanceIdentifier()));
 
-    unit_->StartFindService([](auto, auto) noexcept {}, instance_specifier_);
+    std::ignore = unit_->StartFindService([](auto, auto) noexcept {}, instance_specifier_);
 }
 
 TEST_F(ServiceDiscoveryStartFindServiceInstanceSpecifierFixture, StartFindServiceReturnsHandleIfSuccessful)
@@ -368,11 +368,11 @@ TEST_F(ServiceDiscoveryStartFindServiceInstanceSpecifierFixture,
 
     // Expecting that StartFindService will be called on each instance, with the last one returning an error
     EXPECT_CALL(service_discovery_client_, StartFindService(_, _, config_stores_[0].GetEnrichedInstanceIdentifier()))
-        .WillOnce(DoAll(SaveArg<0>(&handle1), Return(score::cpp::blank{})));
+        .WillOnce(DoAll(SaveArg<0>(&handle1), Return(score::ResultBlank{})));
     EXPECT_CALL(service_discovery_client_, StartFindService(_, _, config_stores_[1].GetEnrichedInstanceIdentifier()))
-        .WillOnce(DoAll(SaveArg<0>(&handle2), Return(score::cpp::blank{})));
+        .WillOnce(DoAll(SaveArg<0>(&handle2), Return(score::ResultBlank{})));
     EXPECT_CALL(service_discovery_client_, StartFindService(_, _, config_stores_[2].GetEnrichedInstanceIdentifier()))
-        .WillOnce(DoAll(SaveArg<0>(&handle3), Return(score::cpp::blank{})));
+        .WillOnce(DoAll(SaveArg<0>(&handle3), Return(score::ResultBlank{})));
     EXPECT_CALL(service_discovery_client_, StartFindService(_, _, config_stores_[3].GetEnrichedInstanceIdentifier()))
         .WillOnce(DoAll(SaveArg<0>(&handle4), Return(Unexpected{ComErrc::kBindingFailure})));
 
@@ -383,7 +383,7 @@ TEST_F(ServiceDiscoveryStartFindServiceInstanceSpecifierFixture,
     EXPECT_CALL(service_discovery_client_, StopFindService(Eq(ByRef(handle4))));
 
     // When StartFindService is called
-    unit_->StartFindService([](auto, auto) noexcept {}, instance_specifier_);
+    std::ignore = unit_->StartFindService([](auto, auto) noexcept {}, instance_specifier_);
 }
 
 TEST_F(ServiceDiscoveryStartFindServiceInstanceSpecifierFixture,
@@ -420,7 +420,7 @@ TEST_F(ServiceDiscoveryStartFindServiceInstanceSpecifierFixture,
 
     // Expecting that StartFindService will be called on each instance, with the second one returning an error
     EXPECT_CALL(service_discovery_client_, StartFindService(_, _, config_stores_[0].GetEnrichedInstanceIdentifier()))
-        .WillOnce(DoAll(SaveArg<0>(&handle1), Return(score::cpp::blank{})));
+        .WillOnce(DoAll(SaveArg<0>(&handle1), Return(score::ResultBlank{})));
     EXPECT_CALL(service_discovery_client_, StartFindService(_, _, config_stores_[1].GetEnrichedInstanceIdentifier()))
         .WillOnce(DoAll(SaveArg<0>(&handle2), Return(Unexpected{ComErrc::kBindingFailure})));
     EXPECT_CALL(service_discovery_client_, StartFindService(_, _, config_stores_[2].GetEnrichedInstanceIdentifier()))
@@ -434,7 +434,7 @@ TEST_F(ServiceDiscoveryStartFindServiceInstanceSpecifierFixture,
     EXPECT_CALL(service_discovery_client_, StopFindService(_)).Times(0);
 
     // When StartFindService is called
-    unit_->StartFindService([](auto, auto) noexcept {}, instance_specifier_);
+    std::ignore = unit_->StartFindService([](auto, auto) noexcept {}, instance_specifier_);
 }
 
 TEST_F(ServiceDiscoveryStartFindServiceInstanceSpecifierFixture, StartFindServiceForwardsCorrectHandler)
@@ -447,7 +447,7 @@ TEST_F(ServiceDiscoveryStartFindServiceInstanceSpecifierFixture, StartFindServic
     });
 
     std::int32_t value{0};
-    unit_->StartFindService(
+    std::ignore = unit_->StartFindService(
         [&value](auto, auto) noexcept {
             value++;
         },
@@ -561,7 +561,7 @@ TEST_F(ServiceDiscoveryStartFindServiceInstanceIdentifierFixture, StartFindServi
 
     EXPECT_CALL(service_discovery_client_, StartFindService(_, _, config_stores_[0].GetEnrichedInstanceIdentifier()));
 
-    unit_->StartFindService([](auto, auto) noexcept {}, config_stores_[0].GetInstanceIdentifier());
+    score::cpp::ignore = unit_->StartFindService([](auto, auto) noexcept {}, config_stores_[0].GetInstanceIdentifier());
 }
 
 TEST_F(ServiceDiscoveryStartFindServiceInstanceIdentifierFixture, StartFindServiceReturnsHandleIfSuccessful)
@@ -622,7 +622,7 @@ TEST_F(ServiceDiscoveryStartFindServiceInstanceIdentifierFixture, StartFindServi
         });
 
     bool value{false};
-    unit_->StartFindService(
+    std::ignore = unit_->StartFindService(
         [&value](auto, auto) noexcept {
             value = true;
         },

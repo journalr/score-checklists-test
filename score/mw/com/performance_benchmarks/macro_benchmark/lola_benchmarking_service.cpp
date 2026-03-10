@@ -102,7 +102,7 @@ bool RunService(const ServiceConfig& config, score::cpp::stop_token test_stop_to
 
         std::fill(sample_allocatee_ptr->begin(), sample_allocatee_ptr->end(), 1U);
 
-        skeleton.test_event.Send(std::move(sample_allocatee_ptr));
+        std::ignore = skeleton.test_event.Send(std::move(sample_allocatee_ptr));
 
         if (proxy_is_done_flag.GetObject() >= config.number_of_clients)
         {

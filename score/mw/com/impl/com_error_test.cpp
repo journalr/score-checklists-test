@@ -211,5 +211,11 @@ TEST_F(ComErrorMessageForDeathTest, MessageForNumEnumElements)
         ".*");
 }
 
+TEST_F(ComErrorMessageForFixture, MessageForDefaultClause)
+{
+    auto one_past_the_last_lable = static_cast<std::uint32_t>(ComErrc::kNumEnumElements) + 1;
+    testErrorMessage(static_cast<ComErrc>(one_past_the_last_lable), "unknown future error");
+}
+
 }  // namespace
 }  // namespace score::mw::com::impl

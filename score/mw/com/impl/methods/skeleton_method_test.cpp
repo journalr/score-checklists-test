@@ -148,7 +148,7 @@ TYPED_TEST(SkeletonMethodTypedTest, AnyCombinationOfReturnAndInputArgTypesCanBeR
     // When a Register call is issued at the binding independent level
     score::cpp::callback<FixtureMethodType> test_callback{};
 
-    method.RegisterHandler(std::move(test_callback));
+    std::ignore = method.RegisterHandler(std::move(test_callback));
 }
 
 TYPED_TEST(SkeletonMethodTypedTest, TwoParameterConstructorCorrectlyCallsBindingFactoryAndSkeletonMethodIsCreated)
@@ -179,7 +179,7 @@ TYPED_TEST(SkeletonMethodTypedTest, TwoParameterConstructorCorrectlyCallsBinding
 
     // Then a Binding can be created which is capable of registering a callback
     score::cpp::callback<FixtureMethodType> test_callback{};
-    method.RegisterHandler(std::move(test_callback));
+    EXPECT_TRUE(method.RegisterHandler(std::move(test_callback)));
 }
 
 TYPED_TEST(
@@ -228,7 +228,7 @@ TEST_F(SkeletonMethodTestFixture, ACallbackWithAPointerAsStateCanBeRegistered)
     EXPECT_CALL(mock_method_binding_, RegisterHandler(_));
 
     // When a Register call is issued at the binding independent level
-    method_->RegisterHandler(std::move(test_callback_with_state));
+    std::ignore = method_->RegisterHandler(std::move(test_callback_with_state));
 }
 
 using Thing = long;
@@ -297,7 +297,7 @@ TEST_F(SkeletonMethodThingStuffFixture, DataTransferBetweenTypedAndTypeErasedCal
     EXPECT_CALL(typed_callback_mock_, Call(in_arg_1, in_arg_2)).WillOnce(Return(ret_val));
 
     SerializeBuffers(in_arg_1, in_arg_2);
-    method_->RegisterHandler(typed_callback_mock_.AsStdFunction());
+    EXPECT_TRUE(method_->RegisterHandler(typed_callback_mock_.AsStdFunction()));
     // When the type erased call is executed by the binding
     typeerased_callback_.value()(in_args_buffer_, out_arg_buffer_);
 
@@ -324,7 +324,7 @@ TEST_F(SkeletonMethodThingVoidFixture, DataTransferBetweenTypedAndTypeErasedCall
     // Expecting that a typed callable will be called without inargs and will return a value
     EXPECT_CALL(typed_callback_mock_, Call()).WillOnce(Return(ret_val));
 
-    method_->RegisterHandler(typed_callback_mock_.AsStdFunction());
+    EXPECT_TRUE(method_->RegisterHandler(typed_callback_mock_.AsStdFunction()));
 
     // When the type erased call is executed by the binding
     typeerased_callback_.value()(std::nullopt, out_arg_buffer_);
@@ -354,7 +354,7 @@ TEST_F(SkeletonMethodVoidStuffFixture, DataTransferBetweenTypedAndTypeErasedCall
     EXPECT_CALL(typed_callback_mock_, Call(in_arg_1, in_arg_2)).WillOnce(Return());
 
     SerializeBuffers(in_arg_1, in_arg_2);
-    method_->RegisterHandler(typed_callback_mock_.AsStdFunction());
+    EXPECT_TRUE(method_->RegisterHandler(typed_callback_mock_.AsStdFunction()));
 
     // When the type erased call is executed by the binding
     typeerased_callback_.value()(in_args_buffer_, {});
@@ -376,7 +376,7 @@ TEST_F(SkeletonMethodVoidVoidFixture, DataTransferBetweenTypedAndTypeErasedCallb
     // Expecting that a typed callable will be called without inargs and will not return a value
     EXPECT_CALL(typed_callback_mock_, Call()).WillOnce(Return());
 
-    method_->RegisterHandler(typed_callback_mock_.AsStdFunction());
+    EXPECT_TRUE(method_->RegisterHandler(typed_callback_mock_.AsStdFunction()));
     // When the type erased call is executed by the binding
     typeerased_callback_.value()({}, {});
 }

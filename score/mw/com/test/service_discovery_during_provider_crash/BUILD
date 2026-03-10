@@ -11,6 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@score_baselibs//score/language/safecpp:toolchain_features.bzl", "COMPILER_WARNING_FEATURES")
 load("//bazel/tools:json_schema_validator.bzl", "validate_json_schema_test")
 load("//score/mw/com/test:pkg_application.bzl", "pkg_application")
@@ -18,7 +19,7 @@ load("//score/mw/com/test:pkg_application.bzl", "pkg_application")
 validate_json_schema_test(
     name = "validate_mw_com_config_schema",
     json = "mw_com_config.json",
-    schema = "//score/mw/com/impl/configuration:ara_com_config_schema",
+    schema = "//score/mw/com/impl/configuration:mw_com_config_schema",
     tags = ["lint"],
 )
 
@@ -88,6 +89,6 @@ pkg_application(
     ],
     visibility = [
         "//platform/aas/test/mw/com:__pkg__",
-        "//score/mw/com/test/service_discovery_during_provider_crash/sct:__subpackages__",
+        "//score/mw/com/test/service_discovery_during_provider_crash:__subpackages__",
     ],
 )
