@@ -485,36 +485,32 @@ class TestFindChecklistsConfig:
 
 
 class TestIsPrInMergeQueue:
-    @patch("helpers.get_github_client")
-    def test_true_when_graphql_returns_true(self, mock_get_gh):
-        gh = MagicMock()
-        gh.graphql_query.return_value = {
+    @patch("helpers._run_graphql_query")
+    def test_true_when_graphql_returns_true(self, mock_query):
+        mock_query.return_value = {
             "data": {
                 "repository": {
                     "pullRequest": {"isInMergeQueue": True}
                 }
             }
         }
-        mock_get_gh.return_value = gh
 
         pr = MagicMock()
         pr.base.repo.full_name = "org/repo"
         pr.number = 42
 
         assert is_pr_in_merge_queue(pr) is True
-        gh.graphql_query.assert_called_once()
+        mock_query.assert_called_once()
 
-    @patch("helpers.get_github_client")
-    def test_false_when_graphql_returns_false(self, mock_get_gh):
-        gh = MagicMock()
-        gh.graphql_query.return_value = {
+    @patch("helpers._run_graphql_query")
+    def test_false_when_graphql_returns_false(self, mock_query):
+        mock_query.return_value = {
             "data": {
                 "repository": {
                     "pullRequest": {"isInMergeQueue": False}
                 }
             }
         }
-        mock_get_gh.return_value = gh
 
         pr = MagicMock()
         pr.base.repo.full_name = "org/repo"
@@ -522,13 +518,11 @@ class TestIsPrInMergeQueue:
 
         assert is_pr_in_merge_queue(pr) is False
 
-    @patch("helpers.get_github_client")
-    def test_false_when_graphql_payload_missing_field(self, mock_get_gh):
-        gh = MagicMock()
-        gh.graphql_query.return_value = {
+    @patch("helpers._run_graphql_query")
+    def test_false_when_graphql_payload_missing_field(self, mock_query):
+        mock_query.return_value = {
             "data": {"repository": {"pullRequest": {}}}
         }
-        mock_get_gh.return_value = gh
 
         pr = MagicMock()
         pr.base.repo.full_name = "org/repo"
@@ -536,11 +530,9 @@ class TestIsPrInMergeQueue:
 
         assert is_pr_in_merge_queue(pr) is False
 
-    @patch("helpers.get_github_client")
-    def test_false_when_graphql_call_fails(self, mock_get_gh):
-        gh = MagicMock()
-        gh.graphql_query.side_effect = RuntimeError("boom")
-        mock_get_gh.return_value = gh
+    @patch("helpers._run_graphql_query")
+    def test_false_when_graphql_call_fails(self, mock_query):
+        mock_query.side_effect = RuntimeError("boom")
 
         pr = MagicMock()
         pr.base.repo.full_name = "org/repo"

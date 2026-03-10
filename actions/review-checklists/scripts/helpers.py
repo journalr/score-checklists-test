@@ -30,10 +30,13 @@ CHECKLIST_MARKER = "<!-- review-checklist:{checklist_id} -->"
 # The keyword a reviewer must post to acknowledge a checklist.
 OK_KEYWORD = "OK"
 
+def _get_github_token() -> str:
+    """Return the GitHub token."""
+    return os.environ["GITHUB_TOKEN"]
 
 def get_github_client() -> Github:
     """Return an authenticated PyGithub client."""
-    token = os.environ["GITHUB_TOKEN"]
+    token = _get_github_token()
     return Github(token)
 
 
@@ -432,11 +435,22 @@ def ensure_merge_queue_notice_comment(pr: Any) -> None:
 
 
 def _run_graphql_query(query: str, variables: dict[str, Any]) -> dict[str, Any]:
-    """Execute a GitHub GraphQL query via PyGithub and return JSON data."""
-    gh = get_github_client()
-    result = gh.graphql_query(query=query, variables=variables)
-    if not isinstance(result, dict):
+    """Execute a GitHub GraphQL query via gql and return JSON-like data."""
+    from gql import Client, gql
+    from gql.transport.requests import RequestsHTTPTransport
+
+    token = _get_github_token()
+    transport = RequestsHTTPTransport(
+        url="https://api.github.com/graphql",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+        },
+        use_json=True,
+    )
+    client = Client(transport=transport, fetch_schema_from_transport=False)
+    data = client.execute(gql(query), variable_values=variables)
+
+    if not isinstance(data, dict):
         raise RuntimeError("Unexpected GraphQL response type")
-    if "errors" in result:
-        raise RuntimeError(f"GraphQL errors: {result['errors']}")
-    return result
+    return {"data": data}
