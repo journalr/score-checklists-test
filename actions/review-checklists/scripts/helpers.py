@@ -17,13 +17,11 @@ from __future__ import annotations
 
 import fnmatch
 import os
-import sys
 from typing import Any
 
 import yaml
 from github import Github
 from github.PullRequest import PullRequest
-
 
 # Marker prefix used to identify bot-managed checklist reviews.
 CHECKLIST_MARKER = "<!-- review-checklist:{checklist_id} -->"
@@ -32,9 +30,14 @@ CHECKLIST_MARKER = "<!-- review-checklist:{checklist_id} -->"
 OK_KEYWORD = "OK"
 
 
+def _get_github_token() -> str:
+    """Return the GitHub token."""
+    return os.environ["GITHUB_TOKEN"]
+
+
 def get_github_client() -> Github:
     """Return an authenticated PyGithub client."""
-    token = os.environ["GITHUB_TOKEN"]
+    token = _get_github_token()
     return Github(token)
 
 
@@ -87,7 +90,7 @@ def get_changed_files(pr: PullRequest) -> list[str]:
 
 
 def match_checklists(
-    checklists: list[dict], changed_files: list[str]
+        checklists: list[dict], changed_files: list[str]
 ) -> list[dict]:
     """Return checklists whose path patterns match at least one changed file.
 
@@ -152,7 +155,7 @@ def find_existing_checklist_comments(pr: PullRequest) -> dict[str, Any]:
 
 
 def find_ok_replies(
-    pr: PullRequest, checklist_comment_id: int, checklist_id: str
+        pr: PullRequest, checklist_comment_id: int, checklist_id: str
 ) -> list[Any]:
     """Find valid OK reply comments for a given checklist review comment.
 
@@ -184,11 +187,11 @@ def get_approving_reviewers(pr: PullRequest) -> list[str]:
 
 
 def set_commit_status(
-    repo: Any,
-    sha: str,
-    state: str,
-    description: str,
-    context: str = "review-checklists",
+        repo: Any,
+        sha: str,
+        state: str,
+        description: str,
+        context: str = "review-checklists",
 ) -> None:
     """Set a commit status on the given SHA."""
     desc = description[:140]
@@ -208,6 +211,28 @@ def set_commit_status(
 EVIDENCE_BLOCK_START = "<!-- review-checklist-evidence:start -->"
 EVIDENCE_BLOCK_END = "<!-- review-checklist-evidence:end -->"
 
+# Standalone merge-queue notice block in PR description.
+MERGE_QUEUE_NOTICE_START = "<!-- review-checklist-merge-queue-notice:start -->"
+MERGE_QUEUE_NOTICE_END = "<!-- review-checklist-merge-queue-notice:end -->"
+
+# Marker for a bot-managed PR comment carrying the same notice.
+MERGE_QUEUE_COMMENT_MARKER = "<!-- review-checklist-merge-queue-comment -->"
+
+MERGE_QUEUE_NOTICE = [
+    MERGE_QUEUE_NOTICE_START,
+    "## Review Checklist Evidence Notice - Merge Queue",
+    "",
+    "This pull request was modified after the review checklist evidence was recorded.",
+    "The review checklist evidence visible here does no longer reflect the evidence that will be recorded at merge.",
+    "Please rely on the evidence in the git history once the pull request was merged.",
+    "",
+    "The git history shows the evidence state at the time of merge queue entry.",
+    "A pull request may only enter the merge queue when all necessary review checklist acknowledgements are in place.",
+    "Changes made after this pull request enters the merge queue may update the evidence here,",
+    "but they do not affect the evidence recorded in the git history.",
+    MERGE_QUEUE_NOTICE_END,
+]
+
 
 def extract_evidence_block(description: str) -> str | None:
     """Extract the evidence block from PR description, or None if not present."""
@@ -216,7 +241,7 @@ def extract_evidence_block(description: str) -> str | None:
     try:
         start = description.index(EVIDENCE_BLOCK_START)
         end = description.index(EVIDENCE_BLOCK_END)
-        return description[start : end + len(EVIDENCE_BLOCK_END)]
+        return description[start: end + len(EVIDENCE_BLOCK_END)]
     except ValueError:
         return None
 
@@ -236,8 +261,8 @@ def remove_evidence_block(description: str) -> str:
 
 
 def build_evidence_block(
-    relevant: list[dict],
-    ack_details: dict[str, list[dict[str, str]]],
+        relevant: list[dict],
+        ack_details: dict[str, list[dict[str, str]]],
 ) -> str:
     """Build the evidence block for the PR description."""
     from datetime import datetime, timezone
@@ -277,8 +302,8 @@ def build_evidence_block(
 
 
 def update_pr_description_with_evidence(
-    pr: Any,
-    evidence_block: str,
+        pr: Any,
+        evidence_block: str,
 ) -> None:
     """Update PR description to include/replace evidence block."""
     current_description = pr.body or ""
@@ -295,3 +320,136 @@ def update_pr_description_with_evidence(
         print("Updated PR description with evidence block")
     else:
         print("PR description evidence is already up to date")
+
+
+def is_pr_in_merge_queue(pr: Any) -> bool:
+    """Return whether the PR is currently in GitHub merge queue via GraphQL."""
+    repo_name = getattr(getattr(getattr(pr, "base", None), "repo", None), "full_name", "")
+    if not repo_name or "/" not in repo_name:
+        repo_name = os.environ.get("GITHUB_REPOSITORY", "")
+    if "/" not in repo_name:
+        print("Could not determine repository for merge-queue lookup")
+        return False
+
+    number = getattr(pr, "number", None)
+    if not number:
+        try:
+            number = int(os.environ.get("PR_NUMBER", "0"))
+        except ValueError:
+            number = 0
+    if not number:
+        print("Could not determine PR number for merge-queue lookup")
+        return False
+
+    owner, name = repo_name.split("/", 1)
+    query = """
+      query($owner: String!, $name: String!, $number: Int!) {
+        repository(owner: $owner, name: $name) {
+          pullRequest(number: $number) {
+            isInMergeQueue
+          }
+        }
+      }
+    """
+
+    try:
+        result = _run_graphql_query(
+            query,
+            {"owner": owner, "name": name, "number": int(number)},
+        )
+    except Exception as exc:
+        print(f"GraphQL merge-queue lookup failed: {exc}")
+        return False
+
+    is_in_queue = (
+        result.get("data", {})
+        .get("repository", {})
+        .get("pullRequest", {})
+        .get("isInMergeQueue")
+    )
+    if isinstance(is_in_queue, bool):
+        return is_in_queue
+
+    print("GraphQL merge-queue lookup returned no boolean state")
+    return False
+
+
+def _build_merge_queue_notice_block() -> str:
+    """Return the standalone merge-queue notice for PR description."""
+    return "\n".join(MERGE_QUEUE_NOTICE)
+
+
+def _remove_merge_queue_notice_block(description: str) -> str:
+    """Remove the standalone merge-queue notice block from PR description."""
+    if MERGE_QUEUE_NOTICE_START not in description:
+        return description
+    try:
+        start = description.index(MERGE_QUEUE_NOTICE_START)
+        end = description.index(MERGE_QUEUE_NOTICE_END) + len(
+            MERGE_QUEUE_NOTICE_END
+        )
+        result = description[:start] + description[end:]
+        return result.rstrip() + "\n"
+    except ValueError:
+        return description
+
+
+def ensure_merge_queue_notice_description(pr: Any) -> None:
+    """Ensure a standalone merge-queue notice exists in the PR description."""
+    current_description = pr.body or ""
+    notice_block = _build_merge_queue_notice_block()
+    description_without_notice = _remove_merge_queue_notice_block(
+        current_description
+    )
+    base = description_without_notice.rstrip()
+    if base:
+        new_description = base + "\n\n" + notice_block
+    else:
+        new_description = notice_block
+
+    if new_description.strip() != current_description.strip():
+        pr.edit(body=new_description)
+        print("Updated PR description with merge-queue evidence notice")
+
+
+def ensure_merge_queue_notice_comment(pr: Any) -> None:
+    """Ensure the PR has a single bot-managed merge-queue evidence notice."""
+    body = "\n".join([MERGE_QUEUE_COMMENT_MARKER] + MERGE_QUEUE_NOTICE)
+
+    existing_comment = None
+    for comment in pr.get_issue_comments():
+        comment_body = comment.body or ""
+        if MERGE_QUEUE_COMMENT_MARKER in comment_body:
+            existing_comment = comment
+            break
+
+    if existing_comment is None:
+        pr.create_issue_comment(body)
+        print("Posted merge-queue evidence notice comment")
+        return
+
+    if (existing_comment.body or "").strip() != body.strip():
+        existing_comment.edit(body)
+        print("Updated merge-queue evidence notice comment")
+
+
+def _run_graphql_query(query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    """Execute a GitHub GraphQL query via gql and return JSON-like data."""
+    from gql import Client, gql
+    from gql.transport.requests import RequestsHTTPTransport
+
+    token = _get_github_token()
+    transport = RequestsHTTPTransport(
+        url="https://api.github.com/graphql",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+        },
+        use_json=True,
+    )
+    client = Client(transport=transport, fetch_schema_from_transport=False)
+    data = client.execute(gql(query), variable_values=variables)
+
+    if not isinstance(data, dict):
+        raise RuntimeError("Unexpected GraphQL response type")
+    return {"data": data}

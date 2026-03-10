@@ -15,7 +15,7 @@ name: "Review Checklists"
 description: >
   Manages review checklists on pull requests.  Posts checklist comments,
   tracks reviewer acknowledgements, dismisses stale approvals, and
-  maintains evidence in the PR description.
+  maintains evidence in the PR description and merge-queue evidence notices.
 
 inputs:
   action:

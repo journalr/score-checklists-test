@@ -21,8 +21,10 @@ py_library(
     visibility = ["//actions/review-checklists:__subpackages__"],
     deps = [
         requirement("bazel-runfiles"),
+        requirement("gql"),
         requirement("pygithub"),
         requirement("pyyaml"),
+        requirement("requests"),
     ],
 )
 

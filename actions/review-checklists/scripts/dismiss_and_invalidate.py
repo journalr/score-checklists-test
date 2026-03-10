@@ -41,10 +41,13 @@ from typing import Any
 
 from helpers import (
     OK_KEYWORD,
+    ensure_merge_queue_notice_comment,
+    ensure_merge_queue_notice_description,
     find_existing_checklist_comments,
     get_changed_files,
     get_github_client,
     get_repo_and_pr,
+    is_pr_in_merge_queue,
     load_checklists,
     match_checklists,
     set_commit_status,
@@ -148,6 +151,10 @@ def handle_synchronize(pr: Any) -> None:
             "Checklist acknowledgements invalidated due to new changes",
         )
 
+    if is_pr_in_merge_queue(pr):
+        ensure_merge_queue_notice_comment(pr)
+        ensure_merge_queue_notice_description(pr)
+
 
 def handle_comment_changed(pr: Any) -> None:
     """Handle an OK comment being edited or deleted.
@@ -200,6 +207,10 @@ def handle_comment_changed(pr: Any) -> None:
             "pending",
             f"Checklist OK retracted by {comment_user}",
         )
+
+    if is_pr_in_merge_queue(pr):
+        ensure_merge_queue_notice_comment(pr)
+        ensure_merge_queue_notice_description(pr)
 
 
 def main() -> None:

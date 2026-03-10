@@ -16,15 +16,21 @@
 #
 # Triggers:
 #   pull_request (opened/reopened/synchronize)
-#     → Post or update checklist findings on the PR.
-#     → On synchronize: invalidate stale OKs for affected checklists.
-#     → Re-check acknowledgements.
+#     -> Post or update checklist findings on the PR.
+#     -> On synchronize: invalidate stale OKs for affected checklists.
+#     -> Re-check acknowledgements.
 #   pull_request_review_comment (created/edited/deleted)
-#     → Restore checklist findings if they were tampered with or deleted.
-#     → On edit/delete: dismiss approval if an OK was retracted.
-#     → Re-check acknowledgements.
+#     -> Restore checklist findings if they were tampered with or deleted.
+#     -> On edit/delete: handle OK retraction.
+#     -> Re-check acknowledgements.
 #   pull_request_review (submitted/dismissed)
-#     → Re-check acknowledgements (approver set may have changed).
+#     -> Re-check acknowledgements (approver set may have changed).
+#
+# When a PR is in merge queue, the workflow also ensures:
+#   - a persistent PR comment notice, and
+#   - a standalone PR-description notice,
+# explaining that post-queue changes do not alter evidence recorded in git
+# history by the merge commit evidence flow.
 
 name: Review Checklists
 
@@ -52,8 +58,9 @@ jobs:
         uses: actions/checkout@v4.2.2
 
       # Step 1: Post or update checklist findings.
-      # Runs on PR open/reopen/sync, and also on review comment events so
-      # that tampered or deleted checklist findings are restored.
+      # Runs on PR open/reopen/sync, on PR description edits, and on
+      # review comment events so tampered checklist findings and notices
+      # are restored.
       - name: Post / update checklist findings
         if: >-
           github.event_name == 'pull_request' ||
