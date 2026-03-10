@@ -730,7 +730,6 @@ where
                 find_handle,
                 discovery_state,
                 waker_storage,
-                instance_specifier,
                 _interface: PhantomData,
             }
             .await
@@ -746,7 +745,6 @@ struct ServiceDiscoveryFuture<I: Interface> {
     find_handle: bridge_ffi_rs::NativeFindServiceHandle,
     discovery_state: Arc<std::sync::Mutex<DiscoveryStateData>>,
     waker_storage: Arc<futures::task::AtomicWaker>,
-    instance_specifier: InstanceSpecifier,
     _interface: PhantomData<I>,
 }
 
@@ -793,7 +791,6 @@ impl<I: Interface> Future for ServiceDiscoveryFuture<I> {
             let available_instances = (0..service_handle_arc.len())
                 .map(|handle_index| {
                     let instance_info = LolaConsumerInfo {
-                        instance_specifier: self.instance_specifier.clone(),
                         handle_container: Arc::clone(&service_handle_arc),
                         handle_index,
                         interface_id: I::INTERFACE_ID,
