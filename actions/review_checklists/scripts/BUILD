@@ -18,7 +18,7 @@ py_library(
     srcs = ["helpers.py"],
     data = ["//.github:review_checklists_config"],
     imports = ["."],
-    visibility = ["//actions/review-checklists:__subpackages__"],
+    visibility = ["//actions/review_checklists:__subpackages__"],
     deps = [
         requirement("bazel-runfiles"),
         requirement("gql"),

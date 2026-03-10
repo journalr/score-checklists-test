@@ -13,7 +13,6 @@
 
 filegroup(
     name = "review_checklists_config",
-    srcs = ["review-checklists.yml"],
+    srcs = ["review_checklists.yml"],
     visibility = ["//visibility:public"],
 )
-
