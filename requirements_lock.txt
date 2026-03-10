@@ -29,7 +29,7 @@ backoff==2.2.1 \
 bazel-runfiles==1.8.4 \
     --hash=sha256:2c9c91d9f20f89642f00d533525f179586f8892af8aa451d71265824a6569582
     # via
-    #   -r ./actions/review-checklists/requirements.txt
+    #   -r ./actions/review_checklists/requirements.txt
     #   -r ./quality/integration_testing/requirements.txt
 beautifulsoup4==4.14.3 \
     --hash=sha256:0918bfe44902e6ad8d57732ba310582e98da931428d231a5ecb9e7c703a735bb \
@@ -316,7 +316,7 @@ docutils==0.22.4 \
 gql[requests]==4.0.0 \
     --hash=sha256:f22980844eb6a7c0266ffc70f111b9c7e7c7c13da38c3b439afc7eab3d7c9c8e \
     --hash=sha256:f3beed7c531218eb24d97cb7df031b4a84fdb462f4a2beb86e2633d395937479
-    # via -r ./actions/review-checklists/requirements.txt
+    # via -r ./actions/review_checklists/requirements.txt
 graphql-core==3.2.8 \
     --hash=sha256:015457da5d996c924ddf57a43f4e959b0b94fb695b85ed4c29446e508ed65cf3 \
     --hash=sha256:cbee07bee1b3ed5e531723685369039f32ff815ef60166686e0162f540f1520c
@@ -748,7 +748,7 @@ pydot==4.0.1 \
 pygithub==2.8.1 \
     --hash=sha256:23a0a5bca93baef082e03411bf0ce27204c32be8bfa7abc92fe4a3e132936df0 \
     --hash=sha256:341b7c78521cb07324ff670afd1baa2bf5c286f8d9fd302c1798ba594a5400c9
-    # via -r ./actions/review-checklists/requirements.txt
+    # via -r ./actions/review_checklists/requirements.txt
 pygments==2.19.2 \
     --hash=sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887 \
     --hash=sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b
@@ -873,7 +873,7 @@ pyyaml==6.0.3 \
     --hash=sha256:fa160448684b4e94d80416c0fa4aac48967a969efe22931448d853ada8baf926 \
     --hash=sha256:fc09d0aa354569bc501d4e787133afc08552722d3ab34836a80547331bb5d4a0
     # via
-    #   -r ./actions/review-checklists/requirements.txt
+    #   -r ./actions/review_checklists/requirements.txt
     #   myst-parser
 requests==2.32.5 \
     --hash=sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6 \

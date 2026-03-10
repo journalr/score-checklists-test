@@ -123,8 +123,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--config-path",
-        default=".github/review-checklists.yml",
-        help="Path to checklist configuration file (default: .github/review-checklists.yml)",
+        default=".github/review_checklists.yml",
+        help="Path to checklist configuration file (default: .github/review_checklists.yml)",
     )
     args = parser.parse_args()
 

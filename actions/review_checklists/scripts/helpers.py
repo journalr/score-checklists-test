@@ -51,13 +51,13 @@ def get_repo_and_pr(gh: Github) -> tuple[Any, PullRequest]:
 
 
 def _find_checklists_config(
-    config_relpath: str = ".github/review-checklists.yml",
+    config_relpath: str = ".github/review_checklists.yml",
 ) -> str:
     """Locate checklist config via runfiles or path heuristics.
 
     Args:
         config_relpath: Relative path to the checklist config file.
-                        Defaults to '.github/review-checklists.yml'.
+                        Defaults to '.github/review_checklists.yml'.
 
     Returns:
         Absolute path to the config file.
@@ -85,13 +85,13 @@ def _find_checklists_config(
 
 
 def load_checklists(
-    config_relpath: str = ".github/review-checklists.yml",
+    config_relpath: str = ".github/review_checklists.yml",
 ) -> list[dict]:
     """Load checklist definitions from the YAML configuration file.
 
     Args:
         config_relpath: Relative path to the checklist config file.
-                        Defaults to '.github/review-checklists.yml'.
+                        Defaults to '.github/review_checklists.yml'.
 
     Returns:
         List of checklist definitions.

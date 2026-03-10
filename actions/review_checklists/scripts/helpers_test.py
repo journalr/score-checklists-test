@@ -83,8 +83,8 @@ SAMPLE_CHECKLISTS = [
 
 @pytest.fixture()
 def sample_config(tmp_path):
-    """Write a sample review-checklists.yml and return its path."""
-    cfg = tmp_path / "review-checklists.yml"
+    """Write a sample review_checklists.yml and return its path."""
+    cfg = tmp_path / "review_checklists.yml"
     cfg.write_text(yaml.dump({"checklists": SAMPLE_CHECKLISTS}))
     return str(cfg)
 
@@ -155,7 +155,7 @@ class TestLoadChecklists:
         monkeypatch.delenv("RUNFILES_MANIFEST_FILE", raising=False)
         with patch(
             "helpers._find_checklists_config",
-            side_effect=FileNotFoundError("Cannot locate .github/review-checklists.yml"),
+            side_effect=FileNotFoundError("Cannot locate .github/review_checklists.yml"),
         ):
             with pytest.raises(FileNotFoundError):
                 load_checklists()
@@ -487,7 +487,7 @@ class TestSetCommitStatus:
 
 class TestFindChecklistsConfig:
     def test_find_via_runfiles(self, tmp_path, monkeypatch):
-        cfg = tmp_path / "review-checklists.yml"
+        cfg = tmp_path / "review_checklists.yml"
         cfg.write_text(yaml.dump({"checklists": SAMPLE_CHECKLISTS}))
 
         class DummyRunfiles:
@@ -517,10 +517,10 @@ class TestFindChecklistsConfig:
         runfiles_mod.Runfiles = DummyRunfiles
 
         monkeypatch.setitem(sys.modules, "runfiles", runfiles_mod)
-        # Test with default config path (.github/review-checklists.yml)
+        # Test with default config path (.github/review_checklists.yml)
         with patch("helpers.os.path.isfile", return_value=True):
             result = _find_checklists_config()
-        assert result == ".github/review-checklists.yml"
+        assert result == ".github/review_checklists.yml"
 
     def test_find_via_custom_config_path(self, monkeypatch):
         class DummyRunfiles:

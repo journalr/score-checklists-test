@@ -17,5 +17,5 @@
 # Python dependencies for traceability tools
 -r ./third_party/traceability/requirements.txt
 
-# Python dependencies for review-checklists tools
+# Python dependencies for review_checklists tools
 -r ./actions/review-checklists/requirements.txt

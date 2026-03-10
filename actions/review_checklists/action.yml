@@ -51,12 +51,12 @@ inputs:
       Relative path to the checklist configuration file.
       Defaults to '.github/review-checklists.yml'.
     required: false
-    default: ".github/review-checklists.yml"
+    default: ".github/review_checklists.yml"
 
 runs:
   using: composite
   steps:
-    - name: Install review-checklists requirements
+    - name: Install review_checklists requirements
       shell: bash
       run: python3 -m pip install -r "$GITHUB_ACTION_PATH/requirements.txt"
 
