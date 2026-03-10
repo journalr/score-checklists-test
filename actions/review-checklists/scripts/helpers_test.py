@@ -25,14 +25,20 @@ import yaml
 
 from helpers import (
     CHECKLIST_MARKER,
+    MERGE_QUEUE_COMMENT_MARKER,
+    MERGE_QUEUE_NOTICE_END,
+    MERGE_QUEUE_NOTICE_START,
     OK_KEYWORD,
     _find_checklists_config,
+    ensure_merge_queue_notice_comment,
+    ensure_merge_queue_notice_description,
     find_existing_checklist_comments,
     find_ok_replies,
     get_approving_reviewers,
     get_changed_files,
     get_github_client,
     get_repo_and_pr,
+    is_pr_in_merge_queue,
     load_checklists,
     make_checklist_comment_body,
     match_checklists,
@@ -471,6 +477,162 @@ class TestFindChecklistsConfig:
             os.path.dirname(os.path.dirname(__file__)), "checklists.yml"
         )
         assert _find_checklists_config() == expected
+
+
+# ---------------------------------------------------------------------------
+# merge-queue helpers
+# ---------------------------------------------------------------------------
+
+
+class TestIsPrInMergeQueue:
+    @patch("helpers.get_github_client")
+    def test_true_when_graphql_returns_true(self, mock_get_gh):
+        gh = MagicMock()
+        gh.graphql_query.return_value = {
+            "data": {
+                "repository": {
+                    "pullRequest": {"isInMergeQueue": True}
+                }
+            }
+        }
+        mock_get_gh.return_value = gh
+
+        pr = MagicMock()
+        pr.base.repo.full_name = "org/repo"
+        pr.number = 42
+
+        assert is_pr_in_merge_queue(pr) is True
+        gh.graphql_query.assert_called_once()
+
+    @patch("helpers.get_github_client")
+    def test_false_when_graphql_returns_false(self, mock_get_gh):
+        gh = MagicMock()
+        gh.graphql_query.return_value = {
+            "data": {
+                "repository": {
+                    "pullRequest": {"isInMergeQueue": False}
+                }
+            }
+        }
+        mock_get_gh.return_value = gh
+
+        pr = MagicMock()
+        pr.base.repo.full_name = "org/repo"
+        pr.number = 7
+
+        assert is_pr_in_merge_queue(pr) is False
+
+    @patch("helpers.get_github_client")
+    def test_false_when_graphql_payload_missing_field(self, mock_get_gh):
+        gh = MagicMock()
+        gh.graphql_query.return_value = {
+            "data": {"repository": {"pullRequest": {}}}
+        }
+        mock_get_gh.return_value = gh
+
+        pr = MagicMock()
+        pr.base.repo.full_name = "org/repo"
+        pr.number = 99
+
+        assert is_pr_in_merge_queue(pr) is False
+
+    @patch("helpers.get_github_client")
+    def test_false_when_graphql_call_fails(self, mock_get_gh):
+        gh = MagicMock()
+        gh.graphql_query.side_effect = RuntimeError("boom")
+        mock_get_gh.return_value = gh
+
+        pr = MagicMock()
+        pr.base.repo.full_name = "org/repo"
+        pr.number = 101
+
+        assert is_pr_in_merge_queue(pr) is False
+
+
+class TestEnsureMergeQueueNoticeDescription:
+    def test_adds_notice_block(self):
+        pr = MagicMock()
+        pr.body = "User summary"
+
+        ensure_merge_queue_notice_description(pr)
+
+        pr.edit.assert_called_once()
+        new_body = pr.edit.call_args.kwargs["body"]
+        assert MERGE_QUEUE_NOTICE_START in new_body
+        assert MERGE_QUEUE_NOTICE_END in new_body
+
+    def test_updates_tampered_notice_block(self):
+        pr = MagicMock()
+        pr.body = (
+            "User summary\n"
+            f"{MERGE_QUEUE_NOTICE_START}\n"
+            "tampered\n"
+            f"{MERGE_QUEUE_NOTICE_END}"
+        )
+
+        ensure_merge_queue_notice_description(pr)
+
+        pr.edit.assert_called_once()
+        new_body = pr.edit.call_args.kwargs["body"]
+        assert "tampered" not in new_body
+        assert "Merge Queue Evidence Notice" in new_body
+
+    def test_no_update_when_notice_already_present(self):
+        pr = MagicMock()
+        pr.body = "Intro"
+
+        ensure_merge_queue_notice_description(pr)
+        expected_body = pr.edit.call_args.kwargs["body"]
+        pr.reset_mock()
+        pr.body = expected_body
+
+        ensure_merge_queue_notice_description(pr)
+
+        pr.edit.assert_not_called()
+
+
+class TestEnsureMergeQueueNoticeComment:
+    def test_creates_comment_when_missing(self):
+        pr = MagicMock()
+        pr.get_issue_comments.return_value = []
+
+        ensure_merge_queue_notice_comment(pr)
+
+        pr.create_issue_comment.assert_called_once()
+        posted = pr.create_issue_comment.call_args.args[0]
+        assert MERGE_QUEUE_COMMENT_MARKER in posted
+
+    def test_updates_existing_tampered_comment(self):
+        existing = MagicMock()
+        existing.body = f"{MERGE_QUEUE_COMMENT_MARKER}\nold text"
+
+        pr = MagicMock()
+        pr.get_issue_comments.return_value = [existing]
+
+        ensure_merge_queue_notice_comment(pr)
+
+        existing.edit.assert_called_once()
+        updated = existing.edit.call_args.args[0]
+        assert "merge queue" in updated.lower()
+
+    def test_noop_when_existing_comment_matches(self):
+        existing = MagicMock()
+        existing.body = "\n".join(
+            [
+                MERGE_QUEUE_COMMENT_MARKER,
+                "Merge queue note: Changes made after this PR enters the merge queue",
+                "may update PR checklist content, but they do not affect the evidence",
+                "recorded in git history by the merge commit evidence flow.",
+            ]
+        )
+
+        pr = MagicMock()
+        pr.get_issue_comments.return_value = [existing]
+
+        ensure_merge_queue_notice_comment(pr)
+
+        existing.edit.assert_not_called()
+        pr.create_issue_comment.assert_not_called()
 
 if __name__ == "__main__":
     sys.exit(pytest.main(sys.argv[1:]))

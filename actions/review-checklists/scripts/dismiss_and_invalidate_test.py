@@ -133,10 +133,22 @@ class TestFindOkCommentsForChecklist:
 
 
 class TestHandleSynchronize:
+    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_description")
+    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_comment")
+    @patch("dismiss_and_invalidate.is_pr_in_merge_queue", return_value=False)
     @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
     @patch("dismiss_and_invalidate.load_checklists", return_value=SAMPLE_CHECKLISTS)
-    def test_no_affected_checklists(self, mock_load, mock_gh, mock_status, monkeypatch):
+    def test_no_affected_checklists(
+        self,
+        mock_load,
+        mock_gh,
+        mock_status,
+        mock_in_queue,
+        mock_notice_comment,
+        mock_notice_description,
+        monkeypatch,
+    ):
         monkeypatch.delenv("BEFORE_SHA", raising=False)
         monkeypatch.delenv("AFTER_SHA", raising=False)
 
@@ -146,11 +158,25 @@ class TestHandleSynchronize:
         handle_synchronize(pr)
 
         mock_status.assert_not_called()
+        mock_notice_comment.assert_not_called()
+        mock_notice_description.assert_not_called()
 
+    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_description")
+    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_comment")
+    @patch("dismiss_and_invalidate.is_pr_in_merge_queue", return_value=True)
     @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
     @patch("dismiss_and_invalidate.load_checklists", return_value=SAMPLE_CHECKLISTS)
-    def test_deletes_ok_without_dismissing(self, mock_load, mock_gh, mock_status, monkeypatch):
+    def test_deletes_ok_without_dismissing(
+        self,
+        mock_load,
+        mock_gh,
+        mock_status,
+        mock_in_queue,
+        mock_notice_comment,
+        mock_notice_description,
+        monkeypatch,
+    ):
         monkeypatch.delenv("BEFORE_SHA", raising=False)
         monkeypatch.delenv("AFTER_SHA", raising=False)
         monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
@@ -184,6 +210,8 @@ class TestHandleSynchronize:
         ok_reply.delete.assert_called_once()
         review.dismiss.assert_not_called()
         mock_status.assert_called_once()
+        mock_notice_comment.assert_called_once_with(pr)
+        mock_notice_description.assert_called_once_with(pr)
 
 
 # ---------------------------------------------------------------------------
@@ -200,8 +228,18 @@ class TestHandleCommentChanged:
 
     @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
+    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_description")
+    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_comment")
+    @patch("dismiss_and_invalidate.is_pr_in_merge_queue", return_value=True)
     def test_deleted_ok_sets_pending_without_dismissing(
-        self, mock_gh, mock_status, tmp_path, monkeypatch
+        self,
+        mock_in_queue,
+        mock_notice_comment,
+        mock_notice_description,
+        mock_gh,
+        mock_status,
+        tmp_path,
+        monkeypatch,
     ):
         monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
 
@@ -227,11 +265,23 @@ class TestHandleCommentChanged:
 
         review.dismiss.assert_not_called()
         mock_status.assert_called_once()
+        mock_notice_comment.assert_called_once_with(pr)
+        mock_notice_description.assert_called_once_with(pr)
 
+    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_description")
+    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_comment")
+    @patch("dismiss_and_invalidate.is_pr_in_merge_queue", return_value=False)
     @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
     def test_edited_ok_retraction_sets_pending_without_dismissing(
-        self, mock_gh, mock_status, tmp_path, monkeypatch
+        self,
+        mock_gh,
+        mock_status,
+        mock_in_queue,
+        mock_notice_comment,
+        mock_notice_description,
+        tmp_path,
+        monkeypatch,
     ):
         monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
 
@@ -260,6 +310,8 @@ class TestHandleCommentChanged:
 
         review.dismiss.assert_not_called()
         mock_status.assert_called_once()
+        mock_notice_comment.assert_not_called()
+        mock_notice_description.assert_not_called()
 
     @patch("dismiss_and_invalidate.set_commit_status")
     @patch("dismiss_and_invalidate.get_github_client")
