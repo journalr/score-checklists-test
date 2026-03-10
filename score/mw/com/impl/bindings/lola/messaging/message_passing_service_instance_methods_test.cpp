@@ -773,7 +773,8 @@ TEST_F(MessagePassingServiceInstanceHandleMessageWithReplyTest, RepliesWithError
 using MessagePassingServiceInstanceHandleCallMethodMessageTest = MessagePassingServiceInstanceMethodsFixture;
 TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, ReturnsErrorWhenPayloadHasUnexpectedSize)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredMethodCallHandler(
+
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredMethodCallHandler(
         kProxyMethodInstanceIdentifier, client_identity_->uid);
 
     // Expecting that the registered method call handler will not be called
@@ -793,7 +794,7 @@ TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, ReturnsErrorWhe
 
 TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, RepliesWithErrorWhenPayloadHasUnexpectedSize)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredMethodCallHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredMethodCallHandler(
         kProxyMethodInstanceIdentifier, client_identity_->uid);
 
     // Expecting that a reply will be sent containing an unexpected message size error
@@ -814,7 +815,7 @@ TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, RepliesWithErro
 
 TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, ReturnsSuccessWhenHandlerNotRegistered)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess();
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess();
 
     // Expecting that the registered method call handler will not be called
     EXPECT_CALL(mock_method_call_handler_, Call(_)).Times(0);
@@ -830,7 +831,7 @@ TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, ReturnsSuccessW
 
 TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, RepliesWithErrorWhenHandlerNotRegistered)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess();
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess();
 
     // Expecting that a reply will be sent containing a not subscribed error
     EXPECT_CALL(server_connection_mock_, Reply(_))
@@ -847,7 +848,7 @@ TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, RepliesWithErro
 
 TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, ReturnsSuccessWhenHandlerScopeAlreadyExpired)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredMethodCallHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredMethodCallHandler(
         kProxyMethodInstanceIdentifier, client_identity_->uid);
 
     // and given that the method call handler scope has expired (which will trigger a recoverable error)
@@ -867,7 +868,7 @@ TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, ReturnsSuccessW
 
 TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, RepliesWithErrorWhenHandlerScopeAlreadyExpired)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredMethodCallHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredMethodCallHandler(
         kProxyMethodInstanceIdentifier, client_identity_->uid);
 
     // and given that the method call handler scope has expired (which will trigger a recoverable error)
@@ -888,7 +889,7 @@ TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, RepliesWithErro
 TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest,
        CallsCallMethodHandlerRegisteredWithProvidedProxyIdentifier)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredMethodCallHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredMethodCallHandler(
         kProxyMethodInstanceIdentifier, client_identity_->uid);
 
     // Expecting that the registered method call handler will be called with the provided queue position
@@ -904,7 +905,7 @@ TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest,
 
 TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, RepliesSuccessWhenMethodHandlerCalledSuccessfully)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredMethodCallHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredMethodCallHandler(
         kProxyMethodInstanceIdentifier, client_identity_->uid);
 
     // Expecting that a reply will be sent containing success
@@ -921,7 +922,7 @@ TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, RepliesSuccessW
 
 TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, ReturnsSuccessWhenCallerUidDoesNotMatchRegisteredUid)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredMethodCallHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredMethodCallHandler(
         kProxyMethodInstanceIdentifier, client_identity_->uid);
 
     // Expecting that GetClientIdentity will be called which returns a uid different to the one registered in
@@ -943,7 +944,7 @@ TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, ReturnsSuccessW
 
 TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, RepliesErrorWhenCallerUidDoesNotMatchRegisteredUid)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredMethodCallHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredMethodCallHandler(
         kProxyMethodInstanceIdentifier, client_identity_->uid);
 
     // Expecting that GetClientIdentity will be called which returns a uid different to the one registered in
@@ -967,7 +968,7 @@ TEST_F(MessagePassingServiceInstanceHandleCallMethodMessageTest, RepliesErrorWhe
 using MessagePassingServiceInstanceHandleSubscribeMethodMessageTest = MessagePassingServiceInstanceMethodsFixture;
 TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, ReturnsErrorWhenPayloadHasUnexpectedSize)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredSubscribeMethodHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredSubscribeMethodHandler(
         kSkeletonInstanceIdentifier, {{client_identity_->uid}});
 
     // When a MessageWithReply message is received of type kSubscribeServiceMethod with the wrong payload size
@@ -984,7 +985,7 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, ReturnsErr
 
 TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, RepliesWithErrorWhenPayloadHasUnexpectedSize)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredSubscribeMethodHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredSubscribeMethodHandler(
         kSkeletonInstanceIdentifier, {{client_identity_->uid}});
 
     // Expecting that a reply will be sent containing an unexpected message size error
@@ -1005,7 +1006,7 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, RepliesWit
 
 TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, ReturnsSuccessWhenHandlerNotRegistered)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess();
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess();
 
     // Expecting that the registered subscribe method handler will not be called
     EXPECT_CALL(mock_subscribe_method_handler_, Call(_, _, _)).Times(0);
@@ -1021,7 +1022,7 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, ReturnsSuc
 
 TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, RepliesWithErrorWhenHandlerNotRegistered)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess();
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess();
 
     // Expecting that a reply will be sent containing a not subscribed error
     EXPECT_CALL(server_connection_mock_, Reply(_))
@@ -1039,7 +1040,7 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, RepliesWit
 
 TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, ReturnsSuccessWhenHandlerScopeAlreadyExpired)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredSubscribeMethodHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredSubscribeMethodHandler(
         kSkeletonInstanceIdentifier, {{client_identity_->uid}});
 
     // and given that the subscribe method handler scope has expired (which will trigger a recoverable error)
@@ -1058,7 +1059,7 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, ReturnsSuc
 
 TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest, RepliesWithErrorWhenHandlerScopeAlreadyExpired)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredSubscribeMethodHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredSubscribeMethodHandler(
         kSkeletonInstanceIdentifier, {{client_identity_->uid}});
 
     // and given that the subscribe method handler scope has expired (which will trigger a recoverable error)
@@ -1103,7 +1104,7 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest,
 {
     const auto client_quality_type = ClientQualityType::kASIL_QM;
     GivenAMessagePassingServiceInstance(client_quality_type)
-        .WithAClientInTheSameProcess()
+        .WithAClientInDifferentProcess()
         .WithARegisteredSubscribeMethodHandler(kSkeletonInstanceIdentifier, {{client_identity_->uid}});
 
     // Expecting that a reply will be sent containing success
@@ -1122,7 +1123,7 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest,
 TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest,
        ReturnsSuccessWhenCallerUidDoesNotMatchRegisteredUid)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredSubscribeMethodHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredSubscribeMethodHandler(
         kSkeletonInstanceIdentifier, {{client_identity_->uid}});
 
     // Expecting that GetClientIdentity will be called which returns a uid different to the one registered in
@@ -1145,7 +1146,7 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest,
 TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest,
        RepliesErrorWhenCallerUidDoesNotMatchRegisteredUid)
 {
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredSubscribeMethodHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredSubscribeMethodHandler(
         kSkeletonInstanceIdentifier, {{client_identity_->uid}});
 
     // Expecting that GetClientIdentity will be called which returns a uid different to the one registered in
@@ -1171,7 +1172,7 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest,
        ReturnsSuccessWhenHandlerRegisteredAllowingAllUids)
 {
     const IMessagePassingService::AllowedConsumerUids allow_all_consumer_ids{};
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredSubscribeMethodHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredSubscribeMethodHandler(
         kSkeletonInstanceIdentifier, allow_all_consumer_ids);
 
     // Expecting that GetClientIdentity will be called which returns a random uid
@@ -1179,9 +1180,10 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest,
     invalid_client_identity.uid += 30;
     EXPECT_CALL(server_connection_mock_, GetClientIdentity()).WillOnce(ReturnRef(invalid_client_identity));
 
-    // Expecting that the registered subscribe method handler will be called with the uid returned by
+    // Expecting that the registered subscribe method handler will be called with the uid and pid returned by
     // GetClientIdentity()
-    EXPECT_CALL(mock_subscribe_method_handler_, Call(kProxyInstanceIdentifier, invalid_client_identity.uid, kLocalPid));
+    EXPECT_CALL(mock_subscribe_method_handler_,
+                Call(kProxyInstanceIdentifier, invalid_client_identity.uid, invalid_client_identity.pid));
 
     // When a valid MessageWithReply message is received of type kSubscribeServiceMethod
     const auto result =
@@ -1195,7 +1197,7 @@ TEST_F(MessagePassingServiceInstanceHandleSubscribeMethodMessageTest,
        RepliesSuccessWhenHandlerRegisteredAllowingAllUids)
 {
     const IMessagePassingService::AllowedConsumerUids allow_all_consumer_ids{};
-    GivenAMessagePassingServiceInstance().WithAClientInTheSameProcess().WithARegisteredSubscribeMethodHandler(
+    GivenAMessagePassingServiceInstance().WithAClientInDifferentProcess().WithARegisteredSubscribeMethodHandler(
         kSkeletonInstanceIdentifier, allow_all_consumer_ids);
 
     // Expecting that GetClientIdentity will be called which returns a random uid
