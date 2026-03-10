@@ -23,6 +23,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import yaml
 
+import helpers
 from helpers import (
     CHECKLIST_MARKER,
     MERGE_QUEUE_COMMENT_MARKER,
@@ -55,28 +56,35 @@ SAMPLE_CHECKLISTS = [
     {
         "id": "api-review",
         "name": "API Review",
-        "paths": ["src/api/*.py", "src/api/*.h"],
+        "include": ["src/api/*.py", "src/api/*.h"],
         "checklist": "- [ ] APIs documented\n- [ ] Tests added",
     },
     {
         "id": "docs-review",
         "name": "Documentation Review",
-        "paths": ["docs/**"],
+        "include": ["docs/**"],
         "checklist": "- [ ] Spelling checked",
     },
     {
         "id": "build-review",
         "name": "Build Review",
-        "paths": ["**/BUILD", "**/*.bzl"],
+        "include": ["**/BUILD", "**/*.bzl"],
         "checklist": "- [ ] Targets correct",
+    },
+    {
+        "id": "com-review",
+        "name": "COM Review",
+        "include": ["score/mw/com/**"],
+        "exclude": ["score/mw/com/design/**", "score/mw/com/impl/**"],
+        "checklist": "- [ ] API reviewed",
     },
 ]
 
 
 @pytest.fixture()
 def sample_config(tmp_path):
-    """Write a sample checklists.yml and return its path."""
-    cfg = tmp_path / "checklists.yml"
+    """Write a sample review-checklists.yml and return its path."""
+    cfg = tmp_path / "review-checklists.yml"
     cfg.write_text(yaml.dump({"checklists": SAMPLE_CHECKLISTS}))
     return str(cfg)
 
@@ -139,7 +147,7 @@ class TestLoadChecklists:
     def test_load_from_explicit_path(self, sample_config):
         with patch("helpers._find_checklists_config", return_value=sample_config):
             result = load_checklists()
-        assert len(result) == 3
+        assert len(result) == 4
         assert result[0]["id"] == "api-review"
 
     def test_file_not_found_raises(self, monkeypatch, tmp_path):
@@ -147,7 +155,7 @@ class TestLoadChecklists:
         monkeypatch.delenv("RUNFILES_MANIFEST_FILE", raising=False)
         with patch(
             "helpers._find_checklists_config",
-            side_effect=FileNotFoundError("Cannot locate checklists.yml"),
+            side_effect=FileNotFoundError("Cannot locate .github/review-checklists.yml"),
         ):
             with pytest.raises(FileNotFoundError):
                 load_checklists()
@@ -220,6 +228,30 @@ class TestMatchChecklists:
         match_checklists(SAMPLE_CHECKLISTS, files)
         assert len(SAMPLE_CHECKLISTS[0]) == original_len
 
+    def test_exclude_removes_matching_files(self):
+        # score/mw/com/design/** is excluded from com-review
+        files = ["score/mw/com/design/foo.md"]
+        result = match_checklists(SAMPLE_CHECKLISTS, files)
+        ids = {r["id"] for r in result}
+        assert "com-review" not in ids
+
+    def test_include_minus_exclude_leaves_remainder(self):
+        files = [
+            "score/mw/com/foo.h",        # included, not excluded
+            "score/mw/com/design/bar.md", # excluded
+            "score/mw/com/impl/baz.cpp",  # excluded
+        ]
+        result = match_checklists(SAMPLE_CHECKLISTS, files)
+        com = next((r for r in result if r["id"] == "com-review"), None)
+        assert com is not None
+        assert com["matched_files"] == ["score/mw/com/foo.h"]
+
+    def test_all_files_excluded_means_no_match(self):
+        files = ["score/mw/com/design/only.md", "score/mw/com/impl/only.cpp"]
+        result = match_checklists(SAMPLE_CHECKLISTS, files)
+        ids = {r["id"] for r in result}
+        assert "com-review" not in ids
+
 
 # ---------------------------------------------------------------------------
 # make_checklist_comment_body
@@ -251,8 +283,19 @@ class TestMakeChecklistCommentBody:
     def test_contains_paths(self):
         cl = SAMPLE_CHECKLISTS[0]
         body = make_checklist_comment_body(cl)
-        for p in cl["paths"]:
+        for p in cl["include"]:
             assert p in body
+
+    def test_contains_exclude_when_present(self):
+        cl = SAMPLE_CHECKLISTS[3]  # com-review, has exclude
+        body = make_checklist_comment_body(cl)
+        for p in cl["exclude"]:
+            assert p in body
+
+    def test_no_exclude_line_when_absent(self):
+        cl = SAMPLE_CHECKLISTS[0]  # api-review, no exclude
+        body = make_checklist_comment_body(cl)
+        assert "Excluding" not in body
 
 
 # ---------------------------------------------------------------------------
@@ -444,7 +487,7 @@ class TestSetCommitStatus:
 
 class TestFindChecklistsConfig:
     def test_find_via_runfiles(self, tmp_path, monkeypatch):
-        cfg = tmp_path / "checklists.yml"
+        cfg = tmp_path / "review-checklists.yml"
         cfg.write_text(yaml.dump({"checklists": SAMPLE_CHECKLISTS}))
 
         class DummyRunfiles:
@@ -474,10 +517,25 @@ class TestFindChecklistsConfig:
         runfiles_mod.Runfiles = DummyRunfiles
 
         monkeypatch.setitem(sys.modules, "runfiles", runfiles_mod)
-        expected = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "checklists.yml"
-        )
-        assert _find_checklists_config() == expected
+        # Test with default config path (.github/review-checklists.yml)
+        with patch("helpers.os.path.isfile", return_value=True):
+            result = _find_checklists_config()
+        assert result == ".github/review-checklists.yml"
+
+    def test_find_via_custom_config_path(self, monkeypatch):
+        class DummyRunfiles:
+            @staticmethod
+            def Create():
+                return None
+
+        runfiles_mod = types.ModuleType("runfiles")
+        runfiles_mod.Runfiles = DummyRunfiles
+
+        monkeypatch.setitem(sys.modules, "runfiles", runfiles_mod)
+        # Test with custom config path
+        with patch("helpers.os.path.isfile", return_value=True):
+            result = _find_checklists_config("custom/checklists.yml")
+        assert result == "custom/checklists.yml"
 
 
 # ---------------------------------------------------------------------------

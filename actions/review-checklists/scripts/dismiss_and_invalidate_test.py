@@ -57,7 +57,7 @@ SAMPLE_CHECKLISTS = [
     {
         "id": "api-review",
         "name": "API Review",
-        "paths": ["src/api/*.py"],
+        "include": ["src/api/*.py"],
         "checklist": "- [ ] Reviewed",
     },
 ]
@@ -155,7 +155,7 @@ class TestHandleSynchronize:
         pr = MagicMock()
         pr.get_files.return_value = [_make_file("unrelated.txt")]
 
-        handle_synchronize(pr)
+        handle_synchronize(pr, ".github/review-checklists.yml")
 
         mock_status.assert_not_called()
         mock_notice_comment.assert_not_called()
@@ -205,7 +205,7 @@ class TestHandleSynchronize:
             "dismiss_and_invalidate.find_existing_checklist_comments",
             return_value={"api-review": cl_comment},
         ):
-            handle_synchronize(pr)
+            handle_synchronize(pr, ".github/review-checklists.yml")
 
         ok_reply.delete.assert_called_once()
         review.dismiss.assert_not_called()

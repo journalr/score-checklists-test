@@ -15,15 +15,19 @@
 # Each checklist has:
 #   id:        Unique identifier (used in markers and tracking)
 #   name:      Human-readable name shown in the PR conversation
-#   paths:     List of glob patterns; if any changed file matches, the checklist applies
+#   include:   List of glob patterns; a file must match at least one to be considered
+#   exclude:   (optional) List of glob patterns; a file matching any of these is excluded
 #   checklist: Markdown checklist body shown to reviewers
 
 checklists:
   - id: com-api-review
     name: "COM Module API Review"
-    paths:
-      - "score/mw/com/*.h"
-      - "score/mw/com/*.cpp"
+    include:
+      - "score/mw/com/**"
+    exclude:
+      - "score/mw/com/design/**"
+      - "score/mw/com/doc/**"
+      - "score/mw/com/impl/**"
     checklist: |
       - Public API changes are backward-compatible or properly versioned
       - New/modified types are documented in header comments
@@ -33,7 +37,7 @@ checklists:
 
   - id: com-design-review
     name: "COM Module Design Review"
-    paths:
+    include:
       - "score/mw/com/design/**"
       - "score/mw/com/doc/**"
     checklist: |
@@ -43,7 +47,7 @@ checklists:
 
   - id: com-impl-review
     name: "COM Module Implementation Review"
-    paths:
+    include:
       - "score/mw/com/impl/**"
     checklist: |
       - No undefined behavior introduced
@@ -54,7 +58,7 @@ checklists:
 
   - id: message-passing-review
     name: "Message Passing Review"
-    paths:
+    include:
       - "score/message_passing/**"
     checklist: |
       - Thread-safety of connection handling reviewed
@@ -65,7 +69,7 @@ checklists:
 
   - id: build-config-review
     name: "Build Configuration Review"
-    paths:
+    include:
       - "**/BUILD"
       - "**/*.bzl"
       - "MODULE.bazel"
@@ -78,7 +82,7 @@ checklists:
 
   - id: ci-workflow-review
     name: "CI Workflow Review"
-    paths:
+    include:
       - ".github/workflows/**"
       - "actions/**"
     checklist: |

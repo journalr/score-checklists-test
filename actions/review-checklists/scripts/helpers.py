@@ -50,35 +50,53 @@ def get_repo_and_pr(gh: Github) -> tuple[Any, PullRequest]:
     return repo, pr
 
 
-def _find_checklists_config() -> str:
-    """Locate checklists.yml using Bazel runfiles, env var, or path heuristics."""
+def _find_checklists_config(
+    config_relpath: str = ".github/review-checklists.yml",
+) -> str:
+    """Locate checklist config via runfiles or path heuristics.
+
+    Args:
+        config_relpath: Relative path to the checklist config file.
+                        Defaults to '.github/review-checklists.yml'.
+
+    Returns:
+        Absolute path to the config file.
+
+    Raises:
+        FileNotFoundError: If the config file cannot be located.
+    """
     # 1. Bazel runfiles via the bazel-runfiles library (Rlocation API).
     try:
         from runfiles import Runfiles  # type: ignore[import-untyped]
 
         r = Runfiles.Create()
         if r:
-            candidate = r.Rlocation(
-                "_main/actions/review-checklists/checklists.yml"
-            )
+            candidate = r.Rlocation(f"_main/{config_relpath}")
             if candidate and os.path.isfile(candidate):
                 return candidate
     except (ImportError, Exception):
         pass
 
-    # 2. Fallback: relative to this source file (works outside Bazel).
-    candidate = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "checklists.yml"
-    )
-    if os.path.isfile(candidate):
-        return candidate
+    # 2. Fallback: relative to working directory (works outside Bazel).
+    if os.path.isfile(config_relpath):
+        return config_relpath
 
-    raise FileNotFoundError("Cannot locate checklists.yml")
+    raise FileNotFoundError(f"Cannot locate {config_relpath}")
 
 
-def load_checklists() -> list[dict]:
-    """Load checklist definitions from the YAML configuration file."""
-    config_path = _find_checklists_config()
+def load_checklists(
+    config_relpath: str = ".github/review-checklists.yml",
+) -> list[dict]:
+    """Load checklist definitions from the YAML configuration file.
+
+    Args:
+        config_relpath: Relative path to the checklist config file.
+                        Defaults to '.github/review-checklists.yml'.
+
+    Returns:
+        List of checklist definitions.
+    """
+    config_path = _find_checklists_config(config_relpath)
     with open(config_path, "r") as f:
         data = yaml.safe_load(f)
     return data["checklists"]
@@ -89,21 +107,34 @@ def get_changed_files(pr: PullRequest) -> list[str]:
     return [f.filename for f in pr.get_files()]
 
 
+def _file_matches_patterns(filepath: str, patterns: list[str]) -> bool:
+    """Return True if filepath matches any of the given glob patterns."""
+    return any(fnmatch.fnmatch(filepath, p) for p in patterns)
+
+
 def match_checklists(
         checklists: list[dict], changed_files: list[str]
 ) -> list[dict]:
     """Return checklists whose path patterns match at least one changed file.
+
+    Each checklist may have:
+      ``include``: list of glob patterns; a file must match at least one.
+      ``exclude``: (optional) list of glob patterns; matching files are removed.
 
     Each returned checklist dict is augmented with a ``matched_files`` key
     containing the list of changed files that triggered the match.
     """
     relevant = []
     for cl in checklists:
+        include_patterns: list[str] = cl.get("include", [])
+        exclude_patterns: list[str] = cl.get("exclude", [])
+
         matched = set()
-        for pattern in cl["paths"]:
-            for filepath in changed_files:
-                if fnmatch.fnmatch(filepath, pattern):
+        for filepath in changed_files:
+            if _file_matches_patterns(filepath, include_patterns):
+                if not _file_matches_patterns(filepath, exclude_patterns):
                     matched.add(filepath)
+
         if matched:
             cl_copy = dict(cl)
             cl_copy["matched_files"] = sorted(matched)
@@ -114,12 +145,19 @@ def match_checklists(
 def make_checklist_comment_body(checklist: dict) -> str:
     """Build the Markdown body for a checklist PR review comment (finding)."""
     marker = CHECKLIST_MARKER.format(checklist_id=checklist["id"])
+    include_patterns = checklist.get("include", [])
+    exclude_patterns = checklist.get("exclude", [])
+    exclude_line = (
+        f"**Excluding files matching:** `{'`, `'.join(exclude_patterns)}`\n\n"
+        if exclude_patterns
+        else ""
+    )
     body = (
         f"{marker}\n"
         f"## 📋 {checklist['name']}\n\n"
         f"**Checklist ID:** `{checklist['id']}`\n\n"
-        f"**Applicable to files matching:** "
-        f"`{'`, `'.join(checklist['paths'])}`\n\n"
+        f"**Applicable to files matching:** `{'`, `'.join(include_patterns)}`\n\n"
+        f"{exclude_line}"
         f"### Checklist\n\n"
         f"{checklist['checklist'].strip()}\n\n"
         f"---\n"

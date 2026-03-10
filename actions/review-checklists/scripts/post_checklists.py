@@ -24,6 +24,9 @@ threaded conversations where reviewers can reply directly with OK.
 
 from __future__ import annotations
 
+import argparse
+import os
+
 from helpers import (
     build_evidence_block,
     ensure_merge_queue_notice_comment,
@@ -77,10 +80,20 @@ def _collect_acknowledgement_details(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Post or update review-checklist findings on a PR."
+    )
+    parser.add_argument(
+        "--config-path",
+        default=".github/review-checklists.yml",
+        help="Path to checklist configuration file (default: .github/review-checklists.yml)",
+    )
+    args = parser.parse_args()
+
     gh = get_github_client()
     repo, pr = get_repo_and_pr(gh)
 
-    checklists = load_checklists()
+    checklists = load_checklists(args.config_path)
     changed_files = get_changed_files(pr)
     relevant = match_checklists(checklists, changed_files)
 

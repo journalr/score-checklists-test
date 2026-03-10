@@ -52,7 +52,7 @@ SAMPLE_CHECKLISTS = [
     {
         "id": "api-review",
         "name": "API Review",
-        "paths": ["src/api/*.py"],
+        "include": ["src/api/*.py"],
         "checklist": "- [ ] Reviewed",
     },
 ]
