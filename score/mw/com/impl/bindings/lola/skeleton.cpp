@@ -1043,6 +1043,8 @@ ResultBlank Skeleton::OnServiceMethodsSubscribed(const ProxyInstanceIdentifier& 
         shm_path_builder_->GetMethodChannelShmName(lola_instance_id_, proxy_instance_identifier);
     const bool is_read_write{true};
 
+    method_resources_.CleanUpOldRegions(proxy_instance_identifier, proxy_pid);  // Per Proxy
+
     const std::vector<uid_t> allowed_providers{proxy_uid};
     auto opened_shm_region =
         memory::shared::SharedMemoryFactory::Open(method_channel_shm_name, is_read_write, allowed_providers);
@@ -1057,7 +1059,7 @@ ResultBlank Skeleton::OnServiceMethodsSubscribed(const ProxyInstanceIdentifier& 
     auto& method_data = GetMethodData(*(resource_it->second));
 
     const auto [subscription_result, method_ids_to_unsubscribe] =
-        SubscribeMethods(method_data, proxy_instance_identifier, proxy_uid, asil_level);
+        SubscribeMethods(method_data, proxy_instance_identifier, proxy_uid, proxy_pid, asil_level);
     if (!(subscription_result.has_value()))
     {
         UnsubscribeMethods(method_ids_to_unsubscribe, proxy_instance_identifier);
@@ -1069,6 +1071,7 @@ ResultBlank Skeleton::OnServiceMethodsSubscribed(const ProxyInstanceIdentifier& 
 auto Skeleton::SubscribeMethods(const MethodData& method_data,
                                 const ProxyInstanceIdentifier proxy_instance_identifier,
                                 const uid_t proxy_uid,
+                                const pid_t proxy_pid,
                                 const QualityType asil_level) -> std::pair<score::ResultBlank, MethodIdsToUnsubscribe>
 {
     const auto& method_call_queues = method_data.method_call_queues_;
@@ -1081,6 +1084,7 @@ auto Skeleton::SubscribeMethods(const MethodData& method_data,
             "Each method that was stored in shared memory by the proxy must be registered with the Skeleton!");
         auto& skeleton_method = skeleton_methods_.at(method_id);
         const ProxyMethodInstanceIdentifier proxy_method_instance_identifier{proxy_instance_identifier, method_id};
+
         const auto result =
             skeleton_method.get().OnProxyMethodSubscribeFinished(type_erased_call_queue.GetTypeErasedElementInfo(),
                                                                  type_erased_call_queue.GetInArgValuesQueueStorage(),
@@ -1088,6 +1092,7 @@ auto Skeleton::SubscribeMethods(const MethodData& method_data,
                                                                  proxy_method_instance_identifier,
                                                                  method_call_handler_scope_,
                                                                  proxy_uid,
+                                                                 proxy_pid,
                                                                  asil_level);
         if (!(result.has_value()))
         {

@@ -68,6 +68,7 @@ const TypeErasedCallQueue::TypeErasedElementInfo kTypeErasedInfoWithNoInArgsOrRe
     kDummyQueueSize};
 
 const uid_t kAllowedProxyUid{10};
+const pid_t kAllowedProxyPid{12};
 const auto kAsilLevel{QualityType::kASIL_QM};
 
 constexpr auto InArgsQueueStorageSize = kValidInArgSizeInfo.Size() * kDummyQueueSize;
@@ -166,6 +167,7 @@ TEST_F(SkeletonMethodOnProxyMethodSubscribedFixture, CallingWithoutRegisteringCa
                                                                                      proxy_method_instance_identifier_,
                                                                                      method_call_handler_scope_,
                                                                                      kAllowedProxyUid,
+                                                                                     kAllowedProxyPid,
                                                                                      kAsilLevel));
 }
 
@@ -186,6 +188,7 @@ TEST_F(SkeletonMethodOnProxyMethodSubscribedFixture, CallingRegistersCallbackWit
                                                               proxy_method_instance_identifier_,
                                                               method_call_handler_scope_,
                                                               kAllowedProxyUid,
+                                                              kAllowedProxyPid,
                                                               asil_level);
 
     // Then the result will be valid
@@ -218,6 +221,7 @@ TEST_F(SkeletonMethodOnProxyMethodSubscribedFixture, CallingRegistersRegisteredC
                                                               proxy_method_instance_identifier_,
                                                               method_call_handler_scope_,
                                                               kAllowedProxyUid,
+                                                              kAllowedProxyPid,
                                                               kAsilLevel);
 
     // Then the result will be valid
@@ -240,6 +244,7 @@ TEST_F(SkeletonMethodOnProxyMethodSubscribedFixture, PropagatesErrorFromMessageP
                                                               proxy_method_instance_identifier_,
                                                               method_call_handler_scope_,
                                                               kAllowedProxyUid,
+                                                              kAllowedProxyPid,
                                                               kAsilLevel);
 
     // Then the result will contain an error
@@ -262,6 +267,7 @@ TEST_F(SkeletonMethodOnProxyMethodSubscribedFixture, FailingToGetLolaRuntimeTerm
                                                                                      proxy_method_instance_identifier_,
                                                                                      method_call_handler_scope_,
                                                                                      kAllowedProxyUid,
+                                                                                     kAllowedProxyPid,
                                                                                      kAsilLevel));
 }
 
@@ -284,6 +290,7 @@ TEST_F(SkeletonMethodOnProxyMethodSubscribedFixture, CallingWillNotCallUnregiste
                                                               proxy_method_instance_identifier_,
                                                               method_call_handler_scope_,
                                                               kAllowedProxyUid,
+                                                              kAllowedProxyPid,
                                                               QualityType::kASIL_QM);
     EXPECT_TRUE(result.has_value());
 }
@@ -313,6 +320,7 @@ TEST_F(SkeletonMethodOnProxyMethodSubscribedFixture, UnregisterWillBeCalledOnAll
                                                               proxy_method_instance_identifier_,
                                                               method_call_handler_scope_,
                                                               kAllowedProxyUid,
+                                                              kAllowedProxyPid,
                                                               QualityType::kASIL_QM);
     EXPECT_TRUE(result.has_value());
 
@@ -322,6 +330,7 @@ TEST_F(SkeletonMethodOnProxyMethodSubscribedFixture, UnregisterWillBeCalledOnAll
                                                                 proxy_method_instance_identifier_2_,
                                                                 method_call_handler_scope_,
                                                                 kAllowedProxyUid,
+                                                                kAllowedProxyPid,
                                                                 QualityType::kASIL_B);
     EXPECT_TRUE(result_2.has_value());
 
@@ -357,6 +366,7 @@ TEST_F(SkeletonMethodUnregisterHandlersFixture, CallingWillUnregisterAllHandlers
                                                               proxy_method_instance_identifier_,
                                                               method_call_handler_scope_,
                                                               kAllowedProxyUid,
+                                                              kAllowedProxyPid,
                                                               QualityType::kASIL_QM);
     EXPECT_TRUE(result.has_value());
 
@@ -366,6 +376,7 @@ TEST_F(SkeletonMethodUnregisterHandlersFixture, CallingWillUnregisterAllHandlers
                                                                 proxy_method_instance_identifier_2,
                                                                 method_call_handler_scope_,
                                                                 kAllowedProxyUid,
+                                                                kAllowedProxyPid,
                                                                 QualityType::kASIL_B);
     EXPECT_TRUE(result_2.has_value());
 
@@ -404,6 +415,7 @@ TEST_F(SkeletonMethodOnProxyMethodUnsubscribedFixture, CallingWillUnregisterHand
                                                               proxy_method_instance_identifier_,
                                                               method_call_handler_scope_,
                                                               kAllowedProxyUid,
+                                                              kAllowedProxyPid,
                                                               QualityType::kASIL_QM);
     EXPECT_TRUE(result.has_value());
 
@@ -413,6 +425,7 @@ TEST_F(SkeletonMethodOnProxyMethodUnsubscribedFixture, CallingWillUnregisterHand
                                                                 proxy_method_instance_identifier_2,
                                                                 method_call_handler_scope_,
                                                                 kAllowedProxyUid,
+                                                                kAllowedProxyPid,
                                                                 QualityType::kASIL_B);
     EXPECT_TRUE(result_2.has_value());
 
@@ -448,6 +461,7 @@ TEST_F(SkeletonMethodCallFixture, CallingWithInArgTypeInfoAndStorageDispatchesTo
                                                         proxy_method_instance_identifier_,
                                                         method_call_handler_scope_,
                                                         kAllowedProxyUid,
+                                                        kAllowedProxyPid,
                                                         kAsilLevel);
 
     // When the method call handler is called by the message passing (i.e. when a Proxy sends a message passing message
@@ -475,6 +489,7 @@ TEST_F(SkeletonMethodCallFixture,
                                                         proxy_method_instance_identifier_,
                                                         method_call_handler_scope_,
                                                         kAllowedProxyUid,
+                                                        kAllowedProxyPid,
                                                         kAsilLevel);
 
     // When the method call handler is called by the message passing (i.e. when a Proxy sends a message passing message
@@ -503,6 +518,7 @@ TEST_F(SkeletonMethodCallFixture,
                                                         proxy_method_instance_identifier_,
                                                         method_call_handler_scope_,
                                                         kAllowedProxyUid,
+                                                        kAllowedProxyPid,
                                                         kAsilLevel);
 
     // When the method call handler is called by the message passing (i.e. when a Proxy sends a message passing message
@@ -529,6 +545,7 @@ TEST_F(SkeletonMethodCallFixture, CallingWithNoTypeInfosAndStoragesDispatchesToR
                                                         proxy_method_instance_identifier_,
                                                         method_call_handler_scope_,
                                                         kAllowedProxyUid,
+                                                        kAllowedProxyPid,
                                                         kAsilLevel);
 
     // When the method call handler is called by the message passing (i.e. when a Proxy sends a message passing message
@@ -549,6 +566,7 @@ TEST_F(SkeletonMethodCallFixture, CallingWithInArgTypeInfoAndNoValidStorageTermi
                                                         proxy_method_instance_identifier_,
                                                         method_call_handler_scope_,
                                                         kAllowedProxyUid,
+                                                        kAllowedProxyPid,
                                                         kAsilLevel);
 
     // When the method call handler is called by the message passing (i.e. when a Proxy sends a message passing message
@@ -570,6 +588,7 @@ TEST_F(SkeletonMethodCallFixture, CallingAfterScopeHasExpiredDoesNotCallTypeEras
                                                         proxy_method_instance_identifier_,
                                                         method_call_handler_scope_,
                                                         kAllowedProxyUid,
+                                                        kAllowedProxyPid,
                                                         kAsilLevel);
     // and given that the method call handler scope has expired
     method_call_handler_scope_.Expire();

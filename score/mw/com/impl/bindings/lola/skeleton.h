@@ -221,12 +221,11 @@ class Skeleton final : public SkeletonBinding
                                            const pid_t proxy_pid);
 
     using MethodIdsToUnsubscribe = std::vector<LolaMethodId>;
-    /// TODO: If SubscribeMethods fails, we want to get the error so that it can be propagated. We also want to return
-    /// MethodIdsToUnsubscribe so that these methods can be unsubscribed. Can this be done in a better way?
     std::pair<score::ResultBlank, MethodIdsToUnsubscribe> SubscribeMethods(
         const MethodData& method_data,
         const ProxyInstanceIdentifier proxy_instance_identifier,
         const uid_t proxy_uid,
+        const pid_t proxy_pid,
         const QualityType asil_level);
     void UnsubscribeMethods(const std::vector<LolaMethodId>& method_ids,
                             const ProxyInstanceIdentifier& proxy_instance_identifier);
