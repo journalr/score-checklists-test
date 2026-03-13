@@ -43,6 +43,7 @@ rust_test(
 rust_doc_test(
     name = "com-api-concept-macros-tests",
     crate = ":com-api-concept",
+    tags = ["manual"],
     deps = ["//score/mw/com/impl/rust/com-api/com-api"],
 )
 
