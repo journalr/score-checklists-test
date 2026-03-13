@@ -112,9 +112,7 @@ def _file_matches_patterns(filepath: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(filepath, p) for p in patterns)
 
 
-def match_checklists(
-        checklists: list[dict], changed_files: list[str]
-) -> list[dict]:
+def match_checklists(checklists: list[dict], changed_files: list[str]) -> list[dict]:
     """Return checklists whose path patterns match at least one changed file.
 
     Each checklist may have:
@@ -193,7 +191,7 @@ def find_existing_checklist_comments(pr: PullRequest) -> dict[str, Any]:
 
 
 def find_ok_replies(
-        pr: PullRequest, checklist_comment_id: int, checklist_id: str
+    pr: PullRequest, checklist_comment_id: int, checklist_id: str
 ) -> list[Any]:
     """Find valid OK reply comments for a given checklist review comment.
 
@@ -213,6 +211,37 @@ def find_ok_replies(
     return ok_replies
 
 
+def _collect_acknowledgement_details(
+    pr: PullRequest, existing_comments: dict[str, Any], relevant_ids: list[str]
+) -> dict[str, list[dict[str, str]]]:
+    """Return acknowledgement details for relevant checklist review threads."""
+    details: dict[str, list[dict[str, str]]] = {cid: [] for cid in relevant_ids}
+
+    cl_comment_ids: dict[int, str] = {}
+    for cid, comment in existing_comments.items():
+        if cid in relevant_ids:
+            cl_comment_ids[comment.id] = cid
+
+    for comment in pr.get_review_comments():
+        reply_to = getattr(comment, "in_reply_to_id", None)
+        if not isinstance(reply_to, int) or reply_to not in cl_comment_ids:
+            continue
+
+        cid = cl_comment_ids[reply_to]
+        body = (comment.body or "").strip()
+        user = comment.user.login
+
+        if body.upper() == OK_KEYWORD:
+            details[cid].append(
+                {
+                    "reviewer": user,
+                    "acknowledged_at": comment.created_at.isoformat(),
+                }
+            )
+
+    return details
+
+
 def get_approving_reviewers(pr: PullRequest) -> list[str]:
     """Return a list of usernames who have an active APPROVED review."""
     approvers = set()
@@ -225,11 +254,11 @@ def get_approving_reviewers(pr: PullRequest) -> list[str]:
 
 
 def set_commit_status(
-        repo: Any,
-        sha: str,
-        state: str,
-        description: str,
-        context: str = "review-checklists",
+    repo: Any,
+    sha: str,
+    state: str,
+    description: str,
+    context: str = "review-checklists",
 ) -> None:
     """Set a commit status on the given SHA."""
     desc = description[:140]
@@ -279,7 +308,7 @@ def extract_evidence_block(description: str) -> str | None:
     try:
         start = description.index(EVIDENCE_BLOCK_START)
         end = description.index(EVIDENCE_BLOCK_END)
-        return description[start: end + len(EVIDENCE_BLOCK_END)]
+        return description[start : end + len(EVIDENCE_BLOCK_END)]
     except ValueError:
         return None
 
@@ -299,8 +328,8 @@ def remove_evidence_block(description: str) -> str:
 
 
 def build_evidence_block(
-        relevant: list[dict],
-        ack_details: dict[str, list[dict[str, str]]],
+    relevant: list[dict],
+    ack_details: dict[str, list[dict[str, str]]],
 ) -> str:
     """Build the evidence block for the PR description."""
     from datetime import datetime, timezone
@@ -325,23 +354,18 @@ def build_evidence_block(
         if acks:
             lines.append("**Acknowledged by:**")
             for ack in acks:
-                lines.append(
-                    f"- {ack['reviewer']} at {ack['acknowledged_at']}"
-                )
+                lines.append(f"- {ack['reviewer']} at {ack['acknowledged_at']}")
         else:
             lines.append("**Acknowledged by:** No acknowledgements yet")
         lines.append("")
 
-    lines += [
-        "</details>",
-        EVIDENCE_BLOCK_END
-    ]
+    lines += ["</details>", EVIDENCE_BLOCK_END]
     return "\n".join(lines)
 
 
 def update_pr_description_with_evidence(
-        pr: Any,
-        evidence_block: str,
+    pr: Any,
+    evidence_block: str,
 ) -> None:
     """Update PR description to include/replace evidence block."""
     current_description = pr.body or ""
@@ -362,7 +386,9 @@ def update_pr_description_with_evidence(
 
 def is_pr_in_merge_queue(pr: Any) -> bool:
     """Return whether the PR is currently in GitHub merge queue via GraphQL."""
-    repo_name = getattr(getattr(getattr(pr, "base", None), "repo", None), "full_name", "")
+    repo_name = getattr(
+        getattr(getattr(pr, "base", None), "repo", None), "full_name", ""
+    )
     if not repo_name or "/" not in repo_name:
         repo_name = os.environ.get("GITHUB_REPOSITORY", "")
     if "/" not in repo_name:
@@ -423,9 +449,7 @@ def _remove_merge_queue_notice_block(description: str) -> str:
         return description
     try:
         start = description.index(MERGE_QUEUE_NOTICE_START)
-        end = description.index(MERGE_QUEUE_NOTICE_END) + len(
-            MERGE_QUEUE_NOTICE_END
-        )
+        end = description.index(MERGE_QUEUE_NOTICE_END) + len(MERGE_QUEUE_NOTICE_END)
         result = description[:start] + description[end:]
         return result.rstrip() + "\n"
     except ValueError:
@@ -436,9 +460,7 @@ def ensure_merge_queue_notice_description(pr: Any) -> None:
     """Ensure a standalone merge-queue notice exists in the PR description."""
     current_description = pr.body or ""
     notice_block = _build_merge_queue_notice_block()
-    description_without_notice = _remove_merge_queue_notice_block(
-        current_description
-    )
+    description_without_notice = _remove_merge_queue_notice_block(current_description)
     base = description_without_notice.rstrip()
     if base:
         new_description = base + "\n\n" + notice_block

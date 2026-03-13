@@ -31,6 +31,7 @@ from helpers import (
     MERGE_QUEUE_NOTICE_END,
     MERGE_QUEUE_NOTICE_START,
     OK_KEYWORD,
+    _collect_acknowledgement_details,
     _find_checklists_config,
     ensure_merge_queue_notice_comment,
     ensure_merge_queue_notice_description,
@@ -155,7 +156,9 @@ class TestLoadChecklists:
         monkeypatch.delenv("RUNFILES_MANIFEST_FILE", raising=False)
         with patch(
             "helpers._find_checklists_config",
-            side_effect=FileNotFoundError("Cannot locate .github/review_checklists.yml"),
+            side_effect=FileNotFoundError(
+                "Cannot locate .github/review_checklists.yml"
+            ),
         ):
             with pytest.raises(FileNotFoundError):
                 load_checklists()
@@ -237,8 +240,8 @@ class TestMatchChecklists:
 
     def test_include_minus_exclude_leaves_remainder(self):
         files = [
-            "score/mw/com/foo.h",        # included, not excluded
-            "score/mw/com/design/bar.md", # excluded
+            "score/mw/com/foo.h",  # included, not excluded
+            "score/mw/com/design/bar.md",  # excluded
             "score/mw/com/impl/baz.cpp",  # excluded
         ]
         result = match_checklists(SAMPLE_CHECKLISTS, files)
@@ -305,15 +308,11 @@ class TestMakeChecklistCommentBody:
 
 class TestFindExistingChecklistComments:
     def test_finds_checklist_review_comments(self):
-        c1 = _make_comment(
-            1, "<!-- review-checklist:api-review --> body here"
-        )
+        c1 = _make_comment(1, "<!-- review-checklist:api-review --> body here")
         c1.in_reply_to_id = None
         c2 = _make_comment(2, "just a normal comment")
         c2.in_reply_to_id = None
-        c3 = _make_comment(
-            3, "<!-- review-checklist:docs-review --> docs body"
-        )
+        c3 = _make_comment(3, "<!-- review-checklist:docs-review --> docs body")
         c3.in_reply_to_id = None
         pr = MagicMock()
         pr.get_review_comments.return_value = [c1, c2, c3]
@@ -325,13 +324,9 @@ class TestFindExistingChecklistComments:
 
     def test_ignores_reply_comments(self):
         """A reply to a checklist comment should not be treated as a checklist."""
-        c1 = _make_comment(
-            1, "<!-- review-checklist:api-review --> body"
-        )
+        c1 = _make_comment(1, "<!-- review-checklist:api-review --> body")
         c1.in_reply_to_id = None
-        c2 = _make_comment(
-            2, "<!-- review-checklist:api-review --> reply copy"
-        )
+        c2 = _make_comment(2, "<!-- review-checklist:api-review --> reply copy")
         c2.in_reply_to_id = 1  # this is a reply
         pr = MagicMock()
         pr.get_review_comments.return_value = [c1, c2]
@@ -367,15 +362,16 @@ class TestFindOkReplies:
         assert result[0].id == 11
 
     def test_finds_case_insensitive_ok(self):
-        c1 = _make_comment(10, "checklist body", "bot")
-        c1.in_reply_to_id = None
-        c2 = _make_comment(11, "OK", "reviewer1")
-        c2.in_reply_to_id = 10
-        pr = MagicMock()
-        pr.get_review_comments.return_value = [c1, c2]
+        for ok in ["OK", "ok", "oK", "Ok"]:
+            c1 = _make_comment(10, "checklist body", "bot")
+            c1.in_reply_to_id = None
+            c2 = _make_comment(11, ok, "reviewer1")
+            c2.in_reply_to_id = 10
+            pr = MagicMock()
+            pr.get_review_comments.return_value = [c1, c2]
 
-        result = find_ok_replies(pr, 10, "api-review")
-        assert len(result) == 1
+            result = find_ok_replies(pr, 10, "api-review")
+            assert len(result) == 1
 
     def test_ignores_reply_to_different_comment(self):
         c1 = _make_comment(11, "OK", "reviewer1")
@@ -394,6 +390,40 @@ class TestFindOkReplies:
 
         result = find_ok_replies(pr, 10, "api-review")
         assert len(result) == 0
+
+
+# ---------------------------------------------------------------------------
+# _collect_acknowledgement_details
+# ---------------------------------------------------------------------------
+
+
+class TestCollectAcknowledgementDetails:
+    def test_collects_ok_reply_details_for_relevant_checklists(self):
+        checklist_comment = _make_comment(10, "checklist body", "bot")
+        ok_reply = _make_comment(11, "OK", "reviewer1")
+        ok_reply.in_reply_to_id = 10
+        other_reply = _make_comment(12, "looks good", "reviewer2")
+        other_reply.in_reply_to_id = 10
+        unrelated_reply = _make_comment(13, "OK", "reviewer3")
+        unrelated_reply.in_reply_to_id = 999
+        pr = MagicMock()
+        pr.get_review_comments.return_value = [ok_reply, other_reply, unrelated_reply]
+
+        result = _collect_acknowledgement_details(
+            pr,
+            {"api-review": checklist_comment},
+            ["api-review", "docs-review"],
+        )
+
+        assert result == {
+            "api-review": [
+                {
+                    "reviewer": "reviewer1",
+                    "acknowledged_at": ok_reply.created_at.isoformat(),
+                }
+            ],
+            "docs-review": [],
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -472,9 +502,7 @@ class TestSetCommitStatus:
 
     def test_custom_context(self):
         repo = MagicMock()
-        set_commit_status(
-            repo, "abc123", "success", "ok", context="my-context"
-        )
+        set_commit_status(repo, "abc123", "success", "ok", context="my-context")
         commit = repo.get_commit.return_value
         call_kwargs = commit.create_status.call_args[1]
         assert call_kwargs["context"] == "my-context"
@@ -547,11 +575,7 @@ class TestIsPrInMergeQueue:
     @patch("helpers._run_graphql_query")
     def test_true_when_graphql_returns_true(self, mock_query):
         mock_query.return_value = {
-            "data": {
-                "repository": {
-                    "pullRequest": {"isInMergeQueue": True}
-                }
-            }
+            "data": {"repository": {"pullRequest": {"isInMergeQueue": True}}}
         }
 
         pr = MagicMock()
@@ -564,11 +588,7 @@ class TestIsPrInMergeQueue:
     @patch("helpers._run_graphql_query")
     def test_false_when_graphql_returns_false(self, mock_query):
         mock_query.return_value = {
-            "data": {
-                "repository": {
-                    "pullRequest": {"isInMergeQueue": False}
-                }
-            }
+            "data": {"repository": {"pullRequest": {"isInMergeQueue": False}}}
         }
 
         pr = MagicMock()
@@ -579,9 +599,7 @@ class TestIsPrInMergeQueue:
 
     @patch("helpers._run_graphql_query")
     def test_false_when_graphql_payload_missing_field(self, mock_query):
-        mock_query.return_value = {
-            "data": {"repository": {"pullRequest": {}}}
-        }
+        mock_query.return_value = {"data": {"repository": {"pullRequest": {}}}}
 
         pr = MagicMock()
         pr.base.repo.full_name = "org/repo"
@@ -677,6 +695,7 @@ class TestEnsureMergeQueueNoticeComment:
 
         existing.edit.assert_not_called()
         pr.create_issue_comment.assert_not_called()
+
 
 if __name__ == "__main__":
     sys.exit(pytest.main(sys.argv[1:]))

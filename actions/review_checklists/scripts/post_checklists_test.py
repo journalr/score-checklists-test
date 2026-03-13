@@ -205,5 +205,6 @@ class TestPostChecklistsMain:
         mock_notice_comment.assert_not_called()
         mock_notice_description.assert_not_called()
 
+
 if __name__ == "__main__":
     sys.exit(pytest.main(sys.argv[1:]))

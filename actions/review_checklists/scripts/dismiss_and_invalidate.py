@@ -12,30 +12,16 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-"""Invalidate OK acknowledgements.
+"""Invalidate OK acknowledgements after new commits are pushed to a PR.
 
-This script handles two scenarios:
-
-1. **New push (synchronize)**: When new commits are pushed to the PR, we
-   determine which checklist paths are affected by the *new* changes.  For
-   each affected checklist, all existing OK replies are deleted and the
-   commit status is set back to pending.  Approvals are **not** dismissed
-   here — branch rulesets handle dismissing stale reviews on new pushes.
-
-2. **OK modified or deleted**: When a reviewer edits or deletes their OK
-   comment, the commit status is set back to pending so the checklist
-   must be re-acknowledged.  The reviewer's approval is **not** dismissed.
-
-The script is invoked with a ``--trigger`` argument:
-
-    python dismiss_and_invalidate.py --trigger synchronize
-    python dismiss_and_invalidate.py --trigger comment_changed
+For the ``synchronize`` trigger, this script determines which checklists are
+affected by newly pushed changes, deletes existing OK replies for those
+checklists, and sets commit status back to pending.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 from typing import Any
 
@@ -76,9 +62,7 @@ def _get_files_in_latest_push(pr: Any) -> list[str]:
     return get_changed_files(pr)
 
 
-def _find_ok_comments_for_checklist(
-    pr: Any, checklist_id: str, checklist_comment_id: int
-) -> list[Any]:
+def _find_ok_comments_for_checklist(pr: Any, checklist_comment_id: int) -> list[Any]:
     """Find all OK reply comments for a given checklist.
 
     Checklist findings are posted as file-level PR review comments; OK
@@ -124,7 +108,7 @@ def handle_synchronize(pr: Any, config_path: str) -> None:
             continue
 
         review = existing[cid]
-        ok_comments = _find_ok_comments_for_checklist(pr, cid, review.id)
+        ok_comments = _find_ok_comments_for_checklist(pr, review.id)
 
         for ok_comment in ok_comments:
             user = ok_comment.user.login
@@ -133,12 +117,10 @@ def handle_synchronize(pr: Any, config_path: str) -> None:
                 ok_comment.delete()
                 print(
                     f"Deleted OK comment {ok_comment.id} from {user} "
-                    f"for checklist '{cid}'"
+                    f"for checklist '{review.id}'"
                 )
             except Exception as e:
-                print(
-                    f"Warning: could not delete comment {ok_comment.id}: {e}"
-                )
+                print(f"Warning: could not delete comment {ok_comment.id}: {e}")
 
     if any_invalidated:
         repo_name = os.environ["GITHUB_REPOSITORY"]
@@ -156,71 +138,12 @@ def handle_synchronize(pr: Any, config_path: str) -> None:
         ensure_merge_queue_notice_description(pr)
 
 
-def handle_comment_changed(pr: Any) -> None:
-    """Handle an OK comment being edited or deleted.
-
-    When a reviewer modifies or removes their OK, set the commit status
-    back to pending.  The reviewer's approval is preserved.
-    """
-    event_path = os.environ.get("GITHUB_EVENT_PATH", "")
-    if not event_path:
-        print("No event payload available.")
-        return
-
-    with open(event_path) as f:
-        event = json.load(f)
-
-    comment_body = event.get("comment", {}).get("body", "")
-    comment_user = event.get("comment", {}).get("user", {}).get("login", "")
-    action = event.get("action", "")
-
-    if not comment_user:
-        print("Could not determine comment author.")
-        return
-
-    # Check if this was an OK-related comment.
-    was_ok = False
-    if action == "deleted":
-        # For deleted comments the body is the content at time of deletion.
-        was_ok = comment_body.strip().upper() == OK_KEYWORD
-    elif action == "edited":
-        old_body = (
-            event.get("changes", {}).get("body", {}).get("from", "")
-        )
-        # If old body was OK but new body is not, this is a retraction.
-        old_is_ok = old_body.strip().upper() == OK_KEYWORD
-        new_is_ok = comment_body.strip().upper() == OK_KEYWORD
-        was_ok = old_is_ok and not new_is_ok
-
-    if was_ok:
-        print(
-            f"Checklist OK retracted by {comment_user} "
-            f"(approval preserved)"
-        )
-
-        repo_name = os.environ["GITHUB_REPOSITORY"]
-        gh = get_github_client()
-        repo = gh.get_repo(repo_name)
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "pending",
-            f"Checklist OK retracted by {comment_user}",
-        )
-
-    if is_pr_in_merge_queue(pr):
-        ensure_merge_queue_notice_comment(pr)
-        ensure_merge_queue_notice_description(pr)
-
-
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Invalidate OK acknowledgements."
-    )
+    parser = argparse.ArgumentParser(description="Invalidate OK acknowledgements.")
     parser.add_argument(
         "--trigger",
         required=True,
-        choices=["synchronize", "comment_changed"],
+        choices=["synchronize"],
         help="The event trigger type.",
     )
     parser.add_argument(
@@ -233,12 +156,8 @@ def main() -> None:
     gh = get_github_client()
     _, pr = get_repo_and_pr(gh)
 
-    if args.trigger == "synchronize":
-        handle_synchronize(pr, args.config_path)
-    elif args.trigger == "comment_changed":
-        handle_comment_changed(pr)
+    handle_synchronize(pr, args.config_path)
 
 
 if __name__ == "__main__":
     main()
-

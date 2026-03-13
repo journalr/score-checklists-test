@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # *******************************************************************************
-# Copyright (c) 2024 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -36,6 +36,7 @@ import sys
 from typing import Any
 
 from helpers import (
+    _collect_acknowledgement_details,
     OK_KEYWORD,
     build_evidence_block,
     find_existing_checklist_comments,
@@ -86,37 +87,6 @@ def _collect_ok_acknowledgements(
     return acks
 
 
-def _collect_acknowledgement_details(
-    pr: Any, existing_comments: dict[str, Any], relevant_ids: list[str]
-) -> dict[str, list[dict[str, str]]]:
-    """Collect detailed acknowledgement information from review comments."""
-    details: dict[str, list[dict[str, str]]] = {cid: [] for cid in relevant_ids}
-
-    cl_comment_ids: dict[int, str] = {}
-    for cid, comment in existing_comments.items():
-        if cid in relevant_ids:
-            cl_comment_ids[comment.id] = cid
-
-    for comment in pr.get_review_comments():
-        reply_to = getattr(comment, "in_reply_to_id", None)
-        if reply_to is None or reply_to not in cl_comment_ids:
-            continue
-
-        cid = cl_comment_ids[reply_to]
-        body = (comment.body or "").strip()
-        user = comment.user.login
-
-        if body.upper() == OK_KEYWORD:
-            details[cid].append(
-                {
-                    "reviewer": user,
-                    "acknowledged_at": comment.created_at.isoformat(),
-                }
-            )
-
-    return details
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Verify review-checklist acknowledgements on a PR."
@@ -152,9 +122,7 @@ def main() -> None:
     relevant = match_checklists(checklists, changed_files)
 
     if not relevant:
-        set_commit_status(
-            repo, pr.head.sha, "success", "No checklists applicable"
-        )
+        set_commit_status(repo, pr.head.sha, "success", "No checklists applicable")
         return
 
     existing = find_existing_checklist_comments(pr)
@@ -218,10 +186,11 @@ def main() -> None:
         print("All checklists acknowledged ✅")
 
     # Write acknowledgement data for downstream use (merge evidence).
-    ack_data = {
-        cid: sorted(users) for cid, users in acks.items()
-    }
-    output_path = os.environ.get("ACK_OUTPUT_PATH", "/tmp/checklist_acks.json")
+    ack_data = {cid: sorted(users) for cid, users in acks.items()}
+    runner_temp = os.environ.get("RUNNER_TEMP", "./")
+    output_path = os.environ.get(
+        "ACK_OUTPUT_PATH", runner_temp + "/checklist_acks.json"
+    )
     with open(output_path, "w") as f:
         json.dump(ack_data, f, indent=2)
     print(f"Acknowledgement data written to {output_path}")
@@ -229,4 +198,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

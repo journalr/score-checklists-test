@@ -178,9 +178,9 @@ class TestCheckAcknowledgementsMain:
         pr.head.sha = "abc"
         pr.get_files.return_value = [_make_file("unrelated.txt")]
         mock_repo_pr.return_value = (repo, pr)
-
-        main()
-
+        # Ensure the argument parser doesn't see pytest's CLI arguments.
+        with patch.object(sys, "argv", ["check_acknowledgements"]):
+            main()
         mock_status.assert_called_once_with(
             repo, "abc", "success", "No checklists applicable"
         )
@@ -205,7 +205,9 @@ class TestCheckAcknowledgementsMain:
         pr.get_files.return_value = [_make_file("src/api/foo.py")]
         mock_repo_pr.return_value = (repo, pr)
 
-        main()
+        # Ensure the argument parser doesn't see pytest's CLI arguments.
+        with patch.object(sys, "argv", ["check_acknowledgements"]):
+            main()
 
         mock_status.assert_called_once_with(
             repo, "abc", "pending", "Checklist comments not yet posted"
@@ -233,9 +235,13 @@ class TestCheckAcknowledgementsMain:
         pr.get_review_comments.return_value = []
         mock_repo_pr.return_value = (repo, pr)
 
-        with patch(
-            "check_acknowledgements.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
+        with (
+            patch(
+                "check_acknowledgements.find_existing_checklist_comments",
+                return_value={"api-review": cl_review},
+            ),
+            # Ensure the argument parser doesn't see pytest's CLI arguments.
+            patch.object(sys, "argv", ["check_acknowledgements"]),
         ):
             main()
 
@@ -255,7 +261,12 @@ class TestCheckAcknowledgementsMain:
     @patch("check_acknowledgements.get_repo_and_pr")
     @patch("check_acknowledgements.get_github_client")
     def test_all_acked_sets_success(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status,
+        self,
+        mock_gh,
+        mock_repo_pr,
+        mock_load,
+        mock_approvers,
+        mock_status,
         tmp_path,
     ):
         repo = MagicMock()
@@ -279,10 +290,15 @@ class TestCheckAcknowledgementsMain:
 
         ack_path = str(tmp_path / "acks.json")
 
-        with patch(
-            "check_acknowledgements.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
-        ), patch.dict(os.environ, {"ACK_OUTPUT_PATH": ack_path}):
+        with (
+            patch(
+                "check_acknowledgements.find_existing_checklist_comments",
+                return_value={"api-review": cl_review},
+            ),
+            patch.dict(os.environ, {"ACK_OUTPUT_PATH": ack_path}),
+            # Ensure the argument parser doesn't see pytest's CLI arguments.
+            patch.object(sys, "argv", ["check_acknowledgements"]),
+        ):
             main()
 
         # The last call should be success.
@@ -309,7 +325,12 @@ class TestCheckAcknowledgementsMain:
     @patch("check_acknowledgements.get_repo_and_pr")
     @patch("check_acknowledgements.get_github_client")
     def test_missing_ack_sets_pending(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status,
+        self,
+        mock_gh,
+        mock_repo_pr,
+        mock_load,
+        mock_approvers,
+        mock_status,
         tmp_path,
     ):
         repo = MagicMock()
@@ -334,10 +355,15 @@ class TestCheckAcknowledgementsMain:
 
         ack_path = str(tmp_path / "acks.json")
 
-        with patch(
-            "check_acknowledgements.find_existing_checklist_comments",
-            return_value={"api-review": cl_review},
-        ), patch.dict(os.environ, {"ACK_OUTPUT_PATH": ack_path}):
+        with (
+            patch(
+                "check_acknowledgements.find_existing_checklist_comments",
+                return_value={"api-review": cl_review},
+            ),
+            patch.dict(os.environ, {"ACK_OUTPUT_PATH": ack_path}),
+            # Ensure the argument parser doesn't see pytest's CLI arguments.
+            patch.object(sys, "argv", ["check_acknowledgements"]),
+        ):
             main()
 
         mock_status.assert_called_with(
@@ -355,13 +381,17 @@ class TestCheckAcknowledgementsMain:
         gh.get_repo.return_value = repo
         mock_gh.return_value = gh
 
-        with patch.dict(
-            os.environ,
-            {
-                "GITHUB_EVENT_NAME": "merge_group",
-                "HEAD_SHA": "merge123",
-                "GITHUB_REPOSITORY": "acme/widgets",
-            },
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_EVENT_NAME": "merge_group",
+                    "HEAD_SHA": "merge123",
+                    "GITHUB_REPOSITORY": "acme/widgets",
+                },
+            ),
+            # Ensure the argument parser doesn't see pytest's CLI arguments.
+            patch.object(sys, "argv", ["check_acknowledgements"]),
         ):
             main()
 
@@ -372,6 +402,7 @@ class TestCheckAcknowledgementsMain:
             "success",
             "Merge queue: checklists assumed OK",
         )
+
 
 if __name__ == "__main__":
     sys.exit(pytest.main(sys.argv[1:]))

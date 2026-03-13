@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2024 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -15,4 +15,4 @@ bazel-runfiles==1.8.4
 gql[requests]>=3.5.0
 PyGithub>=2.1.1
 PyYAML>=6.0.1
-
+pytest==8.4.1

@@ -24,7 +24,6 @@ py_library(
         requirement("gql"),
         requirement("pygithub"),
         requirement("pyyaml"),
-        requirement("requests"),
     ],
 )
 

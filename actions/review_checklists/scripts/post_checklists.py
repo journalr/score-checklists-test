@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # *******************************************************************************
-# Copyright (c) 2024 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -25,9 +25,9 @@ threaded conversations where reviewers can reply directly with OK.
 from __future__ import annotations
 
 import argparse
-import os
 
 from helpers import (
+    _collect_acknowledgement_details,
     build_evidence_block,
     ensure_merge_queue_notice_comment,
     ensure_merge_queue_notice_description,
@@ -42,41 +42,6 @@ from helpers import (
     set_commit_status,
     update_pr_description_with_evidence,
 )
-
-
-def _collect_acknowledgement_details(
-    pr, existing_comments: dict, relevant_ids: list[str]
-) -> dict[str, list[dict[str, str]]]:
-    """Collect detailed acknowledgement information from review comments."""
-    from helpers import OK_KEYWORD
-
-    details: dict[str, list[dict[str, str]]] = {
-        cid: [] for cid in relevant_ids
-    }
-
-    cl_comment_ids: dict[int, str] = {}
-    for cid, comment in existing_comments.items():
-        if cid in relevant_ids:
-            cl_comment_ids[comment.id] = cid
-
-    for comment in pr.get_review_comments():
-        reply_to = getattr(comment, "in_reply_to_id", None)
-        if reply_to is None or reply_to not in cl_comment_ids:
-            continue
-
-        cid = cl_comment_ids[reply_to]
-        body = (comment.body or "").strip()
-        user = comment.user.login
-
-        if body.upper() == OK_KEYWORD:
-            details[cid].append(
-                {
-                    "reviewer": user,
-                    "acknowledged_at": comment.created_at.isoformat(),
-                }
-            )
-
-    return details
 
 
 def main() -> None:
@@ -118,9 +83,7 @@ def main() -> None:
                 comment.edit(body=body)
                 print(f"Updated checklist finding for '{cl['id']}'")
             else:
-                print(
-                    f"Checklist finding for '{cl['id']}' is already up to date"
-                )
+                print(f"Checklist finding for '{cl['id']}' is already up to date")
         else:
             # Post as a review with an inline comment (finding) on the first
             # matched file.  Using create_review with comments creates a

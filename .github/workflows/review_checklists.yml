@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2024 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -15,13 +15,13 @@
 # checklists have been acknowledged by every approving reviewer.
 #
 # Triggers:
-#   pull_request (opened/reopened/synchronize)
+#   pull_request (opened/reopened/synchronize/edited)
 #     -> Post or update checklist findings on the PR.
 #     -> On synchronize: invalidate stale OKs for affected checklists.
+#     -> On edited: refresh checklist evidence/notices after PR description changes.
 #     -> Re-check acknowledgements.
 #   pull_request_review_comment (created/edited/deleted)
 #     -> Restore checklist findings if they were tampered with or deleted.
-#     -> On edit/delete: handle OK retraction.
 #     -> Re-check acknowledgements.
 #   pull_request_review (submitted/dismissed)
 #     -> Re-check acknowledgements (approver set may have changed).
@@ -84,18 +84,7 @@ jobs:
           before-sha: ${{ github.event.before }}
           after-sha: ${{ github.event.after }}
 
-      # Step 3: Dismiss approval if a reviewer retracted their OK.
-      - name: Handle OK retraction
-        if: >-
-          github.event_name == 'pull_request_review_comment' &&
-          (github.event.action == 'edited' || github.event.action == 'deleted')
-        uses: ./actions/review_checklists
-        with:
-          action: dismiss_edit
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          pr-number: ${{ github.event.pull_request.number }}
-
-      # Step 4: Always re-check acknowledgement status.
+      # Step 3: Always re-check acknowledgement status.
       # The script sets the commit status context "review-checklists"
       # to "pending" or "success".  Commit statuses with the same
       # context on the same SHA are deduplicated, so the latest result
