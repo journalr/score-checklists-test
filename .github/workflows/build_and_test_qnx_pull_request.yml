@@ -1,0 +1,107 @@
+# *******************************************************************************
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+
+# Workflow configuration for optional QNX pull request checks.
+# This workflow skips cleanly when the required QNX secrets are unavailable.
+name: Bazel Build & Test communication module (target-platforms PR)
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  check_qnx_secrets:
+    name: check_qnx_secrets
+    runs-on: ubuntu-24.04
+    outputs:
+      has-secrets: ${{ steps.check.outputs.has-secrets }}
+      missing-secrets: ${{ steps.check.outputs.missing-secrets }}
+    steps:
+      - name: Check whether QNX secrets are available
+        id: check
+        env:
+          SCORE_QNX_LICENSE: ${{ secrets.SCORE_QNX_LICENSE }}
+          SCORE_QNX_USER: ${{ secrets.SCORE_QNX_USER }}
+          SCORE_QNX_PASSWORD: ${{ secrets.SCORE_QNX_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          missing=()
+
+          if [ -z "${SCORE_QNX_LICENSE}" ]; then
+            missing+=("SCORE_QNX_LICENSE")
+          fi
+
+          if [ -z "${SCORE_QNX_USER}" ]; then
+            missing+=("SCORE_QNX_USER")
+          fi
+
+          if [ -z "${SCORE_QNX_PASSWORD}" ]; then
+            missing+=("SCORE_QNX_PASSWORD")
+          fi
+
+          if [ "${#missing[@]}" -eq 0 ]; then
+            echo "has-secrets=true" >> "$GITHUB_OUTPUT"
+            echo "missing-secrets=" >> "$GITHUB_OUTPUT"
+            echo "QNX secrets are available. Running the QNX workflow."
+          else
+            echo "has-secrets=false" >> "$GITHUB_OUTPUT"
+            echo "missing-secrets=${missing[*]}" >> "$GITHUB_OUTPUT"
+            echo "QNX workflow will be skipped because the following secrets are unavailable: ${missing[*]}"
+          fi
+
+  run_build_and_test_qnx:
+    name: run_build_and_test_qnx
+    needs: check_qnx_secrets
+    if: ${{ needs.check_qnx_secrets.outputs.has-secrets == 'true' }}
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/build_and_test_qnx_reusable.yml
+    secrets:
+      SCORE_QNX_LICENSE: ${{ secrets.SCORE_QNX_LICENSE }}
+      SCORE_QNX_USER: ${{ secrets.SCORE_QNX_USER }}
+      SCORE_QNX_PASSWORD: ${{ secrets.SCORE_QNX_PASSWORD }}
+
+  qnx_pr_status:
+    name: qnx_pr_status
+    needs:
+      - check_qnx_secrets
+      - run_build_and_test_qnx
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Report pull request QNX status
+        run: |
+          set -euo pipefail
+
+          echo "check_qnx_secrets=${{ needs.check_qnx_secrets.result }}"
+          echo "run_build_and_test_qnx=${{ needs.run_build_and_test_qnx.result }}"
+
+          if [ "${{ needs.check_qnx_secrets.result }}" != "success" ]; then
+            echo "QNX pull request precheck did not complete successfully." >&2
+            exit 1
+          fi
+
+          if [ "${{ needs.check_qnx_secrets.outputs.has-secrets }}" = "true" ]; then
+            if [ "${{ needs.run_build_and_test_qnx.result }}" != "success" ]; then
+              echo "QNX build ran and did not succeed." >&2
+              exit 1
+            fi
+
+            echo "QNX build completed successfully."
+            exit 0
+          fi
+
+          echo "QNX build skipped because required secrets are unavailable: ${{ needs.check_qnx_secrets.outputs.missing-secrets }}"
+
+
