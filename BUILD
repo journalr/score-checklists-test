@@ -19,7 +19,7 @@ compile_pip_requirements(
     name = "pip_requirements",
     src = "requirements.in",
     data = [
-        "//actions/review-checklists:pip_requirements",
+        "//actions/review_checklists:pip_requirements",
         "//quality/integration_testing:pip_requirements",
         "//third_party/traceability:pip_requirements",
     ],
