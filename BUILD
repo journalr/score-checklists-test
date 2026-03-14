@@ -14,7 +14,7 @@
 load("@aspect_rules_lint//format:defs.bzl", "format_multirun", "format_test")
 load("@rules_python//python:pip.bzl", "compile_pip_requirements")
 load("@score_tooling//:defs.bzl", "copyright_checker")
-
+# test
 compile_pip_requirements(
     name = "pip_requirements",
     src = "requirements.in",
