@@ -17,7 +17,7 @@
 name: Bazel Build & Test communication module (target-platforms)
 on:
   pull_request_target:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize, labeled, unlabeled]
   merge_group:
     types: [checks_requested]
   workflow_call:
@@ -32,8 +32,63 @@ on:
 env:
   LICENSE_DIR: "/opt/score_qnx/license"
 jobs:
+    precheck:
+      runs-on: ubuntu-24.04
+      outputs:
+        should-run: ${{ steps.gate.outputs.should-run }}
+        require-approval: ${{ steps.gate.outputs.require-approval }}
+      permissions:
+        contents: read
+        pull-requests: read
+      steps:
+        - name: Evaluate QNX workflow gate
+          id: gate
+          env:
+            EVENT_NAME: ${{ github.event_name }}
+          run: |
+            python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+            import json
+            import os
+
+            should_run = True
+            require_approval = False
+
+            with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as event_file:
+                event = json.load(event_file)
+
+            pr = event.get("pull_request") or {}
+            head_repo = (((pr.get("head") or {}).get("repo") or {}).get("full_name") or "")
+            base_repo = (((pr.get("base") or {}).get("repo") or {}).get("full_name") or "")
+            labels = {label.get("name", "") for label in (pr.get("labels") or [])}
+
+            if os.environ["EVENT_NAME"] == "pull_request_target" and head_repo != base_repo:
+                if "test-qnx" in labels:
+                    require_approval = True
+                else:
+                    should_run = False
+
+            print(f"should-run={'true' if should_run else 'false'}")
+            print(f"require-approval={'true' if require_approval else 'false'}")
+            PY
+
+    approval:
+      needs: precheck
+      if: ${{ needs.precheck.outputs.require-approval == 'true' }}
+      environment: 'workflow-approval'
+      runs-on: ubuntu-24.04
+      permissions:
+        contents: read
+        pull-requests: read
+      steps:
+        - name: Blocking on approval
+          run: ''
+
     build_and_test_qnx:
       name: build_and_test_qnx${{ matrix.identifier }}
+      needs:
+        - precheck
+        - approval
+      if: ${{ needs.precheck.outputs.should-run == 'true' && (needs.approval.result == 'success' || needs.approval.result == 'skipped') }}
       strategy:
         fail-fast: false
         matrix:
@@ -57,7 +112,6 @@ jobs:
       permissions:
         contents: read
         pull-requests: read
-      environment: "workflow-approval"
       steps:
         - name: Checkout repository
           uses: actions/checkout@v4.2.2
