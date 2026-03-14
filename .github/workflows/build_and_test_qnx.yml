@@ -85,27 +85,6 @@ jobs:
           echo "missing-secrets=${missing_secrets}" >> "$GITHUB_OUTPUT"
           echo "should-run-matrix=${should_run_matrix}" >> "$GITHUB_OUTPUT"
 
-      - name: Publish skipped build_and_test_qnx check
-        if: ${{ github.event_name == 'pull_request' && steps.check.outputs.has-secrets != 'true' }}
-        continue-on-error: true
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: 'build_and_test_qnx',
-              head_sha: context.payload.pull_request.head.sha,
-              status: 'completed',
-              conclusion: 'skipped',
-              output: {
-                title: 'QNX check skipped',
-                summary: `QNX workflow was skipped because required secrets are unavailable: ${process.env.MISSING_SECRETS}`,
-              },
-            });
-        env:
-          MISSING_SECRETS: ${{ steps.check.outputs.missing-secrets }}
-
       - name: Write skipped summary
         if: ${{ github.event_name == 'pull_request' && steps.check.outputs.has-secrets != 'true' }}
         env:
@@ -180,3 +159,16 @@ jobs:
         if: ${{ contains(matrix.bazel-config, 'qnx') && !cancelled() }}
         run: sudo rm -rf ${{ env.LICENSE_DIR }}
         # TODO Run tests on QNX QEMU
+
+  # This is a hack to provide the appropriate skip status to the correct name, since the above jobs name is not evaluated correctly if skipped
+  skip:
+    name: build_and_test_qnx
+    needs:
+      - qnx_precheck
+      - run_qnx_matrix
+    if: ${{ needs.run_qnx_matrix.result == 'skipped' && needs.qnx_precheck.outputs.should-run-matrix == 'true' || needs.qnx_precheck.outputs.is-strict-trigger == 'true' }}
+    runs-on: ubuntu-24.04
+    permissions: { }
+    steps:
+      - name: Skip job
+        run: echo "Skipping"
