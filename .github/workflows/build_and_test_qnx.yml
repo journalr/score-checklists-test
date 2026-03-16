@@ -46,6 +46,7 @@ jobs:
         pull-requests: read
       steps:
         - name: Evaluate QNX workflow gate
+          id: gate
           env:
             EVENT_NAME: ${{ github.event_name }}
           run: |
