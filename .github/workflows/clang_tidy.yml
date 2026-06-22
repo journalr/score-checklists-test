@@ -78,6 +78,7 @@ jobs:
         with:
           level: 4
 
+      # We explicitly retain setup-bazel since we use an optimized variant that improves caching
       - uses: castler/setup-bazel@cache-optimized
         with:
           bazelisk-cache: true
@@ -86,124 +87,14 @@ jobs:
           cache-optimized: true
           cache-save: ${{ github.ref == 'refs/heads/main' }}
 
+      - uses: aspect-build/setup-aspect@b1e9d142e86f63c10d603304daa22bf80492e24c # v2026.25.1
+        with:
+          aspect-api-token: ${{ secrets.ASPECT_API_TOKEN }}
+
       - name: Allow linux-sandbox
         uses: ./actions/unblock_user_namespace_for_linux_sandbox
 
       - name: Run clang-tidy via Bazel
         id: run-clang-tidy
-        # continue-on-error so we can collect findings and upload the artifact
-        # even when the Bazel invocation exits non-zero.
-        continue-on-error: true
         run: |
-          bazel test --config=clang-tidy //... \
-            2>&1 | tee clang_tidy_raw.log
-
-      - name: Collect findings
-        id: findings
-        run: |
-          # aspect_rules_lint writes one .out file per target under bazel-bin.
-          # -L is needed because bazel-bin is a symlink.
-          ERRORS=$(find -L bazel-bin -name "*.AspectRulesLintClangTidy.out" 2>/dev/null \
-            | xargs cat 2>/dev/null \
-            | grep -c "error:" || true)
-          WARNINGS=$(find -L bazel-bin -name "*.AspectRulesLintClangTidy.out" 2>/dev/null \
-            | xargs cat 2>/dev/null \
-            | grep -c "warning:" || true)
-          TOTAL=$((ERRORS + WARNINGS))
-
-          # Scope blocking errors to C++ files changed in this PR / merge-group
-          # commit set. The same logic is applied for all event types
-          # (pull_request, merge_group, push to main) so that a check passing on
-          # a PR is guaranteed to also pass at gate — no late-feedback surprises.
-          #
-          # GITHUB_BASE_REF is set by GitHub for both pull_request and
-          # merge_group events (it is the name of the target branch, e.g. main).
-          CHANGED_CPP=$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" 2>/dev/null \
-            | grep -E '\.(cpp|h|cc|cxx|hpp)$' || true)
-
-          if [[ -z "$CHANGED_CPP" ]]; then
-            ERRORS_BLOCKING=0
-          else
-            PATTERN=$(echo "$CHANGED_CPP" | tr '\n' '|' | sed 's/|$//')
-            ERRORS_BLOCKING=$(find -L bazel-bin -name "*.AspectRulesLintClangTidy.out" 2>/dev/null \
-              | xargs cat 2>/dev/null \
-              | grep -E "(${PATTERN})" \
-              | grep -c "error:" || true)
-          fi
-
-          echo "errors=${ERRORS}"                   >> $GITHUB_OUTPUT
-          echo "warnings=${WARNINGS}"               >> $GITHUB_OUTPUT
-          echo "total=${TOTAL}"                     >> $GITHUB_OUTPUT
-          echo "errors_blocking=${ERRORS_BLOCKING}" >> $GITHUB_OUTPUT
-
-          # ── Write full findings and errors-only files for artifact ────────
-          find -L bazel-bin -name "*.AspectRulesLintClangTidy.out" 2>/dev/null \
-            | xargs cat 2>/dev/null > clang_tidy_findings.txt || true
-
-          # Keep the published report human-readable even when no findings
-          # were produced in this run.
-          if [[ ! -s clang_tidy_findings.txt ]]; then
-            {
-              echo "No clang-tidy findings were produced for this run."
-              echo "errors=${ERRORS} warnings=${WARNINGS} total=${TOTAL}"
-            } > clang_tidy_findings.txt
-          fi
-
-          grep "error:" clang_tidy_findings.txt > clang_tidy_errors.txt || true
-
-          # ── Job summary ──────────────────────────────────────────────────
-          {
-            echo "## Clang-Tidy Results"
-            echo ""
-            echo "| Metric | Count |"
-            echo "|--------|------:|"
-            echo "| :x: Errors | **${ERRORS}** |"
-            echo "| :warning: Warnings | **${WARNINGS}** |"
-            echo "| Total | **${TOTAL}** |"
-            if [[ "${ERRORS_BLOCKING}" -gt 0 ]]; then
-              echo ""
-              echo "> :x: **Check failed** — clang-tidy errors found in changed files. Fix before merging."
-              echo ""
-              echo "### First 20 errors in changed files"
-              echo '```'
-              head -20 clang_tidy_errors.txt || true
-              echo '```'
-            else
-              echo ""
-              echo "> :white_check_mark: **Check passed** — no clang-tidy errors in changed files."
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload clang-tidy findings as artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: clang-tidy-findings
-          path: |
-            clang_tidy_findings.txt
-            clang_tidy_errors.txt
-            clang_tidy_raw.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-      # Clang-tidy findings are always collected and uploaded as an artifact,
-      # but they should only block merging when a developer is actively
-      # submitting code — not during nightly reporting runs.
-      - name: Fail check if clang-tidy errors found in changed files
-        if: (github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'merge_group') && steps.findings.outputs.errors_blocking != '0'
-        run: |
-          echo "::error::Clang-tidy found ${{ steps.findings.outputs.errors_blocking }} error(s) in changed files. See the 'clang-tidy-findings' artifact for details."
-          echo ""
-          echo "=== Clang-tidy errors ==="
-          cat clang_tidy_errors.txt || true
-          exit 1
-
-      - name: Set conclusion
-        id: set-conclusion
-        if: always()
-        run: |
-          if [[ "${{ steps.run-clang-tidy.outcome }}" == "success" ]]; then
-            echo "conclusion=success" >> $GITHUB_OUTPUT
-          else
-            echo "conclusion=failure" >> $GITHUB_OUTPUT
-          fi
+          aspect lint --config=clang-tidy //...
