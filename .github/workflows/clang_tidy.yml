@@ -50,6 +50,7 @@ on:
 permissions:
   contents: read
   actions: write # Needed to delete old bazel caches
+  id-token: write    # artifact uploads + PR summary comment aggregation
 
 concurrency:
   group: clang-tidy-pr-${{ github.event.pull_request.number || github.run_id }}
@@ -97,4 +98,4 @@ jobs:
       - name: Run clang-tidy via Bazel
         id: run-clang-tidy
         run: |
-          aspect lint --bazel-flag=--config=clang-tidy //...
+          aspect lint --bazel-flag='--config=clang-tidy' //...
