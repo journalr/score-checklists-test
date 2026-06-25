@@ -75,7 +75,7 @@ class MethodSignatureElementPtr
         return *element_ptr_;
     }
 
-    std::size_t GetQueuePosition() const noexcept
+    std::size_t GetQueuePosition() const noexcept // test
     {
         return queue_position_;
     }
