@@ -19,7 +19,9 @@
 /// \brief The com error domain header file includes the error related definitions which are specific for the
 /// mw::com API.
 /// \requirement SWS_CM_11264, SWS_CM_10432, SWS_CM_11327, SWS_CM_11329
-namespace score::mw::com
+namespace score
+{
+namespace mw::com
 {
 
 /// \api
@@ -29,7 +31,7 @@ using ComErrc = score::mw::com::impl::ComErrc;
 /// \api
 /// \brief Error domain providing human-readable messages for COM error codes
 using ComErrorDomain = score::mw::com::impl::ComErrorDomain;
-
+}
 }  // namespace score::mw::com
 
 #endif  // SCORE_MW_COM_COM_ERROR_DOMAIN_H
