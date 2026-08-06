@@ -127,6 +127,8 @@ jobs:
         pull-requests: read
         actions: write
       steps:
+        - name: TEST ONLY - artificial delay to allow overlap testing
+          run: sleep 180
         - name: Checkout repository
           uses: actions/checkout@v6.0.2
           with:
