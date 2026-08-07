@@ -11,7 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-# Use `bazel mod deps --lockfile_mode=update` to update the lock file
+# Use `bazel mod deps --lockfile_mode=update` to update the lock filea
 common --lockfile_mode=error
 
 # In order to overcome stability issues in GitHub
