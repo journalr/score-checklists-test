@@ -146,12 +146,12 @@ each repository that wants to use it.**
    case-insensitive) directly in the threaded conversation under the
    bot-posted checklist comment — a general PR approval alone does not
    count as an acknowledgement of any checklist.
-8. **Checklist `include` patterns should match files that appear as
-   normal text diffs.** Findings are posted as inline review comments
-   anchored at diff position 1 of the first matched file; if every
-   matched file is binary or otherwise has no diff line at that position,
-   posting the finding will fail. Prefer patterns that also match at
-   least one text file whenever binary files are included.
+8. **Findings are posted as file-level review comments** (`subject_type:
+   "file"`) anchored to the first matched file, not to a specific diff
+   line/position. This means `include` patterns may freely match binary
+   files (images, archives, etc.) or any other file GitHub does not
+   render a text diff for — posting the finding does not depend on the
+   file having a diff hunk.
 9. **Runner requirements.** The workflows run on `ubuntu-24.04` GitHub-hosted
    runners, use the pre-installed `gh` CLI and `python3`/`pip`, and install
    this action's Python dependencies from PyPI on every run (outbound

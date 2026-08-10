@@ -85,21 +85,19 @@ def main() -> None:
             else:
                 print(f"Checklist finding for '{cl['id']}' is already up to date")
         else:
-            # Post as a review with an inline comment (finding) on the first
-            # matched file.  Using create_review with comments creates a
+            # Post a file-level review comment (subject_type="file") anchored
+            # to the first matched file. Unlike diff-position-anchored
+            # comments, file-level comments don't require the file to appear
+            # as a text diff hunk, so this also works for binary files and
+            # files GitHub doesn't render a diff for. It still creates a
             # PullRequestComment that supports threaded replies where
             # reviewers can acknowledge with OK.
             anchor_file = cl["matched_files"][0]
-            pr.create_review(
-                body="",
-                event="COMMENT",
-                comments=[
-                    {
-                        "path": anchor_file,
-                        "position": 1,
-                        "body": body,
-                    }
-                ],
+            pr.create_review_comment(
+                body=body,
+                commit=pr.head.sha,
+                path=anchor_file,
+                subject_type="file",
             )
             print(f"Created checklist finding for '{cl['id']}'")
 

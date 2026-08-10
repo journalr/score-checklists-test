@@ -77,14 +77,12 @@ class TestPostChecklistsMain:
 
         main()
 
-        pr.create_review.assert_called_once()
-        call_kwargs = pr.create_review.call_args[1]
-        assert call_kwargs["event"] == "COMMENT"
-        comments = call_kwargs["comments"]
-        assert len(comments) == 1
-        assert comments[0]["path"] == "src/api/handler.py"
-        assert comments[0]["position"] == 1
-        assert "api-review" in comments[0]["body"]
+        pr.create_review_comment.assert_called_once()
+        call_kwargs = pr.create_review_comment.call_args[1]
+        assert call_kwargs["commit"] == "abc123"
+        assert call_kwargs["path"] == "src/api/handler.py"
+        assert call_kwargs["subject_type"] == "file"
+        assert "api-review" in call_kwargs["body"]
         mock_status.assert_called_with(
             repo,
             "abc123",
