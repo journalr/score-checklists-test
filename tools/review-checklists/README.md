@@ -21,9 +21,12 @@ acknowledgements as threaded "OK" replies, and gates merging on every
 approving reviewer having acknowledged every checklist relevant to the
 files they're approving.
 
-It also understands GitHub's merge queue: while a PR is enqueued it posts
-a notice explaining that the evidence already recorded is what will be
-carried into the merge commit.
+It also understands GitHub's merge queue: when the queue runs its checks
+(`merge_group`) it re-validates the originating PR's checklist evidence
+from scratch rather than assuming it is still valid, and while a PR is
+enqueued and subsequently changed (reviewed, commented on, edited) it
+posts a notice explaining that the evidence already recorded is what will
+be carried into the merge commit.
 
 ## How it works
 
@@ -200,7 +203,7 @@ Notes:
 |---|---|---|---|
 | `action` | yes | all | One of `post`, `check`, `dismiss_sync` |
 | `github-token` | yes | all | Token with `pull-requests: write` / `statuses: write` |
-| `pr-number` | no | all except merge_group | Pull request number |
+| `pr-number` | no | all | Pull request number (for `merge_group` events, the originating PR whose evidence is validated) |
 | `run-id` | no | `dismiss_sync` | Current trigger-workflow run id (for run-history lookup) |
 | `head-branch` | no | `dismiss_sync` | Head branch name (scopes the run-history lookup) |
 | `head-sha` | no | `check` | Commit SHA to set status on for `merge_group` events |

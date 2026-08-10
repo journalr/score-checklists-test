@@ -32,6 +32,14 @@ This script is invoked on every checklist-relevant event (it is always the
 last step run), so it doubles as the single, fully stateless source of
 truth for acknowledgement status: it always re-scans the current live
 comment state rather than relying on which specific event triggered it.
+
+For ``merge_group`` events it does not merely assume the evidence is still
+valid because a required status check passed at some earlier point: it
+resolves the underlying pull request and re-runs the same acknowledgement
+validation against its current live state, setting the commit status on
+the merge-queue's merge-commit SHA. This closes the window between when
+the PR's own check last went green and when it actually entered the queue
+(and rejects entries where that PR can no longer be resolved at all).
 """
 
 from __future__ import annotations
@@ -97,6 +105,63 @@ def _collect_ok_acknowledgements(
     return acks
 
 
+def _acknowledgement_status(
+    approvers: list[str],
+    relevant_ids: list[str],
+    acks: dict[str, set[str]],
+) -> tuple[str, str]:
+    """Compute the (state, description) commit-status pair from ack data.
+
+    Pure decision logic with no side effects, so it can be reused both for
+    the live PR flow (which also refreshes evidence/comments) and for
+    merge_group evidence validation (which must not write anything).
+    """
+    if not approvers:
+        return "pending", "Awaiting at least one approving review"
+
+    missing: dict[str, list[str]] = {}
+    for cid in relevant_ids:
+        not_acked = [u for u in approvers if u not in acks[cid]]
+        if not_acked:
+            missing[cid] = not_acked
+
+    if missing:
+        summary_parts = [
+            f"{cid}: awaiting {', '.join(users)}" for cid, users in missing.items()
+        ]
+        return "pending", "; ".join(summary_parts)
+
+    return "success", "All checklists acknowledged by all approving reviewers"
+
+
+def _validate_checklist_evidence(pr: Any, checklists: list[dict]) -> tuple[str, str]:
+    """Re-derive and validate checklist acknowledgement evidence for a PR.
+
+    Reads the PR's current live state (changed files, checklist findings,
+    threaded OK replies, approving reviews) and returns the same
+    (state, description) pair that would be used to set the
+    "review-checklists" commit status, without any side effects. Used to
+    validate the evidence at merge_group time instead of assuming it is
+    still valid because a required status check passed at some earlier
+    point.
+    """
+    changed_files = get_changed_files(pr)
+    relevant = match_checklists(checklists, changed_files)
+
+    if not relevant:
+        return "success", "No checklists applicable"
+
+    existing = find_existing_checklist_comments(pr)
+    relevant_ids = [cl["id"] for cl in relevant if cl["id"] in existing]
+
+    if not relevant_ids:
+        return "pending", "Checklist comments not yet posted"
+
+    acks = _collect_ok_acknowledgements(pr, existing, relevant_ids)
+    approvers = get_approving_reviewers(pr)
+    return _acknowledgement_status(approvers, relevant_ids, acks)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Verify review-checklist acknowledgements on a PR."
@@ -117,12 +182,29 @@ def main() -> None:
             sys.exit(1)
         repo_name = os.environ["GITHUB_REPOSITORY"]
         repo = gh.get_repo(repo_name)
-        set_commit_status(
-            repo,
-            head_sha,
-            "success",
-            "Merge queue: checklists assumed OK",
-        )
+
+        pr_number_raw = os.environ.get("PR_NUMBER", "")
+        try:
+            pr_number = int(pr_number_raw)
+        except ValueError:
+            pr_number = 0
+
+        if not pr_number:
+            description = (
+                "Could not resolve pull request to validate checklist evidence"
+            )
+            print(description)
+            set_commit_status(repo, head_sha, "failure", description)
+            sys.exit(1)
+
+        pr = repo.get_pull(pr_number)
+        checklists = load_checklists(args.config_path)
+        state, description = _validate_checklist_evidence(pr, checklists)
+        set_commit_status(repo, head_sha, state, f"Merge queue: {description}")
+        if state != "success":
+            print(f"Merge-queue checklist evidence validation failed: {description}")
+            sys.exit(1)
+        print("Merge-queue checklist evidence validated ✅")
         return
 
     repo, pr = get_repo_and_pr(gh)
@@ -160,44 +242,9 @@ def main() -> None:
     update_pr_description_with_evidence(pr, evidence_block)
 
     approvers = get_approving_reviewers(pr)
-
-    if not approvers:
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "pending",
-            "Awaiting at least one approving review",
-        )
-        print("No approving reviewers yet.")
-        return
-
-    # Check: every approver must have acknowledged every relevant checklist.
-    missing: dict[str, list[str]] = {}
-    for cid in relevant_ids:
-        not_acked = [u for u in approvers if u not in acks[cid]]
-        if not_acked:
-            missing[cid] = not_acked
-
-    if missing:
-        summary_parts = []
-        for cid, users in missing.items():
-            summary_parts.append(f"{cid}: awaiting {', '.join(users)}")
-        summary = "; ".join(summary_parts)
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "pending",
-            summary,
-        )
-        print(f"Missing acknowledgements: {summary}")
-    else:
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "success",
-            "All checklists acknowledged by all approving reviewers",
-        )
-        print("All checklists acknowledged ✅")
+    state, description = _acknowledgement_status(approvers, relevant_ids, acks)
+    set_commit_status(repo, pr.head.sha, state, description)
+    print(f"Acknowledgement status: {state} — {description}")
 
     # Write acknowledgement data for downstream use (merge evidence).
     ack_data = {cid: sorted(users) for cid, users in acks.items()}

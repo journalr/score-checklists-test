@@ -412,7 +412,7 @@ class TestCheckAcknowledgementsMain:
     @patch("check_acknowledgements.set_commit_status")
     @patch("check_acknowledgements.get_repo_and_pr")
     @patch("check_acknowledgements.get_github_client")
-    def test_merge_group_sets_success_without_pr_lookup(
+    def test_merge_group_without_pr_number_sets_failure(
         self, mock_gh, mock_repo_pr, mock_status
     ):
         repo = MagicMock()
@@ -432,14 +432,141 @@ class TestCheckAcknowledgementsMain:
             # Ensure the argument parser doesn't see pytest's CLI arguments.
             patch.object(sys, "argv", ["check_acknowledgements"]),
         ):
-            main()
+            with pytest.raises(SystemExit):
+                main()
 
         mock_repo_pr.assert_not_called()
         mock_status.assert_called_once_with(
             repo,
             "merge123",
+            "failure",
+            "Could not resolve pull request to validate checklist evidence",
+        )
+
+    @patch("check_acknowledgements.set_commit_status")
+    @patch(
+        "check_acknowledgements.get_approving_reviewers",
+        return_value=["alice"],
+    )
+    @patch(
+        "check_acknowledgements.load_checklists",
+        return_value=SAMPLE_CHECKLISTS,
+    )
+    @patch("check_acknowledgements.get_repo_and_pr")
+    @patch("check_acknowledgements.get_github_client")
+    def test_merge_group_validates_evidence_and_sets_success(
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_review = MagicMock()
+        cl_review.id = 100
+        cl_review.body = "<!-- review-checklist:api-review -->"
+
+        ok_reply = _make_comment(
+            101,
+            "OK",
+            "alice",
+            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
+        )
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
+
+        gh = MagicMock()
+        gh.get_repo.return_value = repo
+        mock_gh.return_value = gh
+        repo.get_pull.return_value = pr
+
+        with (
+            patch(
+                "check_acknowledgements.find_existing_checklist_comments",
+                return_value={"api-review": cl_review},
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_EVENT_NAME": "merge_group",
+                    "HEAD_SHA": "merge123",
+                    "GITHUB_REPOSITORY": "acme/widgets",
+                    "PR_NUMBER": "75",
+                },
+            ),
+            patch.object(sys, "argv", ["check_acknowledgements"]),
+        ):
+            main()
+
+        repo.get_pull.assert_called_once_with(75)
+        mock_repo_pr.assert_not_called()
+        mock_status.assert_called_once_with(
+            repo,
+            "merge123",
             "success",
-            "Merge queue: checklists assumed OK",
+            "Merge queue: All checklists acknowledged by all approving reviewers",
+        )
+
+    @patch("check_acknowledgements.set_commit_status")
+    @patch(
+        "check_acknowledgements.get_approving_reviewers",
+        return_value=["alice", "bob"],
+    )
+    @patch(
+        "check_acknowledgements.load_checklists",
+        return_value=SAMPLE_CHECKLISTS,
+    )
+    @patch("check_acknowledgements.get_repo_and_pr")
+    @patch("check_acknowledgements.get_github_client")
+    def test_merge_group_validates_evidence_and_sets_pending_on_missing_ack(
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.get_files.return_value = [_make_file("src/api/foo.py")]
+
+        cl_review = MagicMock()
+        cl_review.id = 100
+        cl_review.body = "<!-- review-checklist:api-review -->"
+
+        # Only alice acked, bob (also an approver) did not.
+        ok_reply = _make_comment(
+            101,
+            "OK",
+            "alice",
+            datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
+        )
+        ok_reply.in_reply_to_id = 100
+        pr.get_review_comments.return_value = [ok_reply]
+
+        gh = MagicMock()
+        gh.get_repo.return_value = repo
+        mock_gh.return_value = gh
+        repo.get_pull.return_value = pr
+
+        with (
+            patch(
+                "check_acknowledgements.find_existing_checklist_comments",
+                return_value={"api-review": cl_review},
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_EVENT_NAME": "merge_group",
+                    "HEAD_SHA": "merge123",
+                    "GITHUB_REPOSITORY": "acme/widgets",
+                    "PR_NUMBER": "75",
+                },
+            ),
+            patch.object(sys, "argv", ["check_acknowledgements"]),
+        ):
+            with pytest.raises(SystemExit):
+                main()
+
+        mock_status.assert_called_once_with(
+            repo,
+            "merge123",
+            "pending",
+            "Merge queue: api-review: awaiting bob",
         )
 
 
