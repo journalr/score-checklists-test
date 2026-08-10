@@ -21,11 +21,16 @@
 # attempt to write anything.
 #
 # It performs no checkout and executes no repository/PR-supplied code: it
-# only captures the raw event payload GitHub already delivered and hands it
-# off, as a build artifact, to the privileged `review_checklists_apply.yml`
-# workflow, which runs via `workflow_run` and therefore always executes
-# with the base repository's permissions regardless of where the
-# triggering event originated.
+# only extracts the single field it needs from the event GitHub already
+# delivered (the `action` field, e.g. "opened"/"synchronize"/"edited") and
+# hands it off, as a small build artifact, to the privileged
+# `review_checklists_apply.yml` workflow, which runs via `workflow_run` and
+# therefore always executes with the base repository's permissions
+# regardless of where the triggering event originated.  Everything else the
+# apply stage needs (event name, head SHA, PR number) is derived natively
+# from the `workflow_run` context / the GitHub API rather than transferred
+# here, keeping the artifact minimal and avoiding trust in most of the
+# forked-repo-supplied payload.
 #
 # See "Preventing pwn requests" for background on this pattern:
 # https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
@@ -51,11 +56,10 @@ jobs:
     name: Capture event
     runs-on: ubuntu-24.04
     steps:
-      - name: Save event payload
+      - name: Save minimal event data
         run: |
           mkdir -p ./event
-          cp "$GITHUB_EVENT_PATH" ./event/event.json
-          printf '%s' "$GITHUB_EVENT_NAME" > ./event/event_name.txt
+          jq -c '{action: (.action // null)}' "$GITHUB_EVENT_PATH" > ./event/event.json
 
       - name: Upload event artifact
         uses: actions/upload-artifact@v4

@@ -18,13 +18,20 @@ reviewer, and set the commit status accordingly.
 An acknowledgement is a reply in the threaded conversation of a checklist
 review comment (finding) that contains the ``OK`` keyword.  This script:
 
-1. Enumerates relevant checklists for the PR.
-2. For each checklist, finds the bot-posted review comment and its OK replies.
-3. Builds a mapping: checklist-id → set of reviewers who said OK.
-4. Compares against the set of approving reviewers.
-5. Sets commit status to *success* only when every approving reviewer has
+1. Ensures the merge-queue notice (comment + PR description) is present if
+   the PR is currently enqueued in the merge queue.
+2. Enumerates relevant checklists for the PR.
+3. For each checklist, finds the bot-posted review comment and its OK replies.
+4. Builds a mapping: checklist-id → set of reviewers who said OK.
+5. Compares against the set of approving reviewers.
+6. Sets commit status to *success* only when every approving reviewer has
    acknowledged every relevant checklist.  Otherwise sets *pending* or
    *failure*.
+
+This script is invoked on every checklist-relevant event (it is always the
+last step run), so it doubles as the single, fully stateless source of
+truth for acknowledgement status: it always re-scans the current live
+comment state rather than relying on which specific event triggered it.
 """
 
 from __future__ import annotations
@@ -39,11 +46,14 @@ from helpers import (
     _collect_acknowledgement_details,
     OK_KEYWORD,
     build_evidence_block,
+    ensure_merge_queue_notice_comment,
+    ensure_merge_queue_notice_description,
     find_existing_checklist_comments,
     get_approving_reviewers,
     get_changed_files,
     get_github_client,
     get_repo_and_pr,
+    is_pr_in_merge_queue,
     load_checklists,
     match_checklists,
     set_commit_status,
@@ -116,6 +126,10 @@ def main() -> None:
         return
 
     repo, pr = get_repo_and_pr(gh)
+
+    if is_pr_in_merge_queue(pr):
+        ensure_merge_queue_notice_comment(pr)
+        ensure_merge_queue_notice_description(pr)
 
     checklists = load_checklists(args.config_path)
     changed_files = get_changed_files(pr)

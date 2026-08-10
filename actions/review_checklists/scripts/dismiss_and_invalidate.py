@@ -12,65 +12,76 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-"""Invalidate OK acknowledgements.
+"""Invalidate OK acknowledgements after a new push.
 
-This script handles two scenarios:
+When new commits are pushed to the PR, this script determines which
+checklist paths are affected by the *new* changes.  For each affected
+checklist, all existing OK replies are deleted and the commit status is
+set back to pending.  Approvals are **not** dismissed here — branch
+rulesets handle dismissing stale reviews on new pushes.
 
-1. **New push (synchronize)**: When new commits are pushed to the PR, we
-   determine which checklist paths are affected by the *new* changes.  For
-   each affected checklist, all existing OK replies are deleted and the
-   commit status is set back to pending.  Approvals are **not** dismissed
-   here — branch rulesets handle dismissing stale reviews on new pushes.
+(OK-comment edits/deletions no longer need dedicated handling here: the
+"check" action already re-scans the current comment state on every
+invocation, so an edited/deleted OK comment is naturally no longer
+counted the next time acknowledgements are checked.)
 
-2. **OK modified or deleted**: When a reviewer edits or deletes their OK
-   comment, the commit status is set back to pending so the checklist
-   must be re-acknowledged.  The reviewer's approval is **not** dismissed.
-
-The script is invoked with a ``--trigger`` argument:
-
-    python dismiss_and_invalidate.py --trigger synchronize
-    python dismiss_and_invalidate.py --trigger comment_changed
+The "files changed in the latest push" are found without needing the
+``before``/``after`` SHAs from the original event payload: this script
+looks up the previous run of the "Review Checklists (Trigger)" workflow
+for the same head branch (ordered by run creation time) and uses that
+run's head SHA as the "before" commit.  This keeps stage 1 → stage 2 data
+transfer minimal while still comparing against exactly the commits
+introduced by this push.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 from typing import Any
 
 from helpers import (
     OK_KEYWORD,
-    ensure_merge_queue_notice_comment,
-    ensure_merge_queue_notice_description,
     find_existing_checklist_comments,
     get_changed_files,
     get_github_client,
     get_repo_and_pr,
-    is_pr_in_merge_queue,
     load_checklists,
     match_checklists,
     set_commit_status,
 )
 
+TRIGGER_WORKFLOW_FILE = "review_checklists_trigger.yml"
+TRIGGER_EVENT_NAME = "pull_request_target"
 
-def _get_files_in_latest_push(pr: Any) -> list[str]:
+
+def _get_files_in_latest_push(pr: Any, repo: Any) -> list[str]:
     """Return files changed in the most recent push to the PR.
 
-    For the ``synchronize`` event we ideally look at only the files changed
-    in the new commits.  The GitHub event payload provides ``before`` and
-    ``after`` SHAs which can be compared.  As a practical fallback we use
-    the full PR changed-file list.
+    Finds the "before" SHA by locating the trigger-workflow run that
+    immediately preceded the current one for this head branch, and
+    compares it against the current head.  Falls back to the full PR
+    changed-file list if the previous run cannot be found.
     """
-    before_sha = os.environ.get("BEFORE_SHA", "")
-    after_sha = os.environ.get("AFTER_SHA", "")
+    run_id_raw = os.environ.get("CURRENT_RUN_ID", "")
+    head_branch = os.environ.get("HEAD_BRANCH", "")
 
-    if before_sha and after_sha:
-        repo_name = os.environ["GITHUB_REPOSITORY"]
-        gh = get_github_client()
-        repo = gh.get_repo(repo_name)
-        comparison = repo.compare(before_sha, after_sha)
-        return [f.filename for f in comparison.files]
+    if run_id_raw and head_branch:
+        try:
+            run_id = int(run_id_raw)
+            workflow = repo.get_workflow(TRIGGER_WORKFLOW_FILE)
+            runs = list(
+                workflow.get_runs(branch=head_branch, event=TRIGGER_EVENT_NAME)
+            )
+            run_ids = [r.id for r in runs]
+            idx = run_ids.index(run_id)
+            before_sha = runs[idx + 1].head_sha
+            comparison = repo.compare(before_sha, pr.head.sha)
+            return [f.filename for f in comparison.files]
+        except (ValueError, IndexError) as e:
+            print(f"Could not resolve previous push via run history: {e}")
+        except Exception as e:
+            print(f"Warning: could not resolve latest-push diff: {e}")
 
     # Fallback: treat all PR files as potentially changed.
     return get_changed_files(pr)
@@ -97,7 +108,7 @@ def _find_ok_comments_for_checklist(pr: Any, checklist_comment_id: int) -> list[
     return ok_comments
 
 
-def handle_synchronize(pr: Any, config_path: str) -> None:
+def handle_synchronize(pr: Any, repo: Any, config_path: str) -> None:
     """Handle new commits pushed to the PR.
 
     For each checklist whose covered paths were touched by the new push,
@@ -105,7 +116,7 @@ def handle_synchronize(pr: Any, config_path: str) -> None:
     Approvals are not dismissed — branch rulesets handle that.
     """
     checklists = load_checklists(config_path)
-    new_files = _get_files_in_latest_push(pr)
+    new_files = _get_files_in_latest_push(pr, repo)
     affected = match_checklists(checklists, new_files)
 
     if not affected:
@@ -137,9 +148,6 @@ def handle_synchronize(pr: Any, config_path: str) -> None:
                 print(f"Warning: could not delete comment {ok_comment.id}: {e}")
 
     if any_invalidated:
-        repo_name = os.environ["GITHUB_REPOSITORY"]
-        gh = get_github_client()
-        repo = gh.get_repo(repo_name)
         set_commit_status(
             repo,
             pr.head.sha,
@@ -147,70 +155,10 @@ def handle_synchronize(pr: Any, config_path: str) -> None:
             "Checklist acknowledgements invalidated due to new changes",
         )
 
-    if is_pr_in_merge_queue(pr):
-        ensure_merge_queue_notice_comment(pr)
-        ensure_merge_queue_notice_description(pr)
-
-
-def handle_comment_changed(pr: Any) -> None:
-    """Handle an OK comment being edited or deleted.
-
-    When a reviewer modifies or removes their OK, set the commit status
-    back to pending.  The reviewer's approval is preserved.
-    """
-    event_path = os.environ.get("GITHUB_EVENT_PATH", "")
-    if not event_path:
-        print("No event payload available.")
-        return
-
-    with open(event_path) as f:
-        event = json.load(f)
-
-    comment_body = event.get("comment", {}).get("body", "")
-    comment_user = event.get("comment", {}).get("user", {}).get("login", "")
-    action = event.get("action", "")
-
-    if not comment_user:
-        print("Could not determine comment author.")
-        return
-
-    # Check if this was an OK-related comment.
-    was_ok = False
-    if action == "deleted":
-        # For deleted comments the body is the content at time of deletion.
-        was_ok = comment_body.strip().upper() == OK_KEYWORD
-    elif action == "edited":
-        old_body = event.get("changes", {}).get("body", {}).get("from", "")
-        # If old body was OK but new body is not, this is a retraction.
-        old_is_ok = old_body.strip().upper() == OK_KEYWORD
-        new_is_ok = comment_body.strip().upper() == OK_KEYWORD
-        was_ok = old_is_ok and not new_is_ok
-
-    if was_ok:
-        print(f"Checklist OK retracted by {comment_user} (approval preserved)")
-
-        repo_name = os.environ["GITHUB_REPOSITORY"]
-        gh = get_github_client()
-        repo = gh.get_repo(repo_name)
-        set_commit_status(
-            repo,
-            pr.head.sha,
-            "pending",
-            f"Checklist OK retracted by {comment_user}",
-        )
-
-    if is_pr_in_merge_queue(pr):
-        ensure_merge_queue_notice_comment(pr)
-        ensure_merge_queue_notice_description(pr)
-
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Invalidate OK acknowledgements.")
-    parser.add_argument(
-        "--trigger",
-        required=True,
-        choices=["synchronize", "comment_changed"],
-        help="The event trigger type.",
+    parser = argparse.ArgumentParser(
+        description="Invalidate OK acknowledgements after a new push."
     )
     parser.add_argument(
         "--config-path",
@@ -220,12 +168,8 @@ def main() -> None:
     args = parser.parse_args()
 
     gh = get_github_client()
-    _, pr = get_repo_and_pr(gh)
-
-    if args.trigger == "synchronize":
-        handle_synchronize(pr, args.config_path)
-    elif args.trigger == "comment_changed":
-        handle_comment_changed(pr)
+    repo, pr = get_repo_and_pr(gh)
+    handle_synchronize(pr, repo, args.config_path)
 
 
 if __name__ == "__main__":

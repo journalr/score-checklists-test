@@ -163,6 +163,7 @@ class TestCollectOkAcknowledgements:
 
 
 class TestCheckAcknowledgementsMain:
+    @patch("check_acknowledgements.is_pr_in_merge_queue", return_value=False)
     @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.load_checklists",
@@ -171,7 +172,7 @@ class TestCheckAcknowledgementsMain:
     @patch("check_acknowledgements.get_repo_and_pr")
     @patch("check_acknowledgements.get_github_client")
     def test_no_relevant_checklists_sets_success(
-        self, mock_gh, mock_repo_pr, mock_load, mock_status
+        self, mock_gh, mock_repo_pr, mock_load, mock_status, mock_in_queue
     ):
         repo = MagicMock()
         pr = MagicMock()
@@ -185,6 +186,7 @@ class TestCheckAcknowledgementsMain:
             repo, "abc", "success", "No checklists applicable"
         )
 
+    @patch("check_acknowledgements.is_pr_in_merge_queue", return_value=False)
     @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.find_existing_checklist_comments",
@@ -197,7 +199,7 @@ class TestCheckAcknowledgementsMain:
     @patch("check_acknowledgements.get_repo_and_pr")
     @patch("check_acknowledgements.get_github_client")
     def test_no_existing_comments_sets_pending(
-        self, mock_gh, mock_repo_pr, mock_load, mock_existing, mock_status
+        self, mock_gh, mock_repo_pr, mock_load, mock_existing, mock_status, mock_in_queue
     ):
         repo = MagicMock()
         pr = MagicMock()
@@ -213,6 +215,7 @@ class TestCheckAcknowledgementsMain:
             repo, "abc", "pending", "Checklist comments not yet posted"
         )
 
+    @patch("check_acknowledgements.is_pr_in_merge_queue", return_value=False)
     @patch("check_acknowledgements.set_commit_status")
     @patch("check_acknowledgements.get_approving_reviewers", return_value=[])
     @patch(
@@ -222,7 +225,7 @@ class TestCheckAcknowledgementsMain:
     @patch("check_acknowledgements.get_repo_and_pr")
     @patch("check_acknowledgements.get_github_client")
     def test_no_approvers_sets_pending(
-        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status
+        self, mock_gh, mock_repo_pr, mock_load, mock_approvers, mock_status, mock_in_queue
     ):
         repo = MagicMock()
         pr = MagicMock()
@@ -249,6 +252,7 @@ class TestCheckAcknowledgementsMain:
             repo, "abc", "pending", "Awaiting at least one approving review"
         )
 
+    @patch("check_acknowledgements.is_pr_in_merge_queue", return_value=False)
     @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.get_approving_reviewers",
@@ -267,6 +271,7 @@ class TestCheckAcknowledgementsMain:
         mock_load,
         mock_approvers,
         mock_status,
+        mock_in_queue,
         tmp_path,
     ):
         repo = MagicMock()
@@ -313,6 +318,7 @@ class TestCheckAcknowledgementsMain:
             data = json.load(f)
         assert data["api-review"] == ["alice"]
 
+    @patch("check_acknowledgements.is_pr_in_merge_queue", return_value=False)
     @patch("check_acknowledgements.set_commit_status")
     @patch(
         "check_acknowledgements.get_approving_reviewers",
@@ -331,6 +337,7 @@ class TestCheckAcknowledgementsMain:
         mock_load,
         mock_approvers,
         mock_status,
+        mock_in_queue,
         tmp_path,
     ):
         repo = MagicMock()
@@ -369,6 +376,38 @@ class TestCheckAcknowledgementsMain:
         mock_status.assert_called_with(
             repo, "abc", "pending", "api-review: awaiting bob"
         )
+
+    @patch("check_acknowledgements.ensure_merge_queue_notice_description")
+    @patch("check_acknowledgements.ensure_merge_queue_notice_comment")
+    @patch("check_acknowledgements.is_pr_in_merge_queue", return_value=True)
+    @patch("check_acknowledgements.set_commit_status")
+    @patch(
+        "check_acknowledgements.load_checklists",
+        return_value=SAMPLE_CHECKLISTS,
+    )
+    @patch("check_acknowledgements.get_repo_and_pr")
+    @patch("check_acknowledgements.get_github_client")
+    def test_merge_queue_notice_refreshed_when_pr_enqueued(
+        self,
+        mock_gh,
+        mock_repo_pr,
+        mock_load,
+        mock_status,
+        mock_in_queue,
+        mock_notice_comment,
+        mock_notice_description,
+    ):
+        repo = MagicMock()
+        pr = MagicMock()
+        pr.head.sha = "abc"
+        pr.get_files.return_value = [_make_file("unrelated.txt")]
+        mock_repo_pr.return_value = (repo, pr)
+
+        with patch.object(sys, "argv", ["check_acknowledgements"]):
+            main()
+
+        mock_notice_comment.assert_called_once_with(pr)
+        mock_notice_description.assert_called_once_with(pr)
 
     @patch("check_acknowledgements.set_commit_status")
     @patch("check_acknowledgements.get_repo_and_pr")

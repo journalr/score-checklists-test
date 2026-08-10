@@ -24,7 +24,6 @@ inputs:
         post            – Post/update checklist comments and evidence
         check           – Verify acknowledgements; fail if incomplete
         dismiss_sync    – Invalidate OKs after new push
-        dismiss_edit    – Dismiss approval after OK edit/delete
     required: true
   github-token:
     description: "GitHub token with repo permissions"
@@ -33,12 +32,17 @@ inputs:
     description: "Pull request number"
     required: false
     default: ""
-  before-sha:
-    description: "SHA before the push (for synchronize events)"
+  run-id:
+    description: >
+      The workflow run id of the currently-executing "Review Checklists
+      (Trigger)" run (used by the ``dismiss_sync`` action to look up the
+      previous trigger run for the same branch).
     required: false
     default: ""
-  after-sha:
-    description: "SHA after the push (for synchronize events)"
+  head-branch:
+    description: >
+      Head branch name of the pull request (used by the ``dismiss_sync``
+      action to scope the run-history lookup).
     required: false
     default: ""
   head-sha:
@@ -54,15 +58,6 @@ inputs:
       workflow_run-triggered privileged workflow, where the ambient event
       differs from the event that should drive the checklist logic.
       Defaults to the ambient github.event_name when not set.
-    required: false
-    default: ""
-  event-path:
-    description: >
-      Path to the JSON payload of the original triggering event.  Used to
-      override the ambient GITHUB_EVENT_PATH when this action is invoked
-      from a workflow_run-triggered privileged workflow (e.g. to read a
-      pull_request_review_comment payload downloaded from an artifact).
-      Defaults to the ambient github.event_path when not set.
     required: false
     default: ""
   config-path:
@@ -107,16 +102,6 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
-        BEFORE_SHA: ${{ inputs.before-sha }}
-        AFTER_SHA: ${{ inputs.after-sha }}
-      run: python3 "$GITHUB_ACTION_PATH/scripts/dismiss_and_invalidate.py" --trigger synchronize --config-path "${{ inputs.config-path }}"
-
-    - name: Run dismiss_and_invalidate (comment changed)
-      if: inputs.action == 'dismiss_edit'
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        PR_NUMBER: ${{ inputs.pr-number }}
-        GITHUB_EVENT_PATH: ${{ inputs.event-path || github.event_path }}
-      run: python3 "$GITHUB_ACTION_PATH/scripts/dismiss_and_invalidate.py" --trigger comment_changed --config-path "${{ inputs.config-path }}"
+        CURRENT_RUN_ID: ${{ inputs.run-id }}
+        HEAD_BRANCH: ${{ inputs.head-branch }}
+      run: python3 "$GITHUB_ACTION_PATH/scripts/dismiss_and_invalidate.py" --config-path "${{ inputs.config-path }}"

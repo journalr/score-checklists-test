@@ -15,8 +15,6 @@
 
 from __future__ import annotations
 
-import json
-import os
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
@@ -25,7 +23,7 @@ import sys
 
 from dismiss_and_invalidate import (
     _find_ok_comments_for_checklist,
-    handle_comment_changed,
+    _get_files_in_latest_push,
     handle_synchronize,
 )
 
@@ -50,6 +48,13 @@ def _make_review(user_login, state, review_id=1):
     r.user.login = user_login
     r.state = state
     r.id = review_id
+    return r
+
+
+def _make_run(run_id, head_sha):
+    r = MagicMock()
+    r.id = run_id
+    r.head_sha = head_sha
     return r
 
 
@@ -128,62 +133,128 @@ class TestFindOkCommentsForChecklist:
 
 
 # ---------------------------------------------------------------------------
+# _get_files_in_latest_push
+# ---------------------------------------------------------------------------
+
+
+class TestGetFilesInLatestPush:
+    def test_falls_back_when_no_run_context(self, monkeypatch):
+        monkeypatch.delenv("CURRENT_RUN_ID", raising=False)
+        monkeypatch.delenv("HEAD_BRANCH", raising=False)
+
+        pr = MagicMock()
+        pr.get_files.return_value = [_make_file("fallback.txt")]
+        repo = MagicMock()
+
+        result = _get_files_in_latest_push(pr, repo)
+
+        assert result == ["fallback.txt"]
+        repo.get_workflow.assert_not_called()
+
+    def test_uses_previous_run_head_sha_for_comparison(self, monkeypatch):
+        monkeypatch.setenv("CURRENT_RUN_ID", "20")
+        monkeypatch.setenv("HEAD_BRANCH", "feature")
+
+        pr = MagicMock()
+        pr.head.sha = "newsha"
+
+        repo = MagicMock()
+        workflow = MagicMock()
+        # Newest-first, as returned by the GitHub API.
+        workflow.get_runs.return_value = [
+            _make_run(20, "newsha"),
+            _make_run(10, "oldsha"),
+        ]
+        repo.get_workflow.return_value = workflow
+        comparison = MagicMock()
+        comparison.files = [_make_file("src/api/handler.py")]
+        repo.compare.return_value = comparison
+
+        result = _get_files_in_latest_push(pr, repo)
+
+        repo.get_workflow.assert_called_once_with("review_checklists_trigger.yml")
+        workflow.get_runs.assert_called_once_with(
+            branch="feature", event="pull_request_target"
+        )
+        repo.compare.assert_called_once_with("oldsha", "newsha")
+        assert result == ["src/api/handler.py"]
+
+    def test_falls_back_when_previous_run_not_found(self, monkeypatch):
+        monkeypatch.setenv("CURRENT_RUN_ID", "999")
+        monkeypatch.setenv("HEAD_BRANCH", "feature")
+
+        pr = MagicMock()
+        pr.get_files.return_value = [_make_file("fallback.txt")]
+
+        repo = MagicMock()
+        workflow = MagicMock()
+        workflow.get_runs.return_value = [_make_run(20, "newsha")]
+        repo.get_workflow.return_value = workflow
+
+        result = _get_files_in_latest_push(pr, repo)
+
+        assert result == ["fallback.txt"]
+        repo.compare.assert_not_called()
+
+    def test_falls_back_when_current_run_is_first(self, monkeypatch):
+        # Current run has no predecessor (e.g. only one run exists).
+        monkeypatch.setenv("CURRENT_RUN_ID", "20")
+        monkeypatch.setenv("HEAD_BRANCH", "feature")
+
+        pr = MagicMock()
+        pr.get_files.return_value = [_make_file("fallback.txt")]
+
+        repo = MagicMock()
+        workflow = MagicMock()
+        workflow.get_runs.return_value = [_make_run(20, "newsha")]
+        repo.get_workflow.return_value = workflow
+
+        result = _get_files_in_latest_push(pr, repo)
+
+        assert result == ["fallback.txt"]
+        repo.compare.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # handle_synchronize
 # ---------------------------------------------------------------------------
 
 
 class TestHandleSynchronize:
-    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_description")
-    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_comment")
-    @patch("dismiss_and_invalidate.is_pr_in_merge_queue", return_value=False)
     @patch("dismiss_and_invalidate.set_commit_status")
-    @patch("dismiss_and_invalidate.get_github_client")
     @patch("dismiss_and_invalidate.load_checklists", return_value=SAMPLE_CHECKLISTS)
     def test_no_affected_checklists(
         self,
         mock_load,
-        mock_gh,
         mock_status,
-        mock_in_queue,
-        mock_notice_comment,
-        mock_notice_description,
         monkeypatch,
     ):
-        monkeypatch.delenv("BEFORE_SHA", raising=False)
-        monkeypatch.delenv("AFTER_SHA", raising=False)
+        monkeypatch.delenv("CURRENT_RUN_ID", raising=False)
+        monkeypatch.delenv("HEAD_BRANCH", raising=False)
 
         pr = MagicMock()
         pr.get_files.return_value = [_make_file("unrelated.txt")]
+        repo = MagicMock()
 
-        handle_synchronize(pr, ".github/review_checklists.yml")
+        handle_synchronize(pr, repo, ".github/review_checklists.yml")
 
         mock_status.assert_not_called()
-        mock_notice_comment.assert_not_called()
-        mock_notice_description.assert_not_called()
 
-    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_description")
-    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_comment")
-    @patch("dismiss_and_invalidate.is_pr_in_merge_queue", return_value=True)
     @patch("dismiss_and_invalidate.set_commit_status")
-    @patch("dismiss_and_invalidate.get_github_client")
     @patch("dismiss_and_invalidate.load_checklists", return_value=SAMPLE_CHECKLISTS)
     def test_deletes_ok_without_dismissing(
         self,
         mock_load,
-        mock_gh,
         mock_status,
-        mock_in_queue,
-        mock_notice_comment,
-        mock_notice_description,
         monkeypatch,
     ):
-        monkeypatch.delenv("BEFORE_SHA", raising=False)
-        monkeypatch.delenv("AFTER_SHA", raising=False)
-        monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
+        monkeypatch.delenv("CURRENT_RUN_ID", raising=False)
+        monkeypatch.delenv("HEAD_BRANCH", raising=False)
 
         pr = MagicMock()
         pr.head.sha = "newsha"
         pr.get_files.return_value = [_make_file("src/api/handler.py")]
+        repo = MagicMock()
 
         cl_comment = MagicMock()
         cl_comment.id = 100
@@ -205,158 +276,16 @@ class TestHandleSynchronize:
             "dismiss_and_invalidate.find_existing_checklist_comments",
             return_value={"api-review": cl_comment},
         ):
-            handle_synchronize(pr, ".github/review_checklists.yml")
+            handle_synchronize(pr, repo, ".github/review_checklists.yml")
 
         ok_reply.delete.assert_called_once()
         review.dismiss.assert_not_called()
-        mock_status.assert_called_once()
-        mock_notice_comment.assert_called_once_with(pr)
-        mock_notice_description.assert_called_once_with(pr)
-
-
-# ---------------------------------------------------------------------------
-# handle_comment_changed
-# ---------------------------------------------------------------------------
-
-
-class TestHandleCommentChanged:
-    def test_no_event_path(self, capsys):
-        pr = MagicMock()
-        with patch.dict(os.environ, {"GITHUB_EVENT_PATH": ""}):
-            handle_comment_changed(pr)
-        assert "No event payload" in capsys.readouterr().out
-
-    @patch("dismiss_and_invalidate.set_commit_status")
-    @patch("dismiss_and_invalidate.get_github_client")
-    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_description")
-    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_comment")
-    @patch("dismiss_and_invalidate.is_pr_in_merge_queue", return_value=True)
-    def test_deleted_ok_sets_pending_without_dismissing(
-        self,
-        mock_in_queue,
-        mock_notice_comment,
-        mock_notice_description,
-        mock_gh,
-        mock_status,
-        tmp_path,
-        monkeypatch,
-    ):
-        monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
-
-        event = {
-            "action": "deleted",
-            "comment": {
-                "body": "OK",
-                "user": {"login": "alice"},
-            },
-        }
-        event_file = tmp_path / "event.json"
-        event_file.write_text(json.dumps(event))
-
-        pr = MagicMock()
-        pr.head.sha = "sha123"
-        review = _make_review("alice", "APPROVED", 10)
-        pr.get_reviews.return_value = [review]
-
-        with patch.dict(os.environ, {"GITHUB_EVENT_PATH": str(event_file)}):
-            handle_comment_changed(pr)
-
-        review.dismiss.assert_not_called()
-        mock_status.assert_called_once()
-        mock_notice_comment.assert_called_once_with(pr)
-        mock_notice_description.assert_called_once_with(pr)
-
-    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_description")
-    @patch("dismiss_and_invalidate.ensure_merge_queue_notice_comment")
-    @patch("dismiss_and_invalidate.is_pr_in_merge_queue", return_value=False)
-    @patch("dismiss_and_invalidate.set_commit_status")
-    @patch("dismiss_and_invalidate.get_github_client")
-    def test_edited_ok_retraction_sets_pending_without_dismissing(
-        self,
-        mock_gh,
-        mock_status,
-        mock_in_queue,
-        mock_notice_comment,
-        mock_notice_description,
-        tmp_path,
-        monkeypatch,
-    ):
-        monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
-
-        event = {
-            "action": "edited",
-            "comment": {
-                "body": "never mind",
-                "user": {"login": "bob"},
-            },
-            "changes": {
-                "body": {"from": "OK"},
-            },
-        }
-        event_file = tmp_path / "event.json"
-        event_file.write_text(json.dumps(event))
-
-        pr = MagicMock()
-        pr.head.sha = "sha456"
-        review = _make_review("bob", "APPROVED", 20)
-        pr.get_reviews.return_value = [review]
-
-        with patch.dict(os.environ, {"GITHUB_EVENT_PATH": str(event_file)}):
-            handle_comment_changed(pr)
-
-        review.dismiss.assert_not_called()
-        mock_status.assert_called_once()
-        mock_notice_comment.assert_not_called()
-        mock_notice_description.assert_not_called()
-
-    @patch("dismiss_and_invalidate.set_commit_status")
-    @patch("dismiss_and_invalidate.get_github_client")
-    def test_edited_non_ok_does_not_dismiss(
-        self, mock_gh, mock_status, tmp_path, monkeypatch
-    ):
-        monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
-
-        event = {
-            "action": "edited",
-            "comment": {
-                "body": "updated comment",
-                "user": {"login": "bob"},
-            },
-            "changes": {
-                "body": {"from": "original non-ok comment"},
-            },
-        }
-        event_file = tmp_path / "event.json"
-        event_file.write_text(json.dumps(event))
-
-        pr = MagicMock()
-        pr.head.sha = "sha789"
-        pr.get_reviews.return_value = []
-
-        with patch.dict(os.environ, {"GITHUB_EVENT_PATH": str(event_file)}):
-            handle_comment_changed(pr)
-
-        mock_status.assert_not_called()
-
-    def test_deleted_non_ok_does_not_dismiss(self, tmp_path):
-        event = {
-            "action": "deleted",
-            "comment": {
-                "body": "just a regular comment",
-                "user": {"login": "bob"},
-            },
-        }
-        event_file = tmp_path / "event.json"
-        event_file.write_text(json.dumps(event))
-
-        pr = MagicMock()
-        pr.get_reviews.return_value = []
-
-        with patch.dict(os.environ, {"GITHUB_EVENT_PATH": str(event_file)}):
-            handle_comment_changed(pr)
-
-        # No dismiss should have been called (no reviews to dismiss anyway).
-        # The key assertion is that no exception was raised.
+        mock_status.assert_called_once_with(
+            repo,
+            "newsha",
+            "pending",
+            "Checklist acknowledgements invalidated due to new changes",
+        )
 
 
 if __name__ == "__main__":
