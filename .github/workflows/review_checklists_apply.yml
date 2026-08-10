@@ -86,21 +86,26 @@ jobs:
         uses: actions/checkout@v6.0.2
 
       # Resolves the PR number authoritatively via the API instead of
-      # trusting an artifact-supplied value: matches the head SHA that this
-      # run actually executed against (github.event.workflow_run.head_sha,
-      # verified reliable even for fork PRs) against currently open PRs.
-      # Not needed for merge_group, which has no associated PR.
+      # trusting an artifact-supplied value: matches on the head branch
+      # reference (github.event.workflow_run.head_repository.owner.login +
+      # head_branch), not the head SHA. Matching by SHA would break under
+      # fast iteration: if the PR receives another push while this run is
+      # queued/running, no open PR would still have that exact SHA as its
+      # head by the time this step executes, and pr_number would resolve
+      # empty. The branch reference stays valid across such races as long
+      # as the PR is still open. Not needed for merge_group, which has no
+      # associated PR.
       - name: Resolve PR number
         id: resolve_pr
         if: github.event.workflow_run.event != 'merge_group'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           pr_number="$(gh api "repos/${{ github.repository }}/pulls" \
-            -X GET -f state=open --paginate \
-            --jq '.[] | select(.head.sha == env.HEAD_SHA) | .number' \
-            | head -n1)"
+            -X GET -f state=open -f "head=${HEAD_OWNER}:${HEAD_BRANCH}" --paginate \
+            --jq '.[0].number // empty')"
           echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
 
       # Step 1: Post or update checklist findings.
