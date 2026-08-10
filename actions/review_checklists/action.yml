@@ -95,7 +95,7 @@ runs:
       run: python3 "$GITHUB_ACTION_PATH/scripts/check_acknowledgements.py" --config-path "${{ inputs.config-path }}"
 
 
-    - name: Run dismiss_and_invalidate (synchronize)
+    - name: Run dismiss_and_invalidate
       if: inputs.action == 'dismiss_sync'
       shell: bash
       env:

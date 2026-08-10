@@ -22,11 +22,14 @@
 # would otherwise force a read-only GITHUB_TOKEN.
 #
 # This workflow does all the actual work: it derives the original event
-# name/head SHA/PR number from the `workflow_run` context and the GitHub
-# API, downloads a minimal artifact captured by the trigger stage (just the
-# original event's `action` field), and re-runs the checklist logic that
-# the previous single-stage workflow used to run directly on the untrusted
-# events.
+# name/head SHA/PR number entirely from the `workflow_run` context and the
+# GitHub API and re-runs the checklist logic that the previous
+# single-stage workflow used to run directly on the untrusted events.  No
+# artifact or other data is transferred from the trigger stage at all —
+# not even the original event's `action` (opened/reopened/synchronize/
+# edited): `dismiss_sync` is simply run on every pull_request_target event
+# and self-determines whether anything actually changed (see below), so
+# there is nothing left that stage 2 needs stage 1 to hand it.
 #
 # Keep review-checklists up to date on pull requests and report whether all
 # checklists have been acknowledged by every approving reviewer.
@@ -34,8 +37,11 @@
 # Original events handled:
 #   pull_request_target (opened/reopened/synchronize/edited)
 #     -> Post or update checklist findings on the PR.
-#     -> On synchronize: invalidate stale OKs for checklists affected by
-#        the new push (dismiss_sync resolves the "before" SHA itself).
+#     -> Invalidate OKs for checklists affected by commits since the
+#        previous trigger run (dismiss_sync resolves the "before" SHA
+#        itself via run history and diffs against the current head; if
+#        the head SHA hasn't moved — e.g. on "edited"/"reopened" without
+#        a new push — the diff is empty and this is a no-op).
 #     -> On edited: refresh checklist evidence/notices after PR description changes.
 #     -> Re-check acknowledgements.
 #   pull_request_review_comment (created/edited/deleted)
@@ -79,29 +85,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
-      # The event artifact is attacker-influenced (it originates from the
-      # forked PR's webhook payload), so it is downloaded outside of the
-      # checked-out workspace and only ever read as data (via jq/JSON
-      # parsing), never interpolated into a shell command or executed. It
-      # now only ever contains a single `action` field — everything else
-      # needed below is derived natively from the `workflow_run` context
-      # or resolved via the GitHub API.
-      - name: Download event artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: event
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: ${{ runner.temp }}/event
-
-      - name: Parse original event action
-        id: parse
-        env:
-          EVENT_DIR: ${{ runner.temp }}/event
-        run: |
-          action="$(jq -r '.action // empty' "$EVENT_DIR/event.json")"
-          echo "action=${action}" >> "$GITHUB_OUTPUT"
-
       # Resolves the PR number authoritatively via the API instead of
       # trusting an artifact-supplied value: matches the head SHA that this
       # run actually executed against (github.event.workflow_run.head_sha,
@@ -134,14 +117,15 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-number: ${{ steps.resolve_pr.outputs.pr_number }}
 
-      # Step 2: Invalidate stale OKs when new commits are pushed.
+      # Step 2: Invalidate stale OKs for commits since the previous push.
       # dismiss_sync resolves the "before" SHA itself (via the previous
-      # Trigger-workflow run for this branch), so no push-specific data
-      # needs to travel through the artifact.
+      # Trigger-workflow run for this branch) and diffs it against the
+      # current head, so it doesn't need to know which pull_request_target
+      # sub-action fired: if the head SHA hasn't moved since the previous
+      # trigger run (e.g. "edited"/"reopened" without a new push), the
+      # diff is empty and this step is a no-op.
       - name: Invalidate stale acknowledgements
-        if: >-
-          github.event.workflow_run.event == 'pull_request_target' &&
-          steps.parse.outputs.action == 'synchronize'
+        if: github.event.workflow_run.event == 'pull_request_target'
         uses: ./actions/review_checklists
         with:
           action: dismiss_sync

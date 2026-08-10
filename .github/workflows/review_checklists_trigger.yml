@@ -20,17 +20,16 @@
 # `permissions:` block requests, so this workflow must not (and does not)
 # attempt to write anything.
 #
-# It performs no checkout and executes no repository/PR-supplied code: it
-# only extracts the single field it needs from the event GitHub already
-# delivered (the `action` field, e.g. "opened"/"synchronize"/"edited") and
-# hands it off, as a small build artifact, to the privileged
-# `review_checklists_apply.yml` workflow, which runs via `workflow_run` and
-# therefore always executes with the base repository's permissions
-# regardless of where the triggering event originated.  Everything else the
-# apply stage needs (event name, head SHA, PR number) is derived natively
-# from the `workflow_run` context / the GitHub API rather than transferred
-# here, keeping the artifact minimal and avoiding trust in most of the
-# forked-repo-supplied payload.
+# It performs no checkout and executes no repository/PR-supplied code, and
+# transfers nothing to the privileged `review_checklists_apply.yml`
+# workflow: everything the apply stage needs (event name, head SHA, PR
+# number, and even whether anything actually needs invalidating) is derived
+# natively from the `workflow_run` context / the GitHub API / a live diff
+# against run history, so no event-payload data has to be trusted or
+# carried across the trust boundary at all.  This job's sole purpose is to
+# exist and complete, so that `workflow_run` fires the apply stage, which
+# always executes with the base repository's permissions regardless of
+# where the triggering event originated.
 #
 # See "Preventing pwn requests" for background on this pattern:
 # https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
@@ -52,18 +51,12 @@ on:
 permissions: {}
 
 jobs:
-  capture-event:
-    name: Capture event
+  trigger-apply:
+    name: Trigger apply stage
     runs-on: ubuntu-24.04
     steps:
-      - name: Save minimal event data
-        run: |
-          mkdir -p ./event
-          jq -c '{action: (.action // null)}' "$GITHUB_EVENT_PATH" > ./event/event.json
-
-      - name: Upload event artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: event
-          path: event/
-          retention-days: 1
+      # No-op: this job exists only so that its completion fires the
+      # `workflow_run`-triggered apply stage. Nothing needs to be computed
+      # or transferred here.
+      - name: Signal apply stage
+        run: echo "Triggering privileged apply stage via workflow_run."

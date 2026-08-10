@@ -14,24 +14,31 @@
 
 """Invalidate OK acknowledgements after a new push.
 
-When new commits are pushed to the PR, this script determines which
-checklist paths are affected by the *new* changes.  For each affected
-checklist, all existing OK replies are deleted and the commit status is
-set back to pending.  Approvals are **not** dismissed here — branch
-rulesets handle dismissing stale reviews on new pushes.
+This script runs on every ``pull_request_target`` sub-event (opened,
+reopened, synchronize, edited) — the apply workflow does not need to know
+which one fired.  It determines which checklist paths are affected by
+commits introduced since the previous trigger run, and for each affected
+checklist deletes all existing OK replies and sets the commit status back
+to pending.  Approvals are **not** dismissed here — branch rulesets handle
+dismissing stale reviews on new pushes.
+
+When the head SHA hasn't actually moved since the previous trigger run
+(e.g. on "edited"/"reopened" without a new push), the diff against that
+previous run's head SHA is empty, so no checklists are affected and this
+is a no-op — no separate signal for "was this actually a push" is needed.
 
 (OK-comment edits/deletions no longer need dedicated handling here: the
 "check" action already re-scans the current comment state on every
 invocation, so an edited/deleted OK comment is naturally no longer
 counted the next time acknowledgements are checked.)
 
-The "files changed in the latest push" are found without needing the
-``before``/``after`` SHAs from the original event payload: this script
-looks up the previous run of the "Review Checklists (Trigger)" workflow
-for the same head branch (ordered by run creation time) and uses that
-run's head SHA as the "before" commit.  This keeps stage 1 → stage 2 data
-transfer minimal while still comparing against exactly the commits
-introduced by this push.
+The "files changed since the previous trigger run" are found without
+needing the ``before``/``after`` SHAs from the original event payload:
+this script looks up the previous run of the "Review Checklists
+(Trigger)" workflow for the same head branch (ordered by run creation
+time) and uses that run's head SHA as the "before" commit.  This keeps
+stage 1 → stage 2 data transfer at zero while still comparing against
+exactly the commits introduced since the last time this ran.
 """
 
 from __future__ import annotations
