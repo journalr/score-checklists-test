@@ -1,0 +1,65 @@
+# *******************************************************************************
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License Version 2.0 which is available at
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+# *******************************************************************************
+
+# Unprivileged trigger stage for the review-checklists workflow.
+#
+# This workflow reacts to every event that can affect checklist state,
+# including events raised for pull requests from forked repositories
+# (pull_request_review, pull_request_review_comment).  For those events
+# GitHub always issues a read-only GITHUB_TOKEN, no matter what the
+# `permissions:` block requests, so this workflow must not (and does not)
+# attempt to write anything.
+#
+# It performs no checkout and executes no repository/PR-supplied code: it
+# only captures the raw event payload GitHub already delivered and hands it
+# off, as a build artifact, to the privileged `review_checklists_apply.yml`
+# workflow, which runs via `workflow_run` and therefore always executes
+# with the base repository's permissions regardless of where the
+# triggering event originated.
+#
+# See "Preventing pwn requests" for background on this pattern:
+# https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
+
+name: Review Checklists (Trigger)
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited]
+    branches:
+      - main
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  pull_request_review:
+    types: [submitted, dismissed]
+  merge_group:
+    types: [checks_requested]
+
+permissions: {}
+
+jobs:
+  capture-event:
+    name: Capture event
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Save event payload
+        run: |
+          mkdir -p ./event
+          cp "$GITHUB_EVENT_PATH" ./event/event.json
+          printf '%s' "$GITHUB_EVENT_NAME" > ./event/event_name.txt
+
+      - name: Upload event artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: event
+          path: event/
+          retention-days: 1

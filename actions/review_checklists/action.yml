@@ -46,6 +46,25 @@ inputs:
       Commit SHA to set the status on (used for merge_group events).
     required: false
     default: ""
+  event-name:
+    description: >
+      Name of the original triggering event (e.g. 'pull_request_target',
+      'pull_request_review_comment', 'merge_group').  Used to override the
+      ambient GITHUB_EVENT_NAME when this action is invoked from a
+      workflow_run-triggered privileged workflow, where the ambient event
+      differs from the event that should drive the checklist logic.
+      Defaults to the ambient github.event_name when not set.
+    required: false
+    default: ""
+  event-path:
+    description: >
+      Path to the JSON payload of the original triggering event.  Used to
+      override the ambient GITHUB_EVENT_PATH when this action is invoked
+      from a workflow_run-triggered privileged workflow (e.g. to read a
+      pull_request_review_comment payload downloaded from an artifact).
+      Defaults to the ambient github.event_path when not set.
+    required: false
+    default: ""
   config-path:
     description: >
       Relative path to the checklist configuration file.
@@ -77,6 +96,7 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
         HEAD_SHA: ${{ inputs.head-sha }}
+        GITHUB_EVENT_NAME: ${{ inputs.event-name || github.event_name }}
       run: python3 "$GITHUB_ACTION_PATH/scripts/check_acknowledgements.py" --config-path "${{ inputs.config-path }}"
 
 
@@ -98,5 +118,5 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
-        GITHUB_EVENT_PATH: ${{ github.event_path }}
+        GITHUB_EVENT_PATH: ${{ inputs.event-path || github.event_path }}
       run: python3 "$GITHUB_ACTION_PATH/scripts/dismiss_and_invalidate.py" --trigger comment_changed --config-path "${{ inputs.config-path }}"
