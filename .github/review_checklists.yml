@@ -19,14 +19,14 @@
 #   exclude:   (optional) List of glob patterns; a file matching any of these is excluded
 #   checklist: Markdown checklist body shown to reviewers
 
-checklists:
-  - id: example-review
-    name: "Example checklist"
-    include:
-      - "**"
-    exclude:
-      - ".github/**"
-    checklist: |
-      - This is an example checklist item
-      - Avoid checkmarks in the items since this makes it easy for users to accidentally modify the checklist
-      - Modifying the checklist will reset all previous acknowledgments
+checklists: []
+#  - id: example-review
+#    name: "Example checklist"
+#    include:
+#      - "**"
+#    exclude:
+#      - ".github/**"
+#    checklist: |
+#      - This is an example checklist item
+#      - Avoid checkmarks in the items since this makes it easy for users to accidentally modify the checklist
+#      - Modifying the checklist will reset all previous acknowledgments
