@@ -63,22 +63,26 @@ pattern:
 - **`review_checklists_trigger.yml`** (unprivileged, `permissions: {}`):
   reacts to every event that can affect checklist state
   (`pull_request_target`, `pull_request_review_comment`,
-  `pull_request_review`, `merge_group`). It performs no checkout, executes
-  no repository/PR-supplied code, and does no privileged work — it exists
-  solely so that its completion fires the second workflow. No data is
-  transferred between the two workflows: everything the second workflow
-  needs is derived natively from the `workflow_run` context, the GitHub
-  API, or a live diff against prior run history.
+  `pull_request_review`, `merge_group`). It performs no checkout and
+  executes no repository/PR-supplied code. The only data transferred to
+  the second workflow is the PR number, read directly from the trusted
+  event payload (`github.event.pull_request.number`, or parsed from the
+  merge queue's synthetic ref for `merge_group`) and uploaded as a build
+  artifact. This is safe to trust as-is — it's never attacker-influenced
+  code or a value that steers which logic runs, and at worst a wrong
+  number would just point the second workflow at the wrong already-public,
+  same-repository PR. Everything else the second workflow needs is derived
+  natively from the `workflow_run` context, the GitHub API, or a live diff
+  against prior run history.
 - **`review_checklists_apply.yml`** (privileged, triggered via
   `workflow_run` once the trigger workflow completes): `workflow_run`
   always executes using the *base* repository's workflow file and
   permissions, regardless of which repository (including forks) raised
   the original event. This is what lets it safely hold a
-  `pull-requests: write` / `statuses: write` token. It resolves the PR
-  number (by matching the head branch reference, which stays valid even
-  if the PR is pushed again while this run is queued), derives the
-  original event name and head SHA from `github.event.workflow_run`, and
-  invokes this composite action with the appropriate `action` input.
+  `pull-requests: write` / `statuses: write` token. It downloads the PR
+  number artifact uploaded by the trigger stage, derives the original
+  event name and head SHA from `github.event.workflow_run`, and invokes
+  this composite action with the appropriate `action` input.
 
 Because the apply workflow checks out the **base branch** (`main`), not
 the PR branch, the checklist logic itself (and `.github/review_checklists.yml`)

@@ -20,16 +20,22 @@
 # `permissions:` block requests, so this workflow must not (and does not)
 # attempt to write anything.
 #
-# It performs no checkout and executes no repository/PR-supplied code, and
-# transfers nothing to the privileged `review_checklists_apply.yml`
-# workflow: everything the apply stage needs (event name, head SHA, PR
-# number, and even whether anything actually needs invalidating) is derived
-# natively from the `workflow_run` context / the GitHub API / a live diff
-# against run history, so no event-payload data has to be trusted or
-# carried across the trust boundary at all.  This job's sole purpose is to
-# exist and complete, so that `workflow_run` fires the apply stage, which
-# always executes with the base repository's permissions regardless of
-# where the triggering event originated.
+# It performs no checkout and executes no repository/PR-supplied code. The
+# only thing handed across the trust boundary to the privileged
+# `review_checklists_apply.yml` workflow is the PR number, uploaded as a
+# build artifact for the apply stage to download by run ID. This is safe
+# to trust as-is: it comes straight from the trusted event payload
+# (github.event.pull_request.number, or parsed from
+# github.event.merge_group.head_ref for merge_group), is never
+# attacker-influenced code or a value that steers which logic runs, and at
+# worst a wrong number would just point the apply stage at the wrong
+# already-public, same-repository PR. Everything else the apply stage
+# needs (event name, head SHA, and even whether anything actually needs
+# invalidating) is still derived natively from the `workflow_run` context /
+# the GitHub API / a live diff against run history. This job's sole
+# purpose beyond that is to exist and complete, so that `workflow_run`
+# fires the apply stage, which always executes with the base repository's
+# permissions regardless of where the triggering event originated.
 #
 # See "Preventing pwn requests" for background on this pattern:
 # https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
@@ -55,8 +61,38 @@ jobs:
     name: Trigger apply stage
     runs-on: ubuntu-24.04
     steps:
-      # No-op: this job exists only so that its completion fires the
-      # `workflow_run`-triggered apply stage. Nothing needs to be computed
-      # or transferred here.
+      # Resolve the PR number directly from the trusted event payload.
+      #
+      # For merge_group there is no github.event.pull_request; the number
+      # is instead parsed out of the synthetic queue ref name, which
+      # GitHub generates as `gh-readonly-queue/<base-branch>/pr-<number>-<sha>`.
+      - name: Resolve PR number
+        id: resolve_pr
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_GROUP_REF: ${{ github.event.merge_group.head_ref }}
+        run: |
+          if [ "${EVENT_NAME}" = "merge_group" ]; then
+            pr_number="$(echo "${MERGE_GROUP_REF}" | grep -oP '(?<=/pr-)[0-9]+' || true)"
+          else
+            pr_number="${PR_NUMBER}"
+          fi
+          echo "Resolved PR number: ${pr_number}"
+          mkdir -p pr-number
+          echo -n "${pr_number}" > pr-number/pr-number.txt
+
+      # Upload it for the privileged apply stage to pick up by run ID.
+      # This is the only piece of data transferred across the trust
+      # boundary; see the file-level comment above for why it's safe.
+      - name: Upload PR number
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-number
+          path: pr-number/pr-number.txt
+          retention-days: 1
+
+      # No-op beyond the above: this job's completion is what fires the
+      # `workflow_run`-triggered apply stage.
       - name: Signal apply stage
         run: echo "Triggering privileged apply stage via workflow_run."
