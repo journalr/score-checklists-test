@@ -174,7 +174,7 @@ def main() -> None:
     args = parser.parse_args()
 
     gh = get_github_client()
-    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    event_name = os.environ.get("CHECKLISTS_EVENT_NAME", "")
     if event_name == "merge_group":
         head_sha = os.environ.get("HEAD_SHA")
         if not head_sha:

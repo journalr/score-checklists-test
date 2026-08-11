@@ -424,7 +424,7 @@ class TestCheckAcknowledgementsMain:
             patch.dict(
                 os.environ,
                 {
-                    "GITHUB_EVENT_NAME": "merge_group",
+                    "CHECKLISTS_EVENT_NAME": "merge_group",
                     "HEAD_SHA": "merge123",
                     "GITHUB_REPOSITORY": "acme/widgets",
                 },
@@ -487,7 +487,7 @@ class TestCheckAcknowledgementsMain:
             patch.dict(
                 os.environ,
                 {
-                    "GITHUB_EVENT_NAME": "merge_group",
+                    "CHECKLISTS_EVENT_NAME": "merge_group",
                     "HEAD_SHA": "merge123",
                     "GITHUB_REPOSITORY": "acme/widgets",
                     "PR_NUMBER": "75",
@@ -551,7 +551,7 @@ class TestCheckAcknowledgementsMain:
             patch.dict(
                 os.environ,
                 {
-                    "GITHUB_EVENT_NAME": "merge_group",
+                    "CHECKLISTS_EVENT_NAME": "merge_group",
                     "HEAD_SHA": "merge123",
                     "GITHUB_REPOSITORY": "acme/widgets",
                     "PR_NUMBER": "75",

@@ -53,11 +53,13 @@ inputs:
   event-name:
     description: >
       Name of the original triggering event (e.g. 'pull_request_target',
-      'pull_request_review_comment', 'merge_group').  Used to override the
-      ambient GITHUB_EVENT_NAME when this action is invoked from a
-      workflow_run-triggered privileged workflow, where the ambient event
-      differs from the event that should drive the checklist logic.
-      Defaults to the ambient github.event_name when not set.
+      'pull_request_review_comment', 'merge_group').  Required when this
+      action is invoked from a workflow_run-triggered privileged workflow,
+      since the ambient GITHUB_EVENT_NAME there is always 'workflow_run'
+      and — being a reserved GitHub Actions variable name — cannot be
+      overridden for the subprocess by a step's own `env:` block.  Defaults
+      to the ambient github.event_name when not set (only correct for
+      direct, non-workflow_run invocations).
     required: false
     default: ""
   config-path:
@@ -91,7 +93,7 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ inputs.pr-number }}
         HEAD_SHA: ${{ inputs.head-sha }}
-        GITHUB_EVENT_NAME: ${{ inputs.event-name || github.event_name }}
+        CHECKLISTS_EVENT_NAME: ${{ inputs.event-name || github.event_name }}
       run: python3 "$GITHUB_ACTION_PATH/scripts/check_acknowledgements.py" --config-path "${{ inputs.config-path }}"
 
 
