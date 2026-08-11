@@ -229,3 +229,9 @@ Also remember that the decision of moving a job from a late pipeline to an earli
 singularities and without considering testing strategies of affected components. For example, some post-mortem might conclude
 that an issue could a) have been prevented by moving a job from "nightly" to "check and merge" or b) by creating a unit test. In such
 case the latter option shall alway be the preferred one.
+
+<!-- test: workflow-split verification 2026-08-10T06:59:43Z -->
+
+<!-- second push: testing stateless dismiss_sync 2026-08-10T08:49:42Z -->
+
+<!-- third push: retest after gh api --jq fix 2026-08-10T08:52:44Z -->
