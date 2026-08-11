@@ -20,13 +20,24 @@
 #   checklist: Markdown checklist body shown to reviewers
 
 checklists:
-  - id: example-review
-    name: "Example checklist"
+  - id: markdown-review
+    name: "Markdown checklist"
     include:
-      - "**"
+      - "**/*.md"
     exclude:
       - ".github/**"
     checklist: |
-      - This is an example checklist item
+      - TEST(markdown-review): This checklist applies to Markdown files only
+      - Avoid checkmarks in the items since this makes it easy for users to accidentally modify the checklist
+      - Modifying the checklist will reset all previous acknowledgments
+
+  - id: text-review
+    name: "Text checklist"
+    include:
+      - "**/*.txt"
+    exclude:
+      - ".github/**"
+    checklist: |
+      - TEST(text-review): This checklist applies to plain text files only
       - Avoid checkmarks in the items since this makes it easy for users to accidentally modify the checklist
       - Modifying the checklist will reset all previous acknowledgments
