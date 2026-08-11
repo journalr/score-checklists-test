@@ -23,7 +23,7 @@ checklists:
   - id: markdown-review
     name: "Markdown checklist"
     include:
-      - "**/*.md"
+      - "*.md"
     exclude:
       - ".github/**"
     checklist: |
@@ -34,7 +34,7 @@ checklists:
   - id: text-review
     name: "Text checklist"
     include:
-      - "**/*.txt"
+      - "*.txt"
     exclude:
       - ".github/**"
     checklist: |
